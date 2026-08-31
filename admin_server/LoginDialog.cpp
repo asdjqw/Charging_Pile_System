@@ -27,14 +27,14 @@ LoginDialog::LoginDialog(QWidget *parent)
     m_usernameEdit->setPlaceholderText(QStringLiteral("管理员账号，默认 admin"));
     m_passwordEdit = new QLineEdit(this);
     m_passwordEdit->setEchoMode(QLineEdit::Password);
-    m_passwordEdit->setPlaceholderText(QStringLiteral("密码，默认 admin123"));
+    m_passwordEdit->setPlaceholderText(QStringLiteral("密码，默认 123456"));
 
     auto *form = new QFormLayout;
     form->addRow(QStringLiteral("账号"), m_usernameEdit);
     form->addRow(QStringLiteral("密码"), m_passwordEdit);
 
     auto *loginBtn = new QPushButton(QStringLiteral("登录系统"), this);
-    auto *tip = new QLabel(QStringLiteral("演示账号：admin / admin123"), this);
+    auto *tip = new QLabel(QStringLiteral("演示账号：admin / 123456"), this);
     tip->setObjectName(QStringLiteral("kpiTitle"));
 
     root->addWidget(title);

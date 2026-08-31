@@ -62,7 +62,14 @@ bool DatabaseManager::openDatabase(const QString &dbPath)
     }
 
     QSqlQuery q(m_db);
-    q.exec(QStringLiteral("PRAGMA foreign_keys = ON"));
+    if (!q.exec(QStringLiteral("PRAGMA foreign_keys = ON"))) {
+        m_lastError = q.lastError().text();
+        return false;
+    }
+    // WAL 允许服务端读写并发；短事务争用时最多等待 5 秒。
+    q.exec(QStringLiteral("PRAGMA journal_mode = WAL"));
+    q.exec(QStringLiteral("PRAGMA synchronous = NORMAL"));
+    q.exec(QStringLiteral("PRAGMA busy_timeout = 5000"));
     return true;
 }
 
@@ -74,24 +81,22 @@ bool DatabaseManager::execSqlFile(const QString &filePath)
         return false;
     }
 
+    // 先逐行移除注释。旧实现会误删位于注释之后的整个 CREATE TABLE 语句。
+    QString cleanedContent;
     const QString content = QString::fromUtf8(file.readAll());
-    const QStringList statements = content.split(';', Qt::SkipEmptyParts);
+    for (const QString &line : content.split('\n')) {
+        if (!line.trimmed().startsWith(QStringLiteral("--")))
+            cleanedContent += line + '\n';
+    }
+
+    const QStringList statements = cleanedContent.split(';', Qt::SkipEmptyParts);
     QSqlQuery query(m_db);
     for (QString stmt : statements) {
         stmt = stmt.trimmed();
-        if (stmt.isEmpty() || stmt.startsWith(QStringLiteral("--")))
+        if (stmt.isEmpty())
             continue;
-        // 去掉纯注释行后的空语句
-        QString cleaned;
-        for (const QString &line : stmt.split('\n')) {
-            if (!line.trimmed().startsWith(QStringLiteral("--")))
-                cleaned += line + '\n';
-        }
-        cleaned = cleaned.trimmed();
-        if (cleaned.isEmpty())
-            continue;
-        if (!query.exec(cleaned)) {
-            m_lastError = query.lastError().text() + " | SQL: " + cleaned.left(80);
+        if (!query.exec(stmt)) {
+            m_lastError = query.lastError().text() + " | SQL: " + stmt.left(120);
             return false;
         }
     }
@@ -575,12 +580,13 @@ bool DatabaseManager::startCharging(int userId, int pileId, ChargingOrder &outOr
     QSqlQuery q(m_db);
     const QString orderNo = makeOrderNo();
     const QString now = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss");
-    q.prepare(QStringLiteral("INSERT INTO charging_orders(order_no, user_id, pile_id, start_time, energy_kwh, amount, status) "
-                             "VALUES(?,?,?,?,0,0,'ongoing')"));
+    q.prepare(QStringLiteral("INSERT INTO charging_orders(order_no, user_id, pile_id, start_time, energy_kwh, amount, "
+                             "price_per_kwh, status) VALUES(?,?,?,?,0,0,?,'ongoing')"));
     q.addBindValue(orderNo);
     q.addBindValue(userId);
     q.addBindValue(pileId);
     q.addBindValue(now);
+    q.addBindValue(pile.pricePerKwh);
     if (!q.exec()) {
         m_db.rollback();
         m_lastError = q.lastError().text();
@@ -610,7 +616,8 @@ bool DatabaseManager::stopCharging(int orderId, double energyKwh, ChargingOrder 
 {
     QSqlQuery q(m_db);
     q.prepare(QStringLiteral(
-        "SELECT o.id, o.order_no, o.user_id, o.pile_id, o.start_time, o.status, p.price_per_kwh "
+        "SELECT o.id, o.order_no, o.user_id, o.pile_id, o.start_time, o.status, "
+        "COALESCE(NULLIF(o.price_per_kwh, 0), p.price_per_kwh) "
         "FROM charging_orders o JOIN piles p ON p.id = o.pile_id WHERE o.id=?"));
     q.addBindValue(orderId);
     if (!q.exec() || !q.next()) {
@@ -638,10 +645,12 @@ bool DatabaseManager::stopCharging(int orderId, double energyKwh, ChargingOrder 
 
     m_db.transaction();
     QSqlQuery u(m_db);
-    u.prepare(QStringLiteral("UPDATE charging_orders SET end_time=?, energy_kwh=?, amount=?, status='finished' WHERE id=?"));
+    u.prepare(QStringLiteral("UPDATE charging_orders SET end_time=?, energy_kwh=?, amount=?, "
+                             "status='finished', payment_status='paid', paid_at=? WHERE id=?"));
     u.addBindValue(endTime);
     u.addBindValue(energyKwh);
     u.addBindValue(amount);
+    u.addBindValue(endTime);
     u.addBindValue(orderId);
     if (!u.exec()) {
         m_db.rollback();

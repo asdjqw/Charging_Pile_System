@@ -10,9 +10,10 @@
 |--------|------|------|
 | 充电用户端 | Linux + Qt6 Widgets | 附近电站查询、一键导航、用户信息维护、电动汽车充电 |
 | PC 服务器端 | Linux + Qt6 Widgets | 管理员登录、销售业绩、电桩状态、充电站/桩/用户管理 |
-| 数据库端 | SQLite / MySQL | 用户、管理员、站点、电桩、订单、充值记录 |
+| 数据库端 | Qt SQL + SQLite | 用户、站点、电桩、订单、账务、遥测、预测与审计数据 |
 
-数据库：`~/.local/share/ChargePileLab/charge_pile.db`
+数据库：`~/.local/share/ChargePileLab/charge_pile.db`。完整的数据模型、事务边界和
+Socket 协议见 [`database/DESIGN.md`](database/DESIGN.md)。
 
 ## 环境要求（Ubuntu 22.04 / 24.04）
 
@@ -58,7 +59,7 @@ sudo apt install -y build-essential cmake ninja-build \
 
 | 用户名 | 密码 | 角色 |
 |--------|------|------|
-| admin | admin123 | 系统管理员 |
+| admin | 123456 | 系统管理员 |
 | ops01 | ops123 | 运维人员 |
 
 ## 目录结构
@@ -104,6 +105,10 @@ rm -f ~/.local/share/ChargePileLab/charge_pile.db
 ```
 
 然后重新启动任意一端即可重建。
+
+目标部署中仅 PC 服务器端通过 `QSQLITE` 打开数据库，用户端通过
+`QTcpSocket` 调用服务器业务接口，不直接访问或共享 SQLite 文件。当前骨架中的
+用户端直连数据库代码是单机演示实现，网络化改造接口约定见数据库设计文档。
 
 ## 可改用 MySQL
 
