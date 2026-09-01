@@ -7,13 +7,16 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Sql Charts Network)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Sql Network DBus)
+include(CTest)
 
 add_subdirectory(common)
 add_subdirectory(user_client)
 add_subdirectory(admin_server)
+if(BUILD_TESTING)
+    add_subdirectory(tests)
+endif()
 
-# 构建后把数据库脚本复制到输出目录，便于首次运行初始化
 add_custom_target(copy_database ALL
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_SOURCE_DIR}/database
@@ -24,6 +27,20 @@ add_custom_target(copy_database ALL
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_SOURCE_DIR}/database
         $<TARGET_FILE_DIR:admin_server>/database
-    COMMENT "Copy database scripts next to executables"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_SOURCE_DIR}/web
+        ${CMAKE_BINARY_DIR}/web
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_SOURCE_DIR}/web
+        $<TARGET_FILE_DIR:admin_server>/web
+    COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:user_client>/data
+    COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:admin_server>/data
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${CMAKE_SOURCE_DIR}/data/北京市充电桩数据.csv
+        $<TARGET_FILE_DIR:user_client>/data/北京市充电桩数据.csv
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${CMAKE_SOURCE_DIR}/data/北京市充电桩数据.csv
+        $<TARGET_FILE_DIR:admin_server>/data/北京市充电桩数据.csv
+    COMMENT "Copy database, CSV, and web dashboard assets"
     DEPENDS user_client admin_server
 )

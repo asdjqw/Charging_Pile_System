@@ -63,6 +63,14 @@ CREATE TABLE IF NOT EXISTS piles (
     pile_code            TEXT    NOT NULL UNIQUE,
     pile_type            TEXT    NOT NULL DEFAULT 'AC'
                                  CHECK(pile_type IN ('AC','DC')),
+    speed_class          TEXT    NOT NULL DEFAULT 'slow'
+                                 CHECK(speed_class IN ('slow','standard','fast','ultra')),
+    connector_standard   TEXT    NOT NULL DEFAULT 'GB_T_AC'
+                                 CHECK(connector_standard IN ('GB_T_AC','GB_T_DC','CCS2','CHAdeMO','TeslaNACS')),
+    phase                TEXT    NOT NULL DEFAULT 'single'
+                                 CHECK(phase IN ('single','three')),
+    voltage_v            INTEGER NOT NULL DEFAULT 220 CHECK(voltage_v > 0),
+    category_label       TEXT    NOT NULL DEFAULT '',
     connector_no         INTEGER NOT NULL DEFAULT 1 CHECK(connector_no > 0),
     power_kw             REAL    NOT NULL DEFAULT 7.0 CHECK(power_kw > 0),
     price_per_kwh        REAL    NOT NULL DEFAULT 1.2 CHECK(price_per_kwh >= 0),
@@ -76,6 +84,9 @@ CREATE TABLE IF NOT EXISTS piles (
     updated_at           TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
     FOREIGN KEY (station_id) REFERENCES stations(id) ON DELETE RESTRICT
 );
+
+CREATE INDEX IF NOT EXISTS idx_piles_type_speed ON piles(pile_type, speed_class);
+CREATE INDEX IF NOT EXISTS idx_piles_connector ON piles(connector_standard);
 
 CREATE TABLE IF NOT EXISTS charging_reservations (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -268,6 +279,10 @@ CREATE TABLE IF NOT EXISTS admin_audit_logs (
 
 CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
 CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_station_code
+    ON stations(station_code) WHERE station_code IS NOT NULL AND station_code != '';
+CREATE UNIQUE INDEX IF NOT EXISTS uq_recharge_payment_no
+    ON recharge_records(payment_no) WHERE payment_no IS NOT NULL AND payment_no != '';
 CREATE INDEX IF NOT EXISTS idx_stations_region_status ON stations(region_code, status);
 CREATE INDEX IF NOT EXISTS idx_piles_station_status ON piles(station_id, status);
 CREATE INDEX IF NOT EXISTS idx_orders_user_status ON charging_orders(user_id, status);

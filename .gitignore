@@ -1,4 +1,6 @@
 build/
+build-*/
+spec-review/
 cmake-build-*/
 *.user
 *.autosave

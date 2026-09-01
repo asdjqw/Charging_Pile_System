@@ -10,7 +10,8 @@ class QStackedWidget;
 class QTableWidget;
 class QLineEdit;
 class QComboBox;
-class QChartView;
+class QFrame;
+class SalesTrendWidget;
 
 class MainWindow : public QMainWindow
 {
@@ -32,6 +33,8 @@ private slots:
     void onEditPile();
     void onDeletePile();
     void onSetPileStatus();
+    void onRestartPile();
+    void onToggleUserStatus();
     void onDeleteUser();
     void onRechargeUser();
 
@@ -51,17 +54,21 @@ private:
     // dashboard
     QLabel *m_kpiTodayAmount = nullptr;
     QLabel *m_kpiMonthAmount = nullptr;
+    QLabel *m_kpiTotalAmount = nullptr;
     QLabel *m_kpiTotalOrders = nullptr;
     QLabel *m_kpiUsers = nullptr;
     QLabel *m_kpiIdle = nullptr;
     QLabel *m_kpiCharging = nullptr;
     QLabel *m_kpiFault = nullptr;
     QLabel *m_kpiOffline = nullptr;
-    QChartView *m_salesChart = nullptr;
+    QTableWidget *m_salesTable = nullptr;
+    SalesTrendWidget *m_salesTrend = nullptr;
+    QComboBox *m_salesDays = nullptr;
     QTableWidget *m_recentOrders = nullptr;
 
     // pile status
     QComboBox *m_statusFilter = nullptr;
+    QLabel *m_statusSummary = nullptr;
     QTableWidget *m_statusTable = nullptr;
 
     // stations

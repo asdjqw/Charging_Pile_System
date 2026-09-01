@@ -15,10 +15,8 @@ public:
 
 private slots:
     void onLogin();
-    void onRegister();
 
 private:
-    QLineEdit *m_usernameEdit = nullptr;
-    QLineEdit *m_passwordEdit = nullptr;
+    QLineEdit *m_phoneEdit = nullptr;
     User m_user;
 };

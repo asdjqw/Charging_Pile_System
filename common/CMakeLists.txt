@@ -1,6 +1,10 @@
 add_library(common STATIC
     DatabaseManager.cpp
     DatabaseManager.h
+    FramedJson.cpp
+    FramedJson.h
+    JsonCodec.cpp
+    JsonCodec.h
     Models.h
     StyleHelper.h
 )

@@ -1,125 +1,114 @@
-# 充电桩综合管理系统（Linux + Qt6）
+# 充电桩综合管理系统（Qt6）
 
-项目 **用户端 + PC 服务器端 + 数据库端** 骨架，在 Ubuntu 上使用 Qt6 开发与运行。
-
-> 后续可继续扩展：大数据可视化大屏（Web）、机器学习负荷预测。
+项目包含 **Qt 用户端 + PC 管理/服务器端 + SQLite + Web 运营大屏**。所有组件可在同一台
+设备运行：用户端通过 TCP 业务协议访问服务器，只有服务器进程可以打开 SQLite 数据库。
 
 ## 系统组成
 
 | 子系统 | 技术 | 功能 |
-|--------|------|------|
-| 充电用户端 | Linux + Qt6 Widgets | 附近电站查询、一键导航、用户信息维护、电动汽车充电 |
-| PC 服务器端 | Linux + Qt6 Widgets | 管理员登录、销售业绩、电桩状态、充电站/桩/用户管理 |
-| 数据库端 | Qt SQL + SQLite | 用户、站点、电桩、订单、账务、遥测、预测与审计数据 |
+|---|---|---|
+| 充电用户端 | Qt6 Widgets + Network | 手机号免密登录、找桩导航、预约、充电、资料、充值和订单 |
+| PC 管理/服务器端 | Qt6 Widgets + Network | 营收统计、设备运维、用户风控、TCP/HTTP 服务和核心业务 |
+| 数据库端 | Qt SQL + SQLite | 用户、站点、电桩、订单、账务、遥测与审计 |
+| Web 大屏 | HTML + CSS + ECharts | 7/30 日营收、在线率、电桩状态、订单和站点实时展示 |
 
-数据库：`~/.local/share/ChargePileLab/charge_pile.db`。完整的数据模型、事务边界和
-Socket 协议见 [`database/DESIGN.md`](database/DESIGN.md)。
+数据库默认位于 `~/.local/share/ChargePileLab/charge_pile.db`。协议、数据模型和事务边界见
+[`database/DESIGN.md`](database/DESIGN.md)。
 
-## 环境要求（Ubuntu 22.04 / 24.04）
+## Ubuntu 环境
 
 ```bash
 chmod +x scripts/install_deps_ubuntu.sh scripts/build.sh
 ./scripts/install_deps_ubuntu.sh
 ```
 
-手动安装也可：
+手动安装：
 
 ```bash
 sudo apt update
-sudo apt install -y build-essential cmake ninja-build \
-  qt6-base-dev qt6-charts-dev qt6-tools-dev \
-  libqt6sql6-sqlite libgl1-mesa-dev
+sudo apt install -y build-essential cmake \
+  qt6-base-dev qt6-tools-dev libqt6sql6-sqlite \
+  libgl1-mesa-dev pkg-config
 ```
+
+项目以 Ubuntu Qt 6.2.4、CMake 3.22、GCC 11 和 C++17 为兼容基准。
 
 ## 编译与运行
 
 ```bash
 ./scripts/build.sh
 
-# 终端 1：用户端
+# 终端 1：管理端，同时启动 TCP 9000 和 HTTP 8080
+./build/admin_server/admin_server
+
+# 终端 2：用户端
 ./build/user_client/user_client
 
-# 终端 2：管理端
-./build/admin_server/admin_server
+# 浏览器打开 Web 大屏
+firefox http://127.0.0.1:8080
 ```
 
-或使用 Qt Creator：打开本目录 `CMakeLists.txt`，选择 Qt6 Kit，构建后分别运行两个目标。
+也可使用 Qt Creator 打开顶层 `CMakeLists.txt`，选择 Qt6 Desktop Kit 后构建。
 
-## 演示账号
+### 演示账号
 
-**用户端**
+用户端输入 11 位手机号免密登录，手机号不存在时自动创建用户。内置演示手机号：
+`13800001111`、`13900002222`、`13700003333`。
 
-| 用户名 | 密码 | 说明 |
-|--------|------|------|
-| zhangsan | 123456 | 余额约 200 |
-| lisi | 123456 | 余额约 80.5 |
-| wangwu | 123456 | 余额约 500 |
+| 类型 | 用户名 | 密码 |
+|---|---|---|
+| 管理员 | `admin` | `123456` |
+| 运维 | `ops01` | `ops123` |
 
-**管理端**
+## 运行架构
 
-| 用户名 | 密码 | 角色 |
-|--------|------|------|
-| admin | 123456 | 系统管理员 |
-| ops01 | ops123 | 运维人员 |
+```text
+Qt 用户端 ── TCP/JSON :9000 ──┐
+                               ├── PC 管理/服务器端 ── SQLite
+Web 浏览器 ── HTTP :8080 ──────┘
+```
+
+TCP 消息使用“4 字节大端长度 + UTF-8 JSON”帧，并通过 `requestId` 匹配响应。网络监听
+运行在独立 `QThread`，数据库操作回到创建数据库连接的主线程执行。充电进度、遥测、
+钱包流水和状态日志都由服务器持久化。
+
+## 服务配置
+
+| 环境变量 | 默认值 | 说明 |
+|---|---|---|
+| `CHARGE_PILE_HOST` | `127.0.0.1` | 用户端连接地址 |
+| `CHARGE_PILE_PORT` | `9000` | TCP 业务端口 |
+| `CHARGE_PILE_HTTP_PORT` | `8080` | Web 大屏端口 |
+| `CHARGE_PILE_BIND_ADDRESS` | `127.0.0.1` | 服务监听地址；局域网使用 `0.0.0.0` |
+| `CHARGE_PILE_DB_PATH` | 系统应用数据目录 | 服务端 SQLite 路径 |
+| `CHARGE_PILE_WEB_ROOT` | 程序旁的 `web` | Web 静态资源目录 |
+| `CHARGE_PILE_HEADLESS` | `0` | 设为 `1` 时仅运行服务 |
+
+局域网运行时，将服务端 `CHARGE_PILE_BIND_ADDRESS` 设为 `0.0.0.0`，并将用户端的
+`CHARGE_PILE_HOST` 改为服务器 IP。
 
 ## 目录结构
 
-```
-Charge_pile/
-├── CMakeLists.txt
-├── README.md
-├── database/
-│   ├── schema.sql          # SQLite 建表
-│   ├── seed.sql            # 示例数据
-│   └── schema_mysql.sql    # 可选 MySQL 脚本
-├── common/                 # 公共库：模型、数据库、样式
-├── user_client/            # 充电用户端
-├── admin_server/           # PC 服务器端
-└── scripts/
-    ├── install_deps_ubuntu.sh
-    └── build.sh
+```text
+common/        公共模型、JSON 编解码、帧协议和数据库
+user_client/   Qt 用户端和 TCP API 客户端
+admin_server/  管理 GUI、请求分发、TCP/HTTP 服务
+database/      SQLite schema、seed 和协议设计
+data/          北京充电站 CSV
+web/           离线 Web 运营大屏
+tests/         协议测试和 TCP 端到端测试客户端
+scripts/       Ubuntu 依赖安装与跨平台构建脚本
 ```
 
-## 业务说明
-
-### 1. 充电用户端
-
-- **附近充电站查询**：按关键字搜索，按当前位置估算距离排序
-- **一键导航**：打开 OpenStreetMap 目标坐标（无需商业地图 Key）
-- **用户信息维护**：手机号、车型、车牌、密码；支持充值与订单查看
-- **电动汽车充电**：选择站点与空闲桩 → 开始充电（功率模拟电量）→ 结束结算扣费
-
-### 2. PC 服务器端
-
-- **管理员登录**
-- **销售业绩**：今日/本月营收、近 7 日柱状图、最近订单
-- **电桩状态**：按空闲/充电中/故障/离线筛选与改状态
-- **充电站管理 / 充电桩管理 / 用户管理**：增删改查
-
-### 3. 数据库端
-
-首次启动自动执行 `schema.sql` + `seed.sql`。若需重置数据：
+## 测试
 
 ```bash
-rm -f ~/.local/share/ChargePileLab/charge_pile.db
+ctest --test-dir build --output-on-failure
 ```
 
-然后重新启动任意一端即可重建。
+`database_behavior_test` 验证手机号自动建号、冻结/解冻和模拟远程重启；
+`server_api_smoke` 在运行中的独立服务上验证预约/取消、预约转充电、进度持久化、结算和订单查询。
 
-目标部署中仅 PC 服务器端通过 `QSQLITE` 打开数据库，用户端通过
-`QTcpSocket` 调用服务器业务接口，不直接访问或共享 SQLite 文件。当前骨架中的
-用户端直连数据库代码是单机演示实现，网络化改造接口约定见数据库设计文档。
+## 尚未包含
 
-## 可改用 MySQL
-
-1. 导入 `database/schema_mysql.sql` 与相应数据  
-2. 在 `DatabaseManager` 中把驱动从 `QSQLITE` 改为 `QMYSQL`，并配置主机/库名/账号  
-3. 安装：`sudo apt install libqt6sql6-mysql`
-
-当前默认 SQLite，便于课堂演示与单机答辩。
-
-## 扩展建议
-
-- Web 大数据可视化大屏（ECharts + 后端 API）
-- 充电负荷预测（Python / 简单时序模型）
-- 用户端与管理端改为 TCP/HTTP 联网，而不仅是共享本地库
+机器学习训练与推理属于后续模块；数据库已经保留模型、负荷样本和预测结果表供其接入。
