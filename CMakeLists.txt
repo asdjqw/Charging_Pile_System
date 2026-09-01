@@ -8,10 +8,14 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Sql Network DBus)
+include(CTest)
 
 add_subdirectory(common)
 add_subdirectory(user_client)
 add_subdirectory(admin_server)
+if(BUILD_TESTING)
+    add_subdirectory(tests)
+endif()
 
 add_custom_target(copy_database ALL
     COMMAND ${CMAKE_COMMAND} -E copy_directory
@@ -23,6 +27,12 @@ add_custom_target(copy_database ALL
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_SOURCE_DIR}/database
         $<TARGET_FILE_DIR:admin_server>/database
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_SOURCE_DIR}/web
+        ${CMAKE_BINARY_DIR}/web
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_SOURCE_DIR}/web
+        $<TARGET_FILE_DIR:admin_server>/web
     COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:user_client>/data
     COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:admin_server>/data
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -31,6 +41,6 @@ add_custom_target(copy_database ALL
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         ${CMAKE_SOURCE_DIR}/data/北京市充电桩数据.csv
         $<TARGET_FILE_DIR:admin_server>/data/北京市充电桩数据.csv
-    COMMENT "Copy database scripts and Beijing CSV next to executables"
+    COMMENT "Copy database, CSV, and web dashboard assets"
     DEPENDS user_client admin_server
 )

@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>充电桩运营大屏</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand-lockup">
+      <span class="brand-mark" aria-hidden="true">CP</span>
+      <div>
+        <p class="eyebrow">CHARGE PILE / OPERATIONS</p>
+        <h1>充电桩运营大屏</h1>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <div class="system-meta">
+        <span id="health" class="health" data-state="loading" aria-live="polite">服务检测中</span>
+        <time id="clock"></time>
+      </div>
+      <button id="refresh" class="refresh-button" type="button">
+        <span aria-hidden="true">↻</span><span class="button-label">刷新数据</span>
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <section class="overview" aria-labelledby="overviewTitle">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">实时运行</p>
+          <h2 id="overviewTitle">运营总览</h2>
+        </div>
+        <span id="lastUpdated">等待首次同步</span>
+      </div>
+
+      <div class="signal-grid" aria-label="关键运行指标">
+        <article class="signal signal-revenue">
+          <span>今日营收</span>
+          <div><strong id="todayAmount">--</strong><small>元</small></div>
+          <p>当前自然日已完成订单</p>
+        </article>
+        <article class="signal signal-month">
+          <span>本月营收</span>
+          <div><strong id="monthAmount">--</strong><small>元</small></div>
+          <p>本月累计结算金额</p>
+        </article>
+        <article class="signal signal-online">
+          <span>设备在线率</span>
+          <div><strong id="onlineRate">--</strong><small>%</small></div>
+          <p>全网电桩实时可连接比例</p>
+        </article>
+        <article class="signal signal-alert">
+          <span>异常电桩</span>
+          <div><strong id="abnormalPiles">--</strong><small>台</small></div>
+          <p>故障与离线设备合计</p>
+        </article>
+      </div>
+
+      <div class="asset-strip" aria-label="资产与业务规模">
+        <div><span>累计营收</span><strong id="totalAmount">--</strong><small>元</small></div>
+        <div><span>累计订单</span><strong id="totalOrders">--</strong><small>单</small></div>
+        <div><span>注册用户</span><strong id="totalUsers">--</strong><small>人</small></div>
+        <div><span>充电站</span><strong id="totalStations">--</strong><small>座</small></div>
+        <div class="asset-idle"><span>空闲</span><strong id="idlePiles">--</strong><small>台</small></div>
+        <div class="asset-charging"><span>充电中</span><strong id="chargingPiles">--</strong><small>台</small></div>
+        <div class="asset-reserved"><span>已预约</span><strong id="reservedPiles">--</strong><small>台</small></div>
+      </div>
+    </section>
+
+    <section class="visuals">
+      <div class="panel trend-panel">
+        <div class="panel-heading">
+          <div><p class="section-kicker">经营趋势</p><h2 id="salesTitle">近 7 日营收趋势</h2></div>
+          <div id="salesDays" class="segmented" aria-label="营收时间范围">
+            <button type="button" data-days="7" aria-pressed="true">7 日</button>
+            <button type="button" data-days="30" aria-pressed="false">30 日</button>
+          </div>
+        </div>
+        <div id="salesChart" class="chart" role="img" aria-label="营收趋势折线图"></div>
+      </div>
+      <div class="panel status-panel">
+        <div class="panel-heading">
+          <div><p class="section-kicker">设备构成</p><h2>电桩运行状态</h2></div>
+          <span id="pileTotal">共 0 台</span>
+        </div>
+        <div id="statusChart" class="chart" role="img" aria-label="电桩运行状态环形图"></div>
+      </div>
+    </section>
+
+    <section class="tables">
+      <div class="table-section">
+        <div class="panel-heading">
+          <div><p class="section-kicker">交易流水</p><h2>最近订单</h2></div>
+          <span>最新 12 条结算记录</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th scope="col">订单号</th><th scope="col">用户</th><th scope="col">站点</th><th scope="col">电量</th><th scope="col">金额</th><th scope="col">状态</th></tr></thead>
+            <tbody id="ordersBody"><tr><td class="empty" colspan="6">正在同步订单数据…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="table-section">
+        <div class="panel-heading">
+          <div><p class="section-kicker">资产索引</p><h2>充电站点</h2></div>
+          <span>按北京中心点距离排序</span>
+        </div>
+        <div class="station-search">
+          <div class="search-field">
+            <span class="search-symbol" aria-hidden="true">⌕</span>
+            <input id="stationQuery" type="search" autocomplete="off" placeholder="搜索站名、地址或区域" aria-label="搜索站名、地址或区域">
+            <button id="stationClear" class="icon-button clear-button" type="button" aria-label="清除搜索" title="清除搜索" hidden>×</button>
+          </div>
+          <button id="stationSearch" type="button">搜索</button>
+        </div>
+        <div class="table-wrap station-table-wrap">
+          <table>
+            <thead><tr><th scope="col">站点</th><th scope="col">区域</th><th scope="col">在线率</th><th scope="col">空闲/总数</th><th scope="col">状态</th></tr></thead>
+            <tbody id="stationsBody"><tr><td class="empty" colspan="5">正在同步站点数据…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="pagination-row">
+          <span id="stationProgress" aria-live="polite">第 1 / 1 页 · 共 0 个站点</span>
+          <div>
+            <button id="stationPrev" class="icon-button" type="button" aria-label="上一页" title="上一页">←</button>
+            <button id="stationNext" class="icon-button" type="button" aria-label="下一页" title="下一页">→</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer><span>本地服务 / TCP 9000 / HTTP 8080</span><span>数据每 10 秒自动刷新</span></footer>
+  <div id="announcement" class="sr-only" aria-live="polite"></div>
+  <script src="/echarts.min.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

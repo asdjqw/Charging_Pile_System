@@ -279,6 +279,10 @@ CREATE TABLE IF NOT EXISTS admin_audit_logs (
 
 CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
 CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_station_code
+    ON stations(station_code) WHERE station_code IS NOT NULL AND station_code != '';
+CREATE UNIQUE INDEX IF NOT EXISTS uq_recharge_payment_no
+    ON recharge_records(payment_no) WHERE payment_no IS NOT NULL AND payment_no != '';
 CREATE INDEX IF NOT EXISTS idx_stations_region_status ON stations(region_code, status);
 CREATE INDEX IF NOT EXISTS idx_piles_station_status ON piles(station_id, status);
 CREATE INDEX IF NOT EXISTS idx_orders_user_status ON charging_orders(user_id, status);

@@ -7,7 +7,7 @@ SQLite 是嵌入式数据库，不提供远程数据库协议。正确结构是�
 ```text
 Qt 用户端 ── TCP/JSON ──> Qt PC 服务器 ── QSQLITE ──> charge_pile.db
 Qt 管理界面 ────────────> 业务服务层 ────┘
-Web 大屏 ── HTTP/WebSocket（后续）───────┘
+Web 大屏 ── HTTP JSON（端口 8080）────────┘
 机器学习服务 ── 批量读取/写入预测结果 ──┘
 ```
 
@@ -49,9 +49,9 @@ ml_models ── load_forecasts
 | `ml_models` / `load_forecasts` | 模型版本和 1/6/24 小时预测结果 |
 | `admin_audit_logs` | 冻结用户、重启电桩等敏感操作审计 |
 
-## 4. TCP Socket 协议建议
+## 4. TCP Socket 协议
 
-使用 `QTcpServer` + `QTcpSocket`。每个消息采用“4 字节大端无符号长度 + UTF-8 JSON”帧，解决 TCP 粘包/拆包问题。所有请求都携带唯一 `requestId`，写操作可据此实现幂等。
+系统使用 `QTcpServer` + `QTcpSocket`。每个消息采用“4 字节大端无符号长度 + UTF-8 JSON”帧，解决 TCP 粘包/拆包问题。所有请求都携带唯一 `requestId`；服务端原样返回该 ID，使客户端能够匹配响应。
 
 请求示例：
 
@@ -78,18 +78,18 @@ ml_models ── load_forecasts
 }
 ```
 
-建议动作：
+已实现的主要业务动作：
 
 | 动作 | 主要事务 |
 |---|---|
 | `user.phoneLogin` | 查询手机号；不存在则创建默认昵称；签发会话 |
-| `station.nearby` | 查询营业站点与空闲桩；服务端计算距离并按距离/拥堵度排序 |
-| `station.piles` | 查询站内电桩实时状态 |
+| `stations.list` | 查询站点与空闲桩；服务端计算距离并排序 |
+| `piles.list` | 查询站内电桩实时状态 |
 | `reservation.create/cancel` | 锁定或释放一个空闲桩 |
 | `charge.start` | 校验用户和桩状态，创建订单并把桩改为 `charging` |
 | `charge.stop` | 固化电量与价格，订单进入待支付或直接结算 |
 | `wallet.recharge` | 同一事务更新余额并写入钱包流水 |
-| `order.settle` | 同一事务扣款、结束订单、释放电桩并写入钱包流水 |
+| `charge.stop` | 同一事务扣款、结束订单、释放电桩并写入钱包流水 |
 | `admin.user.freeze` | 更新用户状态并写审计日志 |
 | `admin.pile.restart` | 写状态日志，向设备端发送模拟指令 |
 

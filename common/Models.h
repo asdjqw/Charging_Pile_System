@@ -9,9 +9,11 @@ struct User {
     QString password;
     QString phone;
     QString nickname;
+    QString avatarPath;
     double balance = 0.0;
     QString carModel;
     QString plateNumber;
+    QString status;
     QString createdAt;
 };
 
@@ -35,6 +37,7 @@ struct Station {
     QString status;
     int idlePiles = 0;
     int totalPiles = 0;
+    double onlineRate = 0.0;
     double distanceKm = 0.0;
 };
 
@@ -51,6 +54,20 @@ struct Pile {
     double powerKw = 0.0;
     double pricePerKwh = 0.0;
     QString status;              // idle / charging / fault / offline / reserved / restarting
+    QString stationName;
+    int totalChargeCount = 0;
+    int totalChargeSeconds = 0;
+};
+
+struct ChargingReservation {
+    int id = 0;
+    QString reservationNo;
+    int userId = 0;
+    int pileId = 0;
+    QString reservedAt;
+    QString expiresAt;
+    QString status;
+    QString pileCode;
     QString stationName;
 };
 
@@ -94,6 +111,13 @@ inline QString statusTextOrder(const QString &status)
     if (status == QLatin1String("pending_payment")) return QStringLiteral("待支付");
     if (status == QLatin1String("finished")) return QStringLiteral("已完成");
     if (status == QLatin1String("cancelled")) return QStringLiteral("已取消");
+    return status;
+}
+
+inline QString statusTextUser(const QString &status)
+{
+    if (status == QLatin1String("normal")) return QStringLiteral("正常");
+    if (status == QLatin1String("frozen")) return QStringLiteral("冻结");
     return status;
 }
 

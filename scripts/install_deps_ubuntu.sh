@@ -8,7 +8,6 @@ sudo apt install -y \
   cmake \
   ninja-build \
   qt6-base-dev \
-  qt6-charts-dev \
   qt6-tools-dev \
   libqt6sql6-sqlite \
   libgl1-mesa-dev \
@@ -19,5 +18,5 @@ echo "依赖安装完成。接下来可执行："
 echo "  cd \"$(dirname "$0")/..\""
 echo "  cmake -S . -B build -G Ninja"
 echo "  cmake --build build -j"
-echo "  ./build/user_client/user_client"
 echo "  ./build/admin_server/admin_server"
+echo "  ./build/user_client/user_client"

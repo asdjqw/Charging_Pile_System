@@ -4,6 +4,8 @@ add_executable(user_client
     LoginDialog.h
     LocationProvider.cpp
     LocationProvider.h
+    ServerApiClient.cpp
+    ServerApiClient.h
     MainWindow.cpp
     MainWindow.h
 )

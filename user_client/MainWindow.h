@@ -33,11 +33,14 @@ private slots:
     void onRealLocationUpdated(double lat, double lng, const QString &label, const QString &source);
     void onRealLocationFailed(const QString &reason);
     void refreshPilesForCharge();
+    void onReservePile();
+    void onCancelReservation();
     void onStartCharge();
     void onStopCharge();
     void onChargeTick();
     void refreshProfile();
     void onSaveProfile();
+    void onChooseAvatar();
     void onRecharge();
     void refreshOrders();
 
@@ -84,20 +87,24 @@ private:
     QComboBox *m_connectorFilter = nullptr;
     QListWidget *m_pileList = nullptr;
     QLabel *m_chargeInfo = nullptr;
+    QLabel *m_reservationInfo = nullptr;
     QProgressBar *m_chargeProgress = nullptr;
     QTimer *m_chargeTimer = nullptr;
     ChargingOrder m_ongoing;
+    ChargingReservation m_reservation;
     double m_simulatedEnergy = 0.0;
+    int m_progressTick = 0;
     double m_currentPrice = 1.2;
     double m_currentPowerKw = 7.0;
 
     // 用户信息
     QLineEdit *m_phoneEdit = nullptr;
+    QLineEdit *m_nicknameEdit = nullptr;
     QLineEdit *m_carEdit = nullptr;
     QLineEdit *m_plateEdit = nullptr;
-    QLineEdit *m_pwdEdit = nullptr;
     QLineEdit *m_rechargeEdit = nullptr;
     QLabel *m_balanceLabel = nullptr;
+    QLabel *m_avatarLabel = nullptr;
     QLabel *m_dbInfoLabel = nullptr;
     QTableWidget *m_orderTable = nullptr;
 };
