@@ -1,0 +1,12 @@
+build/
+cmake-build-*/
+*.user
+*.autosave
+.idea/
+.vscode/
+*.db
+*.o
+*.a
+*.so
+*.AppImage
+.DS_Store
