@@ -292,9 +292,8 @@ Web 运营大屏（浏览器）
 - GNU Make 4.3；
 - C++17。
 
-本次开发也在 macOS 用户目录中的 Qt6 环境完成构建验证。macOS 只是开发便利环境，不是项目
-的强制运行平台，也没有引入仅 macOS 可用的核心业务依赖。Web 大屏使用原生 HTML/CSS/JS
-和本地 ECharts，Ubuntu 无需安装 Node.js。
+本项目不依赖特定个人开发设备，也没有引入仅限某一桌面系统的核心业务依赖。Web 大屏使用
+原生 HTML/CSS/JS 和本地 ECharts，Ubuntu 无需安装 Node.js。
 
 顶层 CMake 会构建公共库、用户端、管理/服务器端和测试程序，并把数据库脚本、CSV 和 Web
 资源复制到可执行文件附近。`scripts/build.sh` 默认使用 CMake Unix Makefiles，适配课程环境。
@@ -318,17 +317,7 @@ chmod +x scripts/install_deps_ubuntu.sh scripts/build.sh
 firefox http://127.0.0.1:8080/
 ```
 
-### 9.2 macOS 当前构建目录
-
-```bash
-# 启动管理/服务器端
-open build-submit-check-qt/admin_server/admin_server.app
-
-# 或在终端中启动并查看日志
-./build-submit-check-qt/admin_server/admin_server.app/Contents/MacOS/admin_server
-```
-
-### 9.3 演示账号
+### 9.2 演示账号
 
 | 类型 | 用户名/手机号 | 密码 |
 |---|---|---|
@@ -336,7 +325,7 @@ open build-submit-check-qt/admin_server/admin_server.app
 | 运维 | `ops01` | `ops123` |
 | 用户 | 任意合法 11 位手机号 | 手机号免密登录，不存在时自动创建 |
 
-### 9.4 环境变量
+### 9.3 环境变量
 
 | 环境变量 | 默认值 | 用途 |
 |---|---|---|
@@ -435,7 +424,7 @@ ctest --test-dir build --output-on-failure
 - 用户状态、电桩状态、钱包和审计数据持久化；
 - HTTP 静态资源和大屏 JSON API；
 - Web 运营大屏、站点搜索与服务端分页；
-- Ubuntu 构建脚本和 macOS 开发验证；
+- Ubuntu 构建脚本与标准开发环境兼容；
 - 协议、数据库和端到端核心流程测试。
 
 ### 11.2 尚未完成或属于后续范围
