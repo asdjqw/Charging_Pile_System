@@ -1,16 +1,13 @@
 #include "ApiDispatcher.h"
-#include "LoginDialog.h"
 #include "LocalServer.h"
-#include "MainWindow.h"
 #include "DatabaseManager.h"
-#include "StyleHelper.h"
 
-#include <QApplication>
 #include <QCoreApplication>
 #include <QDir>
-#include <QDebug>
 #include <QFileInfo>
-#include <QMessageBox>
+#include <QDebug>
+#include <QJsonObject>
+#include <QMetaType>
 #include <QThread>
 
 namespace {
@@ -42,18 +39,17 @@ QString resolveWebRoot()
 
 int main(int argc, char *argv[])
 {
-    QApplication app(argc, argv);
-    QApplication::setApplicationName(QStringLiteral("ChargePileAdmin"));
-    QApplication::setOrganizationName(QStringLiteral("ChargePileLab"));
-    app.setStyleSheet(StyleHelper::adminServerStyle());
+    QCoreApplication app(argc, argv);
+    QCoreApplication::setApplicationName(QStringLiteral("ChargePileServer"));
+    QCoreApplication::setOrganizationName(QStringLiteral("ChargePileLab"));
+    qRegisterMetaType<QJsonObject>("QJsonObject");
 
     if (!DatabaseManager::instance().initialize(qEnvironmentVariable("CHARGE_PILE_DB_PATH"))) {
-        QMessageBox::critical(nullptr, QStringLiteral("数据库错误"),
-                              DatabaseManager::instance().lastError());
+        qCritical().noquote() << QStringLiteral("数据库错误：")
+                              << DatabaseManager::instance().lastError();
         return 1;
     }
 
-    const bool headless = qEnvironmentVariableIntValue("CHARGE_PILE_HEADLESS") == 1;
     const quint16 tcpPort = configuredPort("CHARGE_PILE_PORT", 9000);
     const quint16 httpPort = configuredPort("CHARGE_PILE_HTTP_PORT", 8080);
     ApiDispatcher dispatcher;
@@ -69,43 +65,23 @@ int main(int argc, char *argv[])
         QMetaObject::invokeMethod(server, "sendResponse", Qt::QueuedConnection,
                                   Q_ARG(QString, channelId), Q_ARG(QJsonObject, response));
     });
-    QObject::connect(server, &LocalServer::fatalError, &app, [&app, headless](const QString &message) {
-        if (headless)
-            qCritical().noquote() << message;
-        else
-            QMessageBox::critical(nullptr, QStringLiteral("服务启动失败"), message);
+    QObject::connect(server, &LocalServer::fatalError, &app, [&app](const QString &message) {
+        qCritical().noquote() << message;
         app.exit(2);
     });
     QObject::connect(server, &LocalServer::started, &app,
                      [](quint16 startedTcpPort, quint16 startedHttpPort) {
-        qInfo().noquote() << QStringLiteral("服务已启动：TCP %1，Web http://127.0.0.1:%2")
+        qInfo().noquote() << QStringLiteral("后端服务已启动：TCP %1，Web http://127.0.0.1:%2")
                                 .arg(startedTcpPort).arg(startedHttpPort);
+        qInfo().noquote() << QStringLiteral("请分别启动 user_client 与 admin_client 接入本服务。");
     });
-    networkThread.start();
-
-    const auto runEventLoop = [&]() {
-        const int result = app.exec();
+    QObject::connect(&app, &QCoreApplication::aboutToQuit, [&]() {
         if (networkThread.isRunning())
             QMetaObject::invokeMethod(server, "stop", Qt::BlockingQueuedConnection);
         networkThread.quit();
         networkThread.wait();
-        return result;
-    };
+    });
 
-    if (headless)
-        return runEventLoop();
-
-    LoginDialog login;
-    if (login.exec() != QDialog::Accepted) {
-        QMetaObject::invokeMethod(server, "stop", Qt::BlockingQueuedConnection);
-        networkThread.quit();
-        networkThread.wait();
-        return 0;
-    }
-
-    MainWindow w(login.loggedInAdmin());
-    w.setWindowTitle(QStringLiteral("充电桩运营管理后台 · TCP %1 · Web %2")
-                         .arg(tcpPort).arg(httpPort));
-    w.show();
-    return runEventLoop();
+    networkThread.start();
+    return app.exec();
 }

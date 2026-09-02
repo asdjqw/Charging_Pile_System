@@ -4,6 +4,7 @@
 
 #include <QCoreApplication>
 #include <QDateTime>
+#include <QDebug>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -181,8 +182,10 @@ bool DatabaseManager::ensureSchemaAndSeed()
     const int stations = stationCount();
     const int piles = pileCount();
     if (stations == 0 || piles < stations * 3) {
+        qInfo().noquote() << QStringLiteral("首次启动：正在导入北京市充电桩 CSV，虚拟机上可能需要 1～2 分钟，请等待…");
         if (!importBeijingCsv(QString(), stations > 0))
             return false;
+        qInfo().noquote() << QStringLiteral("CSV 导入完成。");
     }
     return true;
 }
@@ -668,6 +671,72 @@ bool DatabaseManager::saveStation(Station &station)
             return false;
         }
     }
+    return true;
+}
+
+bool DatabaseManager::createStationWithPiles(Station &station, int pileCount)
+{
+    pileCount = qBound(1, pileCount, 40);
+    if (station.name.trimmed().isEmpty() || station.address.trimmed().isEmpty()) {
+        m_lastError = QStringLiteral("站名和地址不能为空");
+        return false;
+    }
+    if (station.openHours.isEmpty())
+        station.openHours = QStringLiteral("00:00-24:00");
+    if (station.status.isEmpty())
+        station.status = QStringLiteral("open");
+
+    if (!m_db.transaction()) {
+        m_lastError = m_db.lastError().text();
+        return false;
+    }
+    if (!saveStation(station)) {
+        m_db.rollback();
+        return false;
+    }
+
+    const QString code = station.stationCode.isEmpty()
+                             ? QStringLiteral("ST%1").arg(station.id, 4, 10, QChar('0'))
+                             : station.stationCode;
+    if (station.stationCode.isEmpty()) {
+        QSqlQuery codeQuery(m_db);
+        codeQuery.prepare(QStringLiteral("UPDATE stations SET station_code=? WHERE id=?"));
+        codeQuery.addBindValue(code);
+        codeQuery.addBindValue(station.id);
+        if (!codeQuery.exec()) {
+            m_lastError = codeQuery.lastError().text();
+            m_db.rollback();
+            return false;
+        }
+        station.stationCode = code;
+    }
+
+    for (int i = 0; i < pileCount; ++i) {
+        Pile pile;
+        pile.stationId = station.id;
+        pile.pileCode = QStringLiteral("%1-A%2").arg(code).arg(i + 1, 2, 10, QChar('0'));
+        const bool fast = (i % 3 == 0);
+        pile.pileType = fast ? QStringLiteral("DC") : QStringLiteral("AC");
+        pile.speedClass = fast ? QStringLiteral("fast") : QStringLiteral("slow");
+        pile.connectorStandard = fast ? QStringLiteral("GB_T_DC") : QStringLiteral("GB_T_AC");
+        pile.phase = fast ? QStringLiteral("three") : QStringLiteral("single");
+        pile.voltageV = fast ? 750 : 220;
+        pile.powerKw = fast ? 60.0 : 7.0;
+        pile.pricePerKwh = fast ? 1.80 : 1.20;
+        pile.status = QStringLiteral("idle");
+        pile.categoryLabel = pileCategoryText(pile);
+        if (!savePile(pile)) {
+            m_db.rollback();
+            return false;
+        }
+    }
+
+    if (!m_db.commit()) {
+        m_lastError = m_db.lastError().text();
+        m_db.rollback();
+        return false;
+    }
+    station.totalPiles = pileCount;
     return true;
 }
 
@@ -1697,6 +1766,8 @@ bool DatabaseManager::importBeijingCsv(const QString &csvPath, bool force)
 
         appendClassifiedPiles(stationId, stationCode, qHash(poi), priceHint, q);
         ++imported;
+        if (imported % 200 == 0)
+            qInfo().noquote() << QStringLiteral("已导入 %1 个充电站…").arg(imported);
     }
 
     if (!m_db.commit()) {

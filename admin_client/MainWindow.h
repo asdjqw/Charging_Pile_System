@@ -2,16 +2,17 @@
 
 #include "Models.h"
 
+#include <QJsonObject>
 #include <QMainWindow>
+#include <QtCharts/QChartView>
 
+class QComboBox;
+class QFrame;
 class QLabel;
+class QLineEdit;
 class QListWidget;
 class QStackedWidget;
 class QTableWidget;
-class QLineEdit;
-class QComboBox;
-class QFrame;
-class SalesTrendWidget;
 
 class MainWindow : public QMainWindow
 {
@@ -23,63 +24,49 @@ private slots:
     void onNavChanged(int row);
     void refreshDashboard();
     void refreshPileStatus();
-    void refreshStations();
     void refreshPiles();
+    void refreshStations();
     void refreshUsers();
-    void onAddStation();
-    void onEditStation();
-    void onDeleteStation();
-    void onAddPile();
-    void onEditPile();
-    void onDeletePile();
-    void onSetPileStatus();
     void onRestartPile();
+    void onAddStation();
+    void onStationRowClicked(int row, int column);
     void onToggleUserStatus();
-    void onDeleteUser();
-    void onRechargeUser();
 
 private:
     void buildUi();
     QWidget *buildDashboardPage();
     QWidget *buildPileStatusPage();
-    QWidget *buildStationPage();
     QWidget *buildPilePage();
+    QWidget *buildStationPage();
     QWidget *buildUserPage();
     QFrame *makeKpiCard(const QString &title, QLabel **valueLabel);
+    void applySalesChart(const QJsonObject &payload);
+    void applyStatusChart(const QJsonObject &stats);
+    void showApiError(const QString &title);
 
     Admin m_admin;
     QListWidget *m_nav = nullptr;
     QStackedWidget *m_stack = nullptr;
 
-    // dashboard
     QLabel *m_kpiTodayAmount = nullptr;
     QLabel *m_kpiMonthAmount = nullptr;
     QLabel *m_kpiTotalAmount = nullptr;
-    QLabel *m_kpiTotalOrders = nullptr;
-    QLabel *m_kpiUsers = nullptr;
-    QLabel *m_kpiIdle = nullptr;
-    QLabel *m_kpiCharging = nullptr;
-    QLabel *m_kpiFault = nullptr;
-    QLabel *m_kpiOffline = nullptr;
-    QTableWidget *m_salesTable = nullptr;
-    SalesTrendWidget *m_salesTrend = nullptr;
     QComboBox *m_salesDays = nullptr;
+    QChartView *m_salesChartView = nullptr;
     QTableWidget *m_recentOrders = nullptr;
 
-    // pile status
-    QComboBox *m_statusFilter = nullptr;
     QLabel *m_statusSummary = nullptr;
-    QTableWidget *m_statusTable = nullptr;
+    QChartView *m_statusChartView = nullptr;
+    QTableWidget *m_statusDistTable = nullptr;
 
-    // stations
-    QTableWidget *m_stationTable = nullptr;
-    QLineEdit *m_stationKeyword = nullptr;
-
-    // piles
-    QTableWidget *m_pileTable = nullptr;
     QComboBox *m_pileStationFilter = nullptr;
+    QTableWidget *m_pileTable = nullptr;
 
-    // users
-    QTableWidget *m_userTable = nullptr;
+    QLineEdit *m_stationKeyword = nullptr;
+    QTableWidget *m_stationTable = nullptr;
+    QLabel *m_stationDetailTitle = nullptr;
+    QTableWidget *m_stationPileTable = nullptr;
+
     QLineEdit *m_userKeyword = nullptr;
+    QTableWidget *m_userTable = nullptr;
 };

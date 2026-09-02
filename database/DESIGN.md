@@ -89,9 +89,11 @@ ml_models ── load_forecasts
 | `charge.start` | 校验用户和桩状态，创建订单并把桩改为 `charging` |
 | `charge.stop` | 固化电量与价格，订单进入待支付或直接结算 |
 | `wallet.recharge` | 同一事务更新余额并写入钱包流水 |
-| `charge.stop` | 同一事务扣款、结束订单、释放电桩并写入钱包流水 |
-| `admin.user.freeze` | 更新用户状态并写审计日志 |
-| `admin.pile.restart` | 写状态日志，向设备端发送模拟指令 |
+| `admin.login` | 校验管理员账号密码并签发管理端会话 |
+| `admin.dashboard` | 今日/本月/总营收与 7/30 日趋势 |
+| `admin.piles.list` / `admin.piles.restart` | 电桩列表与模拟远程重启 |
+| `admin.stations.list` / `admin.stations.save` / `admin.stations.piles` | 电站查询、模拟新增、站内明细 |
+| `admin.users.list` / `admin.users.setStatus` | 按手机号查询用户，冻结/解冻 |
 
 ## 5. 必须保证的事务规则
 

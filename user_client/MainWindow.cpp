@@ -8,6 +8,7 @@
 #include <QFileDialog>
 #include <QFormLayout>
 #include <QFrame>
+#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
@@ -66,10 +67,10 @@ MainWindow::MainWindow(const User &user, QWidget *parent)
     : QMainWindow(parent)
     , m_user(user)
 {
-    setWindowTitle(QStringLiteral("电动汽车充电 - %1").arg(m_user.username));
-    resize(420, 780);
-    setMinimumSize(380, 640);
-    setMaximumWidth(480);
+    setWindowTitle(QStringLiteral("充电用户端 - %1").arg(m_user.username));
+    resize(400, 700);
+    setMinimumSize(360, 620);
+    setMaximumWidth(440);
 
     m_locationProvider = new LocationProvider(this);
     connect(m_locationProvider, &LocationProvider::locationUpdated,
@@ -107,8 +108,8 @@ void MainWindow::buildUi()
 QWidget *MainWindow::buildBottomNav()
 {
     auto *bar = new QWidget(this);
-    bar->setFixedHeight(58);
-    bar->setStyleSheet(QStringLiteral("background:white; border-top:1px solid #BAE6FD;"));
+    bar->setFixedHeight(48);
+    bar->setStyleSheet(QStringLiteral("background:#FFFFFF; border-top:1px solid #D8E0DE;"));
     auto *layout = new QHBoxLayout(bar);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
@@ -118,11 +119,11 @@ QWidget *MainWindow::buildBottomNav()
     m_navProfile = new QPushButton(QStringLiteral("我的"), bar);
     for (auto *btn : {m_navStations, m_navCharge, m_navProfile}) {
         btn->setFlat(true);
-        btn->setMinimumHeight(58);
-        btn->setStyleSheet(QStringLiteral("border:none; background:white; color:#64748B; font-size:14px;"));
+        btn->setMinimumHeight(48);
+        btn->setStyleSheet(QStringLiteral("border:none; background:transparent; color:#64716E; font-size:13px;"));
         layout->addWidget(btn, 1);
     }
-    m_navStations->setStyleSheet(QStringLiteral("border:none; background:white; color:#0284C7; font-weight:700; font-size:14px;"));
+    m_navStations->setStyleSheet(QStringLiteral("border:none; background:transparent; color:#0D7565; font-weight:600; font-size:13px;"));
 
     connect(m_navStations, &QPushButton::clicked, this, [this]() { onBottomNav(0); });
     connect(m_navCharge, &QPushButton::clicked, this, [this]() { onBottomNav(1); });
@@ -134,8 +135,8 @@ void MainWindow::onBottomNav(int index)
 {
     m_tabStack->setCurrentIndex(index);
     auto style = [](bool on) {
-        return on ? QStringLiteral("border:none; background:white; color:#0284C7; font-weight:700; font-size:14px;")
-                  : QStringLiteral("border:none; background:white; color:#64748B; font-size:14px;");
+        return on ? QStringLiteral("border:none; background:transparent; color:#0D7565; font-weight:600; font-size:13px;")
+                  : QStringLiteral("border:none; background:transparent; color:#64716E; font-size:13px;");
     };
     m_navStations->setStyleSheet(style(index == 0));
     m_navCharge->setStyleSheet(style(index == 1));
@@ -155,8 +156,8 @@ QWidget *MainWindow::buildStationsPage()
 {
     auto *page = new QWidget(this);
     auto *layout = new QVBoxLayout(page);
-    layout->setContentsMargins(16, 20, 16, 8);
-    layout->setSpacing(10);
+    layout->setContentsMargins(14, 12, 14, 8);
+    layout->setSpacing(8);
 
     auto *header = new QLabel(QStringLiteral("附近充电站"), page);
     header->setObjectName(QStringLiteral("pageTitle"));
@@ -169,8 +170,8 @@ QWidget *MainWindow::buildStationsPage()
         m_regionCombo->addItem(d);
 
     m_addressEdit = new QLineEdit(page);
-    m_addressEdit->setPlaceholderText(QStringLiteral("也可手动输入地址，如：国贸 / 中关村"));
-    m_locateBtn = new QPushButton(QStringLiteral("检测当前位置"), page);
+    m_addressEdit->setPlaceholderText(QStringLiteral("地址，如：国贸"));
+    m_locateBtn = new QPushButton(QStringLiteral("定位"), page);
     m_locateBtn->setObjectName(QStringLiteral("secondaryBtn"));
 
     auto *filterRow = new QHBoxLayout;
@@ -191,12 +192,12 @@ QWidget *MainWindow::buildStationsPage()
     m_locationLabel->setWordWrap(true);
 
     m_stationList = new QListWidget(page);
-    m_loadMoreBtn = new QPushButton(QStringLiteral("加载更多附近站点"), page);
+    m_loadMoreBtn = new QPushButton(QStringLiteral("加载更多"), page);
     m_loadMoreBtn->setObjectName(QStringLiteral("secondaryBtn"));
     m_loadMoreBtn->hide();
 
-    auto *navBtn = new QPushButton(QStringLiteral("腾讯地图导航"), page);
-    m_navInfo = new QLabel(QStringLiteral("选择站点后可发起导航"), page);
+    auto *navBtn = new QPushButton(QStringLiteral("导航"), page);
+    m_navInfo = new QLabel(QStringLiteral("选中站点后可打开腾讯地图"), page);
     m_navInfo->setObjectName(QStringLiteral("muted"));
     m_navInfo->setWordWrap(true);
 
@@ -224,10 +225,10 @@ QWidget *MainWindow::buildChargePage()
 {
     auto *page = new QWidget(this);
     auto *layout = new QVBoxLayout(page);
-    layout->setContentsMargins(16, 20, 16, 8);
-    layout->setSpacing(10);
+    layout->setContentsMargins(14, 12, 14, 8);
+    layout->setSpacing(8);
 
-    auto *header = new QLabel(QStringLiteral("汽车充电"), page);
+    auto *header = new QLabel(QStringLiteral("充电"), page);
     header->setObjectName(QStringLiteral("pageTitle"));
 
     m_stationCombo = new QComboBox(page);
@@ -260,29 +261,31 @@ QWidget *MainWindow::buildChargePage()
     m_chargeProgress->setRange(0, 100);
     m_chargeProgress->setValue(0);
 
-    auto *chargeBtnRow = new QHBoxLayout;
-    auto *reserveBtn = new QPushButton(QStringLiteral("预约 15 分钟"), page);
+    auto *chargeBtns = new QGridLayout;
+    chargeBtns->setHorizontalSpacing(6);
+    chargeBtns->setVerticalSpacing(6);
+    auto *reserveBtn = new QPushButton(QStringLiteral("预约15分钟"), page);
     reserveBtn->setObjectName(QStringLiteral("secondaryBtn"));
     auto *cancelReservationBtn = new QPushButton(QStringLiteral("取消预约"), page);
     cancelReservationBtn->setObjectName(QStringLiteral("secondaryBtn"));
     auto *startBtn = new QPushButton(QStringLiteral("开始充电"), page);
     auto *stopBtn = new QPushButton(QStringLiteral("结束充电"), page);
     stopBtn->setObjectName(QStringLiteral("dangerBtn"));
-    chargeBtnRow->addWidget(reserveBtn);
-    chargeBtnRow->addWidget(cancelReservationBtn);
-    chargeBtnRow->addWidget(startBtn);
-    chargeBtnRow->addWidget(stopBtn);
+    chargeBtns->addWidget(reserveBtn, 0, 0);
+    chargeBtns->addWidget(cancelReservationBtn, 0, 1);
+    chargeBtns->addWidget(startBtn, 1, 0);
+    chargeBtns->addWidget(stopBtn, 1, 1);
 
     layout->addWidget(header);
     layout->addWidget(new QLabel(QStringLiteral("选择充电站"), page));
     layout->addWidget(m_stationCombo);
-    layout->addWidget(new QLabel(QStringLiteral("按分类筛选电桩"), page));
+    layout->addWidget(new QLabel(QStringLiteral("筛选"), page));
     layout->addLayout(filterRow);
     layout->addWidget(m_pileList, 1);
     layout->addWidget(m_reservationInfo);
     layout->addWidget(m_chargeInfo);
     layout->addWidget(m_chargeProgress);
-    layout->addLayout(chargeBtnRow);
+    layout->addLayout(chargeBtns);
 
     m_chargeTimer = new QTimer(this);
     m_chargeTimer->setInterval(1000);
@@ -304,8 +307,8 @@ QWidget *MainWindow::buildProfilePage()
 {
     auto *page = new QWidget(this);
     auto *layout = new QVBoxLayout(page);
-    layout->setContentsMargins(16, 20, 16, 8);
-    layout->setSpacing(12);
+    layout->setContentsMargins(14, 12, 14, 8);
+    layout->setSpacing(8);
 
     auto *header = new QLabel(QStringLiteral("我的"), page);
     header->setObjectName(QStringLiteral("pageTitle"));
@@ -313,13 +316,13 @@ QWidget *MainWindow::buildProfilePage()
     auto *card = new QFrame(page);
     card->setObjectName(QStringLiteral("card"));
     auto *form = new QFormLayout(card);
-    form->setContentsMargins(14, 14, 14, 14);
+    form->setContentsMargins(12, 12, 12, 12);
     m_balanceLabel = new QLabel(page);
-    m_balanceLabel->setStyleSheet(QStringLiteral("color:#F97316; font-size:16px; font-weight:700;"));
+    m_balanceLabel->setStyleSheet(QStringLiteral("color:#0D7565; font-size:15px; font-weight:600;"));
     m_avatarLabel = new QLabel(page);
-    m_avatarLabel->setFixedSize(64, 64);
+    m_avatarLabel->setFixedSize(48, 48);
     m_avatarLabel->setAlignment(Qt::AlignCenter);
-    m_avatarLabel->setStyleSheet(QStringLiteral("background:#E5E7EB; border-radius:4px; color:#64748B;"));
+    m_avatarLabel->setStyleSheet(QStringLiteral("background:#EEF2F1; border-radius:4px; color:#64716E;"));
     auto *avatarBtn = new QPushButton(QStringLiteral("选择头像"), page);
     avatarBtn->setObjectName(QStringLiteral("secondaryBtn"));
     auto *avatarRow = new QHBoxLayout;
@@ -343,11 +346,11 @@ QWidget *MainWindow::buildProfilePage()
     auto *walletCard = new QFrame(page);
     walletCard->setObjectName(QStringLiteral("card"));
     auto *walletLayout = new QVBoxLayout(walletCard);
-    walletLayout->setContentsMargins(14, 14, 14, 14);
+    walletLayout->setContentsMargins(12, 12, 12, 12);
     walletLayout->addWidget(new QLabel(QStringLiteral("钱包充值"), walletCard));
     m_rechargeEdit = new QLineEdit(walletCard);
     m_rechargeEdit->setPlaceholderText(QStringLiteral("输入充值金额（元），如 100"));
-    auto *rechargeBtn = new QPushButton(QStringLiteral("充值（模拟支付）"), walletCard);
+    auto *rechargeBtn = new QPushButton(QStringLiteral("充值"), walletCard);
     rechargeBtn->setObjectName(QStringLiteral("successBtn"));
     auto *quickRow = new QHBoxLayout;
     for (int amt : {50, 100, 200, 500}) {
@@ -430,7 +433,7 @@ void MainWindow::onRealLocationUpdated(double lat, double lng, const QString &la
     m_locationSource = source;
     if (m_locateBtn) {
         m_locateBtn->setEnabled(true);
-        m_locateBtn->setText(QStringLiteral("检测当前位置"));
+        m_locateBtn->setText(QStringLiteral("定位"));
     }
     refreshStations();
 }
@@ -439,7 +442,7 @@ void MainWindow::onRealLocationFailed(const QString &reason)
 {
     if (m_locateBtn) {
         m_locateBtn->setEnabled(true);
-        m_locateBtn->setText(QStringLiteral("检测当前位置"));
+        m_locateBtn->setText(QStringLiteral("定位"));
     }
     // 失败时保留上次坐标，并提示可手动输入
     m_locationLabel->setText(QStringLiteral("%1（可手动输入地址后回车）").arg(reason));

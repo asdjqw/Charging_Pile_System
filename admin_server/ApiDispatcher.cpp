@@ -2,8 +2,11 @@
 
 #include "DatabaseManager.h"
 #include "JsonCodec.h"
+#include "Models.h"
 
+#include <QDateTime>
 #include <QJsonArray>
+#include <QTimer>
 #include <QUuid>
 
 namespace {
@@ -120,24 +123,8 @@ QJsonObject ApiDispatcher::dispatch(const QJsonObject &request)
     }
 
     if (action == QLatin1String("dashboard.summary")) {
-        const auto stats = db.salesStats();
-        QJsonObject statJson{{"todayAmount", stats.todayAmount}, {"monthAmount", stats.monthAmount},
-                             {"totalAmount", stats.totalAmount}, {"todayOrders", stats.todayOrders},
-                             {"monthOrders", stats.monthOrders}, {"totalOrders", stats.totalOrders},
-                             {"idlePiles", stats.idlePiles}, {"chargingPiles", stats.chargingPiles},
-                             {"faultPiles", stats.faultPiles}, {"offlinePiles", stats.offlinePiles},
-                             {"reservedPiles", stats.reservedPiles}, {"restartingPiles", stats.restartingPiles},
-                             {"totalPiles", stats.totalPiles},
-                             {"onlineRate", stats.totalPiles > 0
-                                                ? (stats.totalPiles - stats.offlinePiles) * 100.0 / stats.totalPiles
-                                                : 0.0},
-                             {"totalUsers", stats.totalUsers}, {"totalStations", stats.totalStations}};
-        QJsonArray daily;
         const int days = data.value("days").toInt(30) == 7 ? 7 : 30;
-        for (const auto &entry : db.dailySales(days))
-            daily.append(QJsonObject{{"date", entry.first}, {"amount", entry.second}});
-        return success(request, QJsonObject{{"stats", statJson}, {"dailySales", daily},
-                                 {"recentOrders", ordersJson(db.listOrders(), 12)}});
+        return success(request, dashboardPayload(days));
     }
 
     if (action == QLatin1String("dashboard.stations")) {
@@ -149,6 +136,23 @@ QJsonObject ApiDispatcher::dispatch(const QJsonObject &request)
                                                                           keyword, district, limit, offset))},
                                             {"total", db.stationCount(keyword, district)}, {"offset", offset},
                                             {"limit", limit}});
+    }
+
+    if (action == QLatin1String("admin.login")) {
+        Admin admin;
+        if (!db.loginAdmin(data.value("username").toString(), data.value("password").toString(), admin))
+            return failure(request, QStringLiteral("AUTH_FAILED"), db.lastError());
+        const QString token = QUuid::createUuid().toString(QUuid::WithoutBraces);
+        m_adminSessions.insert(token, {admin.id, QDateTime::currentDateTimeUtc().addSecs(12 * 60 * 60)});
+        return success(request, QJsonObject{{"token", token}, {"admin", JsonCodec::toJson(admin)}},
+                       QStringLiteral("登录成功"));
+    }
+
+    if (action.startsWith(QLatin1String("admin."))) {
+        const int adminId = authorizedAdmin(request);
+        if (adminId <= 0)
+            return failure(request, QStringLiteral("UNAUTHORIZED"), QStringLiteral("管理员登录已失效，请重新登录"));
+        return dispatchAdmin(request, adminId);
     }
 
     const int userId = authorizedUser(request);
@@ -276,4 +280,126 @@ QJsonObject ApiDispatcher::dispatch(const QJsonObject &request)
 
     return failure(request, QStringLiteral("UNKNOWN_ACTION"),
                    QStringLiteral("未知请求: %1").arg(action));
+}
+
+int ApiDispatcher::authorizedAdmin(const QJsonObject &request)
+{
+    const QString token = request.value("token").toString();
+    const auto it = m_adminSessions.find(token);
+    if (it == m_adminSessions.end())
+        return 0;
+    if (it->expiresAt < QDateTime::currentDateTimeUtc()) {
+        m_adminSessions.erase(it);
+        return 0;
+    }
+    return it->adminId;
+}
+
+QJsonObject ApiDispatcher::dashboardPayload(int days) const
+{
+    auto &db = DatabaseManager::instance();
+    const auto stats = db.salesStats();
+    QJsonObject statJson{{"todayAmount", stats.todayAmount}, {"monthAmount", stats.monthAmount},
+                         {"totalAmount", stats.totalAmount}, {"todayOrders", stats.todayOrders},
+                         {"monthOrders", stats.monthOrders}, {"totalOrders", stats.totalOrders},
+                         {"idlePiles", stats.idlePiles}, {"chargingPiles", stats.chargingPiles},
+                         {"faultPiles", stats.faultPiles}, {"offlinePiles", stats.offlinePiles},
+                         {"reservedPiles", stats.reservedPiles}, {"restartingPiles", stats.restartingPiles},
+                         {"totalPiles", stats.totalPiles},
+                         {"inUsePiles", stats.chargingPiles + stats.reservedPiles},
+                         {"onlineRate", stats.totalPiles > 0
+                                            ? (stats.totalPiles - stats.offlinePiles) * 100.0 / stats.totalPiles
+                                            : 0.0},
+                         {"totalUsers", stats.totalUsers}, {"totalStations", stats.totalStations}};
+    QJsonArray daily;
+    for (const auto &entry : db.dailySales(days == 7 ? 7 : 30))
+        daily.append(QJsonObject{{"date", entry.first}, {"amount", entry.second}});
+    return {{"stats", statJson}, {"dailySales", daily}, {"recentOrders", ordersJson(db.listOrders(), 12)}};
+}
+
+QJsonObject ApiDispatcher::dispatchAdmin(const QJsonObject &request, int adminId)
+{
+    auto &db = DatabaseManager::instance();
+    const QString action = request.value("action").toString();
+    const QJsonObject data = request.value("data").toObject();
+
+    if (action == QLatin1String("admin.dashboard")) {
+        const int days = data.value("days").toInt(7) == 30 ? 30 : 7;
+        return success(request, dashboardPayload(days));
+    }
+
+    if (action == QLatin1String("admin.piles.list")) {
+        return success(request, QJsonObject{{"items", pilesJson(db.listPiles(data.value("stationId").toInt(-1),
+                                                                    data.value("status").toString()))},
+                                            {"stats", dashboardPayload(7).value("stats").toObject()}});
+    }
+
+    if (action == QLatin1String("admin.piles.restart")) {
+        const int pileId = data.value("pileId").toInt();
+        if (!db.restartPile(pileId, adminId))
+            return failure(request, QStringLiteral("RESTART_FAILED"), db.lastError());
+        QTimer::singleShot(1500, this, [pileId]() {
+            DatabaseManager::instance().updatePileStatus(
+                pileId, QStringLiteral("idle"), QStringLiteral("pile"),
+                QStringLiteral("模拟重启完成"));
+        });
+        return success(request, QJsonObject(), QStringLiteral("已向电桩下发远程重启指令"));
+    }
+
+    if (action == QLatin1String("admin.stations.list")) {
+        const QString keyword = data.value("keyword").toString();
+        return success(request, QJsonObject{
+            {"items", stationsJson(db.listStations(39.9042, 116.4074, keyword, QString(), 1000, 0))},
+            {"total", db.stationCount(keyword)}});
+    }
+
+    if (action == QLatin1String("admin.stations.save")) {
+        Station station;
+        station.id = data.value("id").toInt();
+        station.name = data.value("name").toString().trimmed();
+        station.address = data.value("address").toString().trimmed();
+        station.latitude = data.value("latitude").toDouble();
+        station.longitude = data.value("longitude").toDouble();
+        station.openHours = data.value("openHours").toString(QStringLiteral("00:00-24:00"));
+        station.status = data.value("status").toString(QStringLiteral("open"));
+        const int pileCount = data.value("pileCount").toInt(4);
+        if (station.id == 0) {
+            if (!db.createStationWithPiles(station, pileCount))
+                return failure(request, QStringLiteral("STATION_CREATE_FAILED"), db.lastError());
+            return success(request, JsonCodec::toJson(station),
+                           QStringLiteral("已新增电站（模拟）并生成 %1 个电桩").arg(station.totalPiles));
+        }
+        if (!db.saveStation(station))
+            return failure(request, QStringLiteral("STATION_SAVE_FAILED"), db.lastError());
+        return success(request, JsonCodec::toJson(station), QStringLiteral("电站已更新"));
+    }
+
+    if (action == QLatin1String("admin.stations.piles")) {
+        const int stationId = data.value("stationId").toInt();
+        Station station;
+        if (!db.getStation(stationId, station))
+            return failure(request, QStringLiteral("NOT_FOUND"), db.lastError());
+        return success(request, QJsonObject{{"station", JsonCodec::toJson(station)},
+                                            {"items", pilesJson(db.listPiles(stationId))}});
+    }
+
+    if (action == QLatin1String("admin.users.list")) {
+        QJsonArray items;
+        for (const User &user : db.listUsers(data.value("keyword").toString()))
+            items.append(JsonCodec::toJson(user));
+        return success(request, QJsonObject{{"items", items}});
+    }
+
+    if (action == QLatin1String("admin.users.setStatus")) {
+        const int userId = data.value("userId").toInt();
+        const QString status = data.value("status").toString();
+        if (!db.setUserStatus(userId, status, adminId))
+            return failure(request, QStringLiteral("USER_STATUS_FAILED"), db.lastError());
+        return success(request, QJsonObject(),
+                       status == QLatin1String("frozen") ? QStringLiteral("用户已冻结")
+                                                         : QStringLiteral("用户已解冻"));
+    }
+
+    return failure(request, QStringLiteral("UNKNOWN_ACTION"),
+                   QStringLiteral("未知管理员请求: %1").arg(action));
 }

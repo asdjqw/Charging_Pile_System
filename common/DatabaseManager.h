@@ -40,6 +40,7 @@ public:
                                   int limit = 80, int offset = 0);
     bool getStation(int id, Station &out);
     bool saveStation(Station &station);
+    bool createStationWithPiles(Station &station, int pileCount);
     bool deleteStation(int id);
 
     QVector<Pile> listPiles(int stationId = -1,

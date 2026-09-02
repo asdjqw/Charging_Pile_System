@@ -1,14 +1,15 @@
 # 充电桩综合管理系统（Qt6）
 
-项目包含 **Qt 用户端 + PC 管理/服务器端 + SQLite + Web 运营大屏**。所有组件可在同一台
-设备运行：用户端通过 TCP 业务协议访问服务器，只有服务器进程可以打开 SQLite 数据库。
+项目包含 **Qt 用户端 + Qt 管理端 + PC 后端服务 + SQLite + Web 运营大屏**。所有组件可在同一台
+设备运行：用户端与管理端都通过 TCP 业务协议访问服务器，只有 `admin_server` 进程可以打开 SQLite。
 
 ## 系统组成
 
 | 子系统 | 技术 | 功能 |
 |---|---|---|
-| 充电用户端 | Qt6 Widgets + Network | 手机号免密登录、找桩导航、预约、充电、资料、充值和订单 |
-| PC 管理/服务器端 | Qt6 Widgets + Network | 营收统计、设备运维、用户风控、TCP/HTTP 服务和核心业务 |
+| 充电用户端 `user_client` | Qt6 Widgets + Network | 手机号免密登录、找桩导航、预约、充电、资料、充值和订单 |
+| 管理客户端 `admin_client` | Qt6 Widgets + Charts + Network | 管理员登录、销售业绩、电桩状态、充电桩/站管理、用户风控 |
+| 后端服务 `admin_server` | Qt6 Network + SQL | TCP/HTTP 服务、业务校验、事务与 SQLite 独占访问 |
 | 数据库端 | Qt SQL + SQLite | 用户、站点、电桩、订单、账务、遥测与审计 |
 | Web 大屏 | HTML + CSS + ECharts | 7/30 日营收、在线率、电桩状态、订单和站点实时展示 |
 
@@ -18,37 +19,110 @@
 ## Ubuntu 环境
 
 ```bash
-chmod +x scripts/install_deps_ubuntu.sh scripts/build.sh
+chmod +x scripts/*.sh
 ./scripts/install_deps_ubuntu.sh
 ```
+
+若项目在 VMware 共享盘（`/mnt/hgfs/...`）上，`chmod` / `sed -i` 可能报「不允许的操作」。
+脚本已使用 Unix 换行；共享盘上请用 `bash` 直接跑（不依赖可执行位）：
+
+```bash
+bash scripts/install_deps_ubuntu.sh
+bash scripts/build.sh
+bash scripts/run_ubuntu.sh
+```
+
+更稳妥是拷到虚拟机本地再编：
+
+```bash
+cp -a /mnt/hgfs/Small_s3/Charge_pile ~/Charge_pile
+cd ~/Charge_pile
+```
+
+若项目在 VMware 共享盘（`/mnt/hgfs/...`）上，`chmod` / `sed -i` 可能报「不允许的操作」。
+脚本已使用 Unix 换行；共享盘上请用下面方式运行（不依赖可执行权限）：
+
+```bash
+bash scripts/install_deps_ubuntu.sh
+bash scripts/build.sh
+bash scripts/run_ubuntu.sh
+```
+
+更稳妥是拷到虚拟机本地再编：`cp -a /mnt/hgfs/Small_s3/Charge_pile ~/Charge_pile && cd ~/Charge_pile`
 
 手动安装：
 
 ```bash
 sudo apt update
+# Ubuntu 22.04 用 libqt6charts6-dev；24.04 可用 qt6-charts-dev
 sudo apt install -y build-essential cmake \
-  qt6-base-dev qt6-tools-dev libqt6sql6-sqlite \
-  libgl1-mesa-dev pkg-config
+    qt6-base-dev qt6-tools-dev libqt6charts6-dev libqt6sql6-sqlite \
+    libgl1-mesa-dev pkg-config
 ```
 
 项目以 Ubuntu Qt 6.2.4、CMake 3.22、GCC 11 和 C++17 为兼容基准。
 
 ## 编译与运行
 
+Ubuntu 上一键重新编译并拉起后端、管理端、用户端：
+
+```bash
+bash scripts/rebuild_run.sh
+```
+
+共享盘（`/mnt/hgfs`）若不能执行二进制，脚本会拷到 `~/Charge_pile_bin` 再启动。`Ctrl+C` 结束全部进程。已编译过、只想重开时用 `bash scripts/rebuild_run.sh --skip-build`。
+
+分终端手动启动：
+
 ```bash
 ./scripts/build.sh
 
-# 终端 1：管理端，同时启动 TCP 9000 和 HTTP 8080
+# 终端 1：后端服务，监听 TCP 9000 和 HTTP 8080
 ./build/admin_server/admin_server
 
 # 终端 2：用户端
 ./build/user_client/user_client
 
+# 终端 3：管理员客户端
+./build/admin_client/admin_client
+
 # 浏览器打开 Web 大屏
 firefox http://127.0.0.1:8080
 ```
 
-也可使用 Qt Creator 打开顶层 `CMakeLists.txt`，选择 Qt6 Desktop Kit 后构建。
+也可使用 Qt Creator：菜单「文件 → 打开文件或项目」，选择本目录的 **`CMakeLists.txt`**
+（本项目是 Qt6 + CMake，**没有** `.pro` 文件，源码目录里也看不到可双击的启动图标）。
+
+编译完成后，程序在 `build/` 里，不在源码根目录：
+
+```text
+build/admin_server/admin_server    后端（无窗口）
+build/admin_client/admin_client    管理员登录 + 后台 GUI
+build/user_client/user_client      用户端 GUI
+```
+
+### Ubuntu 虚拟机逐步启动
+
+```bash
+# 1. 进入项目目录（把路径换成你克隆/拷贝后的实际位置）
+cd ~/Charge_pile
+
+# 2. 首次安装依赖并编译（只需一次，约几分钟）
+chmod +x scripts/*.sh
+./scripts/install_deps_ubuntu.sh
+./scripts/build.sh
+
+# 3. 终端 1：后端（先开，一直不要关）
+./scripts/run_ubuntu.sh
+# 或：./build/admin_server/admin_server
+# 首次会导入北京市充电桩 CSV，看到「后端服务已启动」再进行下一步
+
+# 4. 终端 2：管理员界面（登录窗）
+./build/admin_client/admin_client
+
+# 5. 终端 3：用户端
+./build/user_client/user_client
+```
 
 ### 演示账号
 
@@ -63,14 +137,15 @@ firefox http://127.0.0.1:8080
 ## 运行架构
 
 ```text
-Qt 用户端 ── TCP/JSON :9000 ──┐
-                               ├── PC 管理/服务器端 ── SQLite
-Web 浏览器 ── HTTP :8080 ──────┘
+Qt 用户端 user_client  ── TCP/JSON :9000 ──┐
+Qt 管理端 admin_client ── TCP/JSON :9000 ──┼── admin_server 后端 ── SQLite
+Web 浏览器              ── HTTP :8080 ─────┘
 ```
 
-TCP 消息使用“4 字节大端长度 + UTF-8 JSON”帧，并通过 `requestId` 匹配响应。网络监听
-运行在独立 `QThread`，数据库操作回到创建数据库连接的主线程执行。充电进度、遥测、
-钱包流水和状态日志都由服务器持久化。
+`admin_server` 是纯后端：不再内嵌管理 GUI。管理员界面在 `admin_client` 中，风格与
+`user_client` 同一套天蓝配色，布局改为宽屏表格/图表。TCP 消息使用“4 字节大端长度 +
+UTF-8 JSON”帧，并通过 `requestId` 匹配响应。网络监听运行在独立 `QThread`，数据库
+操作回到创建数据库连接的主线程执行。
 
 ## 服务配置
 
@@ -82,9 +157,8 @@ TCP 消息使用“4 字节大端长度 + UTF-8 JSON”帧，并通过 `requestI
 | `CHARGE_PILE_BIND_ADDRESS` | `127.0.0.1` | 服务监听地址；局域网使用 `0.0.0.0` |
 | `CHARGE_PILE_DB_PATH` | 系统应用数据目录 | 服务端 SQLite 路径 |
 | `CHARGE_PILE_WEB_ROOT` | 程序旁的 `web` | Web 静态资源目录 |
-| `CHARGE_PILE_HEADLESS` | `0` | 设为 `1` 时仅运行服务 |
 
-局域网运行时，将服务端 `CHARGE_PILE_BIND_ADDRESS` 设为 `0.0.0.0`，并将用户端的
+局域网运行时，将服务端 `CHARGE_PILE_BIND_ADDRESS` 设为 `0.0.0.0`，并将用户端/管理端的
 `CHARGE_PILE_HOST` 改为服务器 IP。
 
 ## 目录结构
@@ -92,7 +166,8 @@ TCP 消息使用“4 字节大端长度 + UTF-8 JSON”帧，并通过 `requestI
 ```text
 common/        公共模型、JSON 编解码、帧协议和数据库
 user_client/   Qt 用户端和 TCP API 客户端
-admin_server/  管理 GUI、请求分发、TCP/HTTP 服务
+admin_client/  Qt 管理端（宽屏 PC 界面，经 TCP 接入后端）
+admin_server/  后端服务：请求分发、TCP/HTTP、SQLite
 database/      SQLite schema、seed 和协议设计
 data/          北京充电站 CSV
 web/           离线 Web 运营大屏

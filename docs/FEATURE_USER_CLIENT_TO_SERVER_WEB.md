@@ -276,7 +276,7 @@ Web 运营大屏（浏览器）
 - 仪表盘、电桩、用户和订单数据从统一数据库状态刷新；
 - 用户冻结/解冻和电桩模拟重启使用服务端业务校验及审计；
 - 关闭管理端时有序停止监听器和网络线程；
-- 支持 `CHARGE_PILE_HEADLESS=1`，无管理 GUI 只运行服务。
+- `admin_server` 现在是纯后端进程；管理 GUI 已拆到 `admin_client`。
 
 需要注意：非 headless 模式下，服务器在线不等于管理员已经登录。程序会先初始化数据库并启动
 服务，再显示管理员登录窗口；取消登录会结束整个进程和服务。
@@ -307,11 +307,12 @@ chmod +x scripts/install_deps_ubuntu.sh scripts/build.sh
 ./scripts/install_deps_ubuntu.sh
 ./scripts/build.sh
 
-# 终端 1：管理端，同时提供 TCP 与 HTTP 服务
+# 终端 1：后端服务，提供 TCP 与 HTTP
 ./build/admin_server/admin_server
-
-# 终端 2：用户客户端
+# 终端 2：用户端
 ./build/user_client/user_client
+# 终端 3：管理端
+./build/admin_client/admin_client
 
 # 浏览器
 firefox http://127.0.0.1:8080/
@@ -335,7 +336,7 @@ firefox http://127.0.0.1:8080/
 | `CHARGE_PILE_BIND_ADDRESS` | `127.0.0.1` | 服务监听地址 |
 | `CHARGE_PILE_DB_PATH` | 系统应用数据目录 | 自定义 SQLite 文件路径 |
 | `CHARGE_PILE_WEB_ROOT` | 程序旁的 `web` | 自定义 Web 静态资源目录 |
-| `CHARGE_PILE_HEADLESS` | `0` | 设为 `1` 时只运行服务 |
+| `CHARGE_PILE_WEB_ROOT` | 程序旁的 `web` | Web 静态资源目录 |
 
 局域网部署时，服务端可设置：
 

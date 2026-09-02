@@ -10,6 +10,11 @@ QJsonObject toJson(const User &v)
             {"createdAt", v.createdAt}};
 }
 
+QJsonObject toJson(const Admin &v)
+{
+    return {{"id", v.id}, {"username", v.username}, {"realName", v.realName}, {"role", v.role}};
+}
+
 QJsonObject toJson(const Station &v)
 {
     return {{"id", v.id}, {"stationCode", v.stationCode}, {"name", v.name},
@@ -61,6 +66,16 @@ User userFromJson(const QJsonObject &o)
     v.plateNumber = o.value("plateNumber").toString();
     v.status = o.value("status").toString();
     v.createdAt = o.value("createdAt").toString();
+    return v;
+}
+
+Admin adminFromJson(const QJsonObject &o)
+{
+    Admin v;
+    v.id = o.value("id").toInt();
+    v.username = o.value("username").toString();
+    v.realName = o.value("realName").toString();
+    v.role = o.value("role").toString();
     return v;
 }
 

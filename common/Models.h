@@ -147,6 +147,14 @@ inline QString pileTypeText(const QString &type)
     return type;
 }
 
+inline QString chargeKindText(const Pile &p)
+{
+    if (p.speedClass == QLatin1String("fast") || p.speedClass == QLatin1String("ultra")
+        || p.pileType == QLatin1String("DC"))
+        return QStringLiteral("快充");
+    return QStringLiteral("慢充");
+}
+
 inline QString pileCategoryText(const Pile &p)
 {
     if (!p.categoryLabel.isEmpty())

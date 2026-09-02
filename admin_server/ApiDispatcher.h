@@ -19,12 +19,20 @@ private:
         int userId = 0;
         QDateTime expiresAt;
     };
+    struct AdminSession {
+        int adminId = 0;
+        QDateTime expiresAt;
+    };
 
     QJsonObject success(const QJsonObject &request, const QJsonValue &data = QJsonObject(),
                         const QString &message = QString()) const;
     QJsonObject failure(const QJsonObject &request, const QString &code,
                         const QString &message) const;
     int authorizedUser(const QJsonObject &request);
+    int authorizedAdmin(const QJsonObject &request);
+    QJsonObject dashboardPayload(int days) const;
+    QJsonObject dispatchAdmin(const QJsonObject &request, int adminId);
 
     QHash<QString, Session> m_sessions;
+    QHash<QString, AdminSession> m_adminSessions;
 };

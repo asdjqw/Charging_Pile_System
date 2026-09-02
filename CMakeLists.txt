@@ -7,11 +7,12 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Sql Network DBus)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Sql Network DBus Charts)
 include(CTest)
 
 add_subdirectory(common)
 add_subdirectory(user_client)
+add_subdirectory(admin_client)
 add_subdirectory(admin_server)
 if(BUILD_TESTING)
     add_subdirectory(tests)
@@ -35,6 +36,7 @@ add_custom_target(copy_database ALL
         $<TARGET_FILE_DIR:admin_server>/web
     COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:user_client>/data
     COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:admin_server>/data
+    COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:admin_client>/data
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         ${CMAKE_SOURCE_DIR}/data/北京市充电桩数据.csv
         $<TARGET_FILE_DIR:user_client>/data/北京市充电桩数据.csv
@@ -42,5 +44,5 @@ add_custom_target(copy_database ALL
         ${CMAKE_SOURCE_DIR}/data/北京市充电桩数据.csv
         $<TARGET_FILE_DIR:admin_server>/data/北京市充电桩数据.csv
     COMMENT "Copy database, CSV, and web dashboard assets"
-    DEPENDS user_client admin_server
+    DEPENDS user_client admin_client admin_server
 )
