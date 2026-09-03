@@ -1,9 +1,13 @@
 #include "MainWindow.h"
 #include "ServerApiClient.h"
 #include "LocationProvider.h"
+#include "StyleHelper.h"
 
 #include <QAbstractItemView>
+#include <QApplication>
+#include <QCheckBox>
 #include <QComboBox>
+#include <QDateTime>
 #include <QDesktopServices>
 #include <QFileDialog>
 #include <QFormLayout>
@@ -19,7 +23,12 @@
 #include <QProgressBar>
 #include <QPixmap>
 #include <QPushButton>
+#include <QScrollArea>
+#include <QSettings>
+#include <QSizePolicy>
 #include <QStackedWidget>
+#include <QStatusBar>
+#include <QStyle>
 #include <QTableWidget>
 #include <QTimer>
 #include <QUrl>
@@ -78,14 +87,29 @@ MainWindow::MainWindow(const User &user, QWidget *parent)
     connect(m_locationProvider, &LocationProvider::locationFailed,
             this, &MainWindow::onRealLocationFailed);
 
+    QSettings settings;
+    m_darkMode = settings.value(QStringLiteral("ui/darkMode"), false).toBool();
+    applyTheme(m_darkMode);
+
+    loadFavorites();
     buildUi();
+    statusBar()->showMessage(QStringLiteral("已登录"));
+
     refreshStations();
     refreshPilesForCharge();
     refreshProfile();
     refreshOrders();
     refreshOngoingBanner();
-    // 启动后自动检测真实当前位置
-    QTimer::singleShot(300, this, &MainWindow::requestRealLocation);
+    updateReservationCountdown();
+
+    m_reservationTimer = new QTimer(this);
+    m_reservationTimer->setInterval(1000);
+    connect(m_reservationTimer, &QTimer::timeout, this, &MainWindow::onReservationTick);
+    m_reservationTimer->start();
+
+    // 启动后：恢复进行中订单/预约，并检测定位
+    QTimer::singleShot(200, this, &MainWindow::restoreSession);
+    QTimer::singleShot(400, this, &MainWindow::requestRealLocation);
 }
 
 void MainWindow::buildUi()
@@ -107,44 +131,52 @@ void MainWindow::buildUi()
 
 QWidget *MainWindow::buildBottomNav()
 {
-    auto *bar = new QWidget(this);
-    bar->setFixedHeight(48);
-    bar->setStyleSheet(QStringLiteral("background:#FFFFFF; border-top:1px solid #D8E0DE;"));
-    auto *layout = new QHBoxLayout(bar);
+    m_bottomNav = new QWidget(this);
+    m_bottomNav->setObjectName(QStringLiteral("bottomNav"));
+    m_bottomNav->setFixedHeight(48);
+    auto *layout = new QHBoxLayout(m_bottomNav);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
 
-    m_navStations = new QPushButton(QStringLiteral("充电站"), bar);
-    m_navCharge = new QPushButton(QStringLiteral("充电"), bar);
-    m_navProfile = new QPushButton(QStringLiteral("我的"), bar);
+    m_navStations = new QPushButton(QStringLiteral("充电站"), m_bottomNav);
+    m_navCharge = new QPushButton(QStringLiteral("充电"), m_bottomNav);
+    m_navProfile = new QPushButton(QStringLiteral("我的"), m_bottomNav);
     for (auto *btn : {m_navStations, m_navCharge, m_navProfile}) {
         btn->setFlat(true);
+        btn->setObjectName(QStringLiteral("navBtn"));
         btn->setMinimumHeight(48);
-        btn->setStyleSheet(QStringLiteral("border:none; background:transparent; color:#64716E; font-size:13px;"));
         layout->addWidget(btn, 1);
     }
-    m_navStations->setStyleSheet(QStringLiteral("border:none; background:transparent; color:#0D7565; font-weight:600; font-size:13px;"));
+    updateNavActive(0);
 
     connect(m_navStations, &QPushButton::clicked, this, [this]() { onBottomNav(0); });
     connect(m_navCharge, &QPushButton::clicked, this, [this]() { onBottomNav(1); });
     connect(m_navProfile, &QPushButton::clicked, this, [this]() { onBottomNav(2); });
-    return bar;
+    return m_bottomNav;
+}
+
+void MainWindow::updateNavActive(int index)
+{
+    auto setActive = [](QPushButton *btn, bool on) {
+        btn->setProperty("active", on);
+        btn->style()->unpolish(btn);
+        btn->style()->polish(btn);
+        btn->update();
+    };
+    setActive(m_navStations, index == 0);
+    setActive(m_navCharge, index == 1);
+    setActive(m_navProfile, index == 2);
 }
 
 void MainWindow::onBottomNav(int index)
 {
     m_tabStack->setCurrentIndex(index);
-    auto style = [](bool on) {
-        return on ? QStringLiteral("border:none; background:transparent; color:#0D7565; font-weight:600; font-size:13px;")
-                  : QStringLiteral("border:none; background:transparent; color:#64716E; font-size:13px;");
-    };
-    m_navStations->setStyleSheet(style(index == 0));
-    m_navCharge->setStyleSheet(style(index == 1));
-    m_navProfile->setStyleSheet(style(index == 2));
+    updateNavActive(index);
     if (index == 0) refreshStations();
     if (index == 1) {
         refreshPilesForCharge();
         refreshOngoingBanner();
+        updateReservationCountdown();
     }
     if (index == 2) {
         refreshProfile();
@@ -197,9 +229,17 @@ QWidget *MainWindow::buildStationsPage()
     m_loadMoreBtn->hide();
 
     auto *navBtn = new QPushButton(QStringLiteral("导航"), page);
-    m_navInfo = new QLabel(QStringLiteral("选中站点后可打开腾讯地图"), page);
+    m_favBtn = new QPushButton(QStringLiteral("收藏/取消"), page);
+    m_favBtn->setObjectName(QStringLiteral("secondaryBtn"));
+    m_favOnlyCheck = new QCheckBox(QStringLiteral("仅看收藏"), page);
+    m_navInfo = new QLabel(QStringLiteral("选中站点后可导航或收藏"), page);
     m_navInfo->setObjectName(QStringLiteral("muted"));
     m_navInfo->setWordWrap(true);
+
+    auto *actionRow = new QHBoxLayout;
+    actionRow->addWidget(navBtn, 1);
+    actionRow->addWidget(m_favBtn, 1);
+    actionRow->addWidget(m_favOnlyCheck);
 
     layout->addWidget(header);
     layout->addWidget(m_countLabel);
@@ -208,7 +248,7 @@ QWidget *MainWindow::buildStationsPage()
     layout->addWidget(m_locationLabel);
     layout->addWidget(m_stationList, 1);
     layout->addWidget(m_loadMoreBtn);
-    layout->addWidget(navBtn);
+    layout->addLayout(actionRow);
     layout->addWidget(m_navInfo);
 
     connect(m_locateBtn, &QPushButton::clicked, this, &MainWindow::onLocate);
@@ -218,6 +258,8 @@ QWidget *MainWindow::buildStationsPage()
     connect(m_regionCombo, &QComboBox::currentTextChanged, this, &MainWindow::onRegionChanged);
     connect(m_loadMoreBtn, &QPushButton::clicked, this, &MainWindow::loadMoreStations);
     connect(navBtn, &QPushButton::clicked, this, &MainWindow::onNavigate);
+    connect(m_favBtn, &QPushButton::clicked, this, &MainWindow::onToggleFavorite);
+    connect(m_favOnlyCheck, &QCheckBox::toggled, this, &MainWindow::onFavoriteFilterToggled);
     return page;
 }
 
@@ -253,7 +295,7 @@ QWidget *MainWindow::buildChargePage()
 
     m_pileList = new QListWidget(page);
     m_reservationInfo = new QLabel(QStringLiteral("当前无有效预约"), page);
-    m_reservationInfo->setObjectName(QStringLiteral("muted"));
+    m_reservationInfo->setObjectName(QStringLiteral("countdownLabel"));
     m_reservationInfo->setWordWrap(true);
     m_chargeInfo = new QLabel(QStringLiteral("当前无进行中的充电"), page);
     m_chargeInfo->setWordWrap(true);
@@ -306,34 +348,61 @@ QWidget *MainWindow::buildChargePage()
 QWidget *MainWindow::buildProfilePage()
 {
     auto *page = new QWidget(this);
-    auto *layout = new QVBoxLayout(page);
-    layout->setContentsMargins(14, 12, 14, 8);
-    layout->setSpacing(8);
+    auto *pageLayout = new QVBoxLayout(page);
+    pageLayout->setContentsMargins(0, 0, 0, 0);
+    pageLayout->setSpacing(0);
 
-    auto *header = new QLabel(QStringLiteral("我的"), page);
+    auto *scroll = new QScrollArea(page);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+
+    auto *content = new QWidget(scroll);
+    content->setObjectName(QStringLiteral("centralRoot"));
+    auto *layout = new QVBoxLayout(content);
+    layout->setContentsMargins(14, 12, 14, 16);
+    layout->setSpacing(12);
+
+    auto *header = new QLabel(QStringLiteral("我的"), content);
     header->setObjectName(QStringLiteral("pageTitle"));
 
-    auto *card = new QFrame(page);
+    auto *card = new QFrame(content);
     card->setObjectName(QStringLiteral("card"));
     auto *form = new QFormLayout(card);
-    form->setContentsMargins(12, 12, 12, 12);
-    m_balanceLabel = new QLabel(page);
-    m_balanceLabel->setStyleSheet(QStringLiteral("color:#0D7565; font-size:15px; font-weight:600;"));
-    m_avatarLabel = new QLabel(page);
-    m_avatarLabel->setFixedSize(48, 48);
+    form->setContentsMargins(14, 14, 14, 14);
+    form->setHorizontalSpacing(12);
+    form->setVerticalSpacing(12);
+    form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    form->setRowWrapPolicy(QFormLayout::DontWrapRows);
+
+    m_balanceLabel = new QLabel(content);
+    m_balanceLabel->setObjectName(QStringLiteral("countdownLabel"));
+    m_balanceLabel->setMinimumHeight(28);
+
+    m_avatarLabel = new QLabel(content);
+    m_avatarLabel->setFixedSize(56, 56);
     m_avatarLabel->setAlignment(Qt::AlignCenter);
-    m_avatarLabel->setStyleSheet(QStringLiteral("background:#EEF2F1; border-radius:4px; color:#64716E;"));
-    auto *avatarBtn = new QPushButton(QStringLiteral("选择头像"), page);
+    m_avatarLabel->setStyleSheet(QStringLiteral("background:#EEF2F1; border-radius:4px;"));
+    auto *avatarBtn = new QPushButton(QStringLiteral("选择头像"), content);
     avatarBtn->setObjectName(QStringLiteral("secondaryBtn"));
+    avatarBtn->setMinimumHeight(36);
     auto *avatarRow = new QHBoxLayout;
+    avatarRow->setSpacing(10);
     avatarRow->addWidget(m_avatarLabel);
     avatarRow->addWidget(avatarBtn);
     avatarRow->addStretch();
-    m_phoneEdit = new QLineEdit(page);
+
+    m_phoneEdit = new QLineEdit(content);
     m_phoneEdit->setReadOnly(true);
-    m_nicknameEdit = new QLineEdit(page);
-    m_carEdit = new QLineEdit(page);
-    m_plateEdit = new QLineEdit(page);
+    m_phoneEdit->setMinimumHeight(36);
+    m_nicknameEdit = new QLineEdit(content);
+    m_nicknameEdit->setMinimumHeight(36);
+    m_carEdit = new QLineEdit(content);
+    m_carEdit->setMinimumHeight(36);
+    m_plateEdit = new QLineEdit(content);
+    m_plateEdit->setMinimumHeight(36);
+
     form->addRow(QStringLiteral("头像"), avatarRow);
     form->addRow(QStringLiteral("账户余额"), m_balanceLabel);
     form->addRow(QStringLiteral("昵称"), m_nicknameEdit);
@@ -341,21 +410,35 @@ QWidget *MainWindow::buildProfilePage()
     form->addRow(QStringLiteral("车型"), m_carEdit);
     form->addRow(QStringLiteral("车牌号"), m_plateEdit);
 
-    auto *saveBtn = new QPushButton(QStringLiteral("保存信息"), page);
+    auto *saveBtn = new QPushButton(QStringLiteral("保存信息"), content);
+    saveBtn->setMinimumHeight(40);
 
-    auto *walletCard = new QFrame(page);
+    m_darkModeBtn = new QPushButton(content);
+    m_darkModeBtn->setObjectName(QStringLiteral("secondaryBtn"));
+    m_darkModeBtn->setCheckable(true);
+    m_darkModeBtn->setChecked(m_darkMode);
+    m_darkModeBtn->setMinimumHeight(40);
+    m_darkModeBtn->setText(m_darkMode ? QStringLiteral("深色模式：开")
+                                     : QStringLiteral("深色模式：关"));
+
+    auto *walletCard = new QFrame(content);
     walletCard->setObjectName(QStringLiteral("card"));
     auto *walletLayout = new QVBoxLayout(walletCard);
-    walletLayout->setContentsMargins(12, 12, 12, 12);
+    walletLayout->setContentsMargins(14, 14, 14, 14);
+    walletLayout->setSpacing(10);
     walletLayout->addWidget(new QLabel(QStringLiteral("钱包充值"), walletCard));
     m_rechargeEdit = new QLineEdit(walletCard);
+    m_rechargeEdit->setMinimumHeight(36);
     m_rechargeEdit->setPlaceholderText(QStringLiteral("输入充值金额（元），如 100"));
     auto *rechargeBtn = new QPushButton(QStringLiteral("充值"), walletCard);
     rechargeBtn->setObjectName(QStringLiteral("successBtn"));
+    rechargeBtn->setMinimumHeight(40);
     auto *quickRow = new QHBoxLayout;
+    quickRow->setSpacing(8);
     for (int amt : {50, 100, 200, 500}) {
         auto *qbtn = new QPushButton(QStringLiteral("+%1").arg(amt), walletCard);
         qbtn->setObjectName(QStringLiteral("secondaryBtn"));
+        qbtn->setMinimumHeight(36);
         connect(qbtn, &QPushButton::clicked, this, [this, amt]() {
             m_rechargeEdit->setText(QString::number(amt));
         });
@@ -365,7 +448,10 @@ QWidget *MainWindow::buildProfilePage()
     walletLayout->addLayout(quickRow);
     walletLayout->addWidget(rechargeBtn);
 
-    m_orderTable = new QTableWidget(page);
+    auto *ordersTitle = new QLabel(QStringLiteral("我的充电记录"), content);
+    ordersTitle->setObjectName(QStringLiteral("pageTitle"));
+
+    m_orderTable = new QTableWidget(content);
     m_orderTable->setColumnCount(5);
     m_orderTable->setHorizontalHeaderLabels({
         QStringLiteral("订单号"), QStringLiteral("站点"), QStringLiteral("电量"),
@@ -373,24 +459,35 @@ QWidget *MainWindow::buildProfilePage()
     });
     m_orderTable->horizontalHeader()->setStretchLastSection(true);
     m_orderTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    m_orderTable->verticalHeader()->setVisible(false);
+    m_orderTable->verticalHeader()->setDefaultSectionSize(36);
+    m_orderTable->setMinimumHeight(220);
     m_orderTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_orderTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+    m_orderTable->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 
-    m_dbInfoLabel = new QLabel(page);
+    m_dbInfoLabel = new QLabel(content);
     m_dbInfoLabel->setObjectName(QStringLiteral("muted"));
     m_dbInfoLabel->setWordWrap(true);
+    m_dbInfoLabel->setMinimumHeight(40);
 
     layout->addWidget(header);
     layout->addWidget(card);
     layout->addWidget(saveBtn);
+    layout->addWidget(m_darkModeBtn);
     layout->addWidget(walletCard);
-    layout->addWidget(new QLabel(QStringLiteral("我的充电记录"), page));
-    layout->addWidget(m_orderTable, 1);
+    layout->addWidget(ordersTitle);
+    layout->addWidget(m_orderTable);
     layout->addWidget(m_dbInfoLabel);
+    layout->addStretch();
+
+    scroll->setWidget(content);
+    pageLayout->addWidget(scroll);
 
     connect(saveBtn, &QPushButton::clicked, this, &MainWindow::onSaveProfile);
     connect(avatarBtn, &QPushButton::clicked, this, &MainWindow::onChooseAvatar);
     connect(rechargeBtn, &QPushButton::clicked, this, &MainWindow::onRecharge);
+    connect(m_darkModeBtn, &QPushButton::toggled, this, &MainWindow::onToggleDarkMode);
     return page;
 }
 
@@ -483,69 +580,72 @@ void MainWindow::refreshStations()
     const QString region = m_regionCombo->currentText();
     const QString district = (region == QStringLiteral("全部区域")) ? QString() : region;
 
-    m_cachedStations = ServerApiClient::instance().listStations(
+    const QVector<Station> all = ServerApiClient::instance().listStations(
         m_userLat, m_userLng, m_stationKeyword->text(), district, 120);
-    m_visibleCount = qMin(20, m_cachedStations.size());
 
     m_stationList->clear();
     m_stationCombo->blockSignals(true);
     m_stationCombo->clear();
-    for (int i = 0; i < m_cachedStations.size(); ++i) {
-        const Station &s = m_cachedStations[i];
+    m_cachedStations.clear();
+    for (const Station &s : all) {
         m_stationCombo->addItem(
-            QStringLiteral("%1（空闲%2/%3）").arg(s.name).arg(s.idlePiles).arg(s.totalPiles), s.id);
-        if (i >= m_visibleCount)
+            QStringLiteral("%1%2（空闲%3/%4）")
+                .arg(isFavorite(s.id) ? QStringLiteral("★ ") : QString())
+                .arg(s.name)
+                .arg(s.idlePiles)
+                .arg(s.totalPiles),
+            s.id);
+        if (m_favOnlyCheck && m_favOnlyCheck->isChecked() && !isFavorite(s.id))
             continue;
-        const QString text = QStringLiteral("%1\n%2 · %3\n距离 %4 km · 空闲 %5/%6 · %7")
-                                 .arg(s.name, s.regionCode, s.address)
-                                 .arg(s.distanceKm, 0, 'f', 2)
-                                 .arg(s.idlePiles)
-                                 .arg(s.totalPiles)
-                                 .arg(statusTextStation(s.status));
-        auto *item = new QListWidgetItem(text, m_stationList);
-        item->setData(Qt::UserRole, s.id);
-        item->setData(Qt::UserRole + 1, s.latitude);
-        item->setData(Qt::UserRole + 2, s.longitude);
-        item->setData(Qt::UserRole + 3, s.name);
-        item->setData(Qt::UserRole + 4, s.address);
+        m_cachedStations.append(s);
     }
     m_stationCombo->blockSignals(false);
 
+    m_visibleCount = qMin(20, m_cachedStations.size());
+    for (int i = 0; i < m_visibleCount; ++i)
+        appendStationItem(m_cachedStations[i]);
+
     const int total = ServerApiClient::instance().stationCount();
     const int piles = ServerApiClient::instance().pileCount();
-    m_countLabel->setText(QStringLiteral("显示附近 %1 / 本批 %2 站（库内 %3 站 · %4 桩）")
+    m_countLabel->setText(QStringLiteral("显示 %1 / 筛选后 %2 站（库内 %3 站 · %4 桩 · 收藏 %5）")
                               .arg(m_visibleCount)
                               .arg(m_cachedStations.size())
                               .arg(total)
-                              .arg(piles));
+                              .arg(piles)
+                              .arg(m_favoriteIds.size()));
     m_loadMoreBtn->setVisible(m_visibleCount < m_cachedStations.size());
     refreshPilesForCharge();
+}
+
+void MainWindow::appendStationItem(const Station &s)
+{
+    const QString star = isFavorite(s.id) ? QStringLiteral("★ ") : QString();
+    const QString text = QStringLiteral("%1%2\n%3 · %4\n距离 %5 km · 空闲 %6/%7 · %8")
+                             .arg(star, s.name, s.regionCode, s.address)
+                             .arg(s.distanceKm, 0, 'f', 2)
+                             .arg(s.idlePiles)
+                             .arg(s.totalPiles)
+                             .arg(statusTextStation(s.status));
+    auto *item = new QListWidgetItem(text, m_stationList);
+    item->setData(Qt::UserRole, s.id);
+    item->setData(Qt::UserRole + 1, s.latitude);
+    item->setData(Qt::UserRole + 2, s.longitude);
+    item->setData(Qt::UserRole + 3, s.name);
+    item->setData(Qt::UserRole + 4, s.address);
 }
 
 void MainWindow::loadMoreStations()
 {
     const int old = m_visibleCount;
     m_visibleCount = qMin(m_visibleCount + 20, m_cachedStations.size());
-    for (int i = old; i < m_visibleCount; ++i) {
-        const Station &s = m_cachedStations[i];
-        const QString text = QStringLiteral("%1\n%2 · %3\n距离 %4 km · 空闲 %5/%6 · %7")
-                                 .arg(s.name, s.regionCode, s.address)
-                                 .arg(s.distanceKm, 0, 'f', 2)
-                                 .arg(s.idlePiles)
-                                 .arg(s.totalPiles)
-                                 .arg(statusTextStation(s.status));
-        auto *item = new QListWidgetItem(text, m_stationList);
-        item->setData(Qt::UserRole, s.id);
-        item->setData(Qt::UserRole + 1, s.latitude);
-        item->setData(Qt::UserRole + 2, s.longitude);
-        item->setData(Qt::UserRole + 3, s.name);
-        item->setData(Qt::UserRole + 4, s.address);
-    }
-    m_countLabel->setText(QStringLiteral("显示附近 %1 / 本批 %2 站（库内 %3 站 · %4 桩）")
+    for (int i = old; i < m_visibleCount; ++i)
+        appendStationItem(m_cachedStations[i]);
+    m_countLabel->setText(QStringLiteral("显示 %1 / 筛选后 %2 站（库内 %3 站 · %4 桩 · 收藏 %5）")
                               .arg(m_visibleCount)
                               .arg(m_cachedStations.size())
                               .arg(ServerApiClient::instance().stationCount())
-                              .arg(ServerApiClient::instance().pileCount()));
+                              .arg(ServerApiClient::instance().pileCount())
+                              .arg(m_favoriteIds.size()));
     m_loadMoreBtn->setVisible(m_visibleCount < m_cachedStations.size());
 }
 
@@ -598,11 +698,8 @@ void MainWindow::refreshPilesForCharge()
     ChargingReservation active;
     m_reservation = ServerApiClient::instance().getActiveReservation(active)
                         ? active : ChargingReservation{};
+    updateReservationCountdown();
     if (m_reservation.id > 0) {
-        m_reservationInfo->setText(
-            QStringLiteral("有效预约：%1 / %2\n预约号 %3，到期 %4")
-                .arg(m_reservation.stationName, m_reservation.pileCode,
-                     m_reservation.reservationNo, m_reservation.expiresAt));
         Pile reservedPile;
         if (ServerApiClient::instance().getPile(m_reservation.pileId, reservedPile)
             && selectedStationId() != reservedPile.stationId) {
@@ -613,8 +710,6 @@ void MainWindow::refreshPilesForCharge()
                 m_stationCombo->blockSignals(false);
             }
         }
-    } else {
-        m_reservationInfo->setText(QStringLiteral("当前无有效预约"));
     }
     const int stationId = selectedStationId();
     if (stationId <= 0)
@@ -875,3 +970,168 @@ void MainWindow::refreshOrders()
         m_orderTable->setItem(i, 4, new QTableWidgetItem(statusTextOrder(o.status)));
     }
 }
+
+void MainWindow::loadFavorites()
+{
+    QSettings settings;
+    const QVariantList list = settings.value(
+        QStringLiteral("favorites/%1").arg(m_user.id)).toList();
+    m_favoriteIds.clear();
+    for (const QVariant &v : list)
+        m_favoriteIds.insert(v.toInt());
+}
+
+void MainWindow::saveFavorites()
+{
+    QVariantList list;
+    for (int id : m_favoriteIds)
+        list.append(id);
+    QSettings settings;
+    settings.setValue(QStringLiteral("favorites/%1").arg(m_user.id), list);
+}
+
+bool MainWindow::isFavorite(int stationId) const
+{
+    return m_favoriteIds.contains(stationId);
+}
+
+void MainWindow::setFavorite(int stationId, bool on)
+{
+    if (on)
+        m_favoriteIds.insert(stationId);
+    else
+        m_favoriteIds.remove(stationId);
+    saveFavorites();
+}
+
+int MainWindow::selectedListStationId() const
+{
+    auto *item = m_stationList->currentItem();
+    return item ? item->data(Qt::UserRole).toInt() : 0;
+}
+
+void MainWindow::onToggleFavorite()
+{
+    const int id = selectedListStationId();
+    if (id <= 0) {
+        QMessageBox::information(this, QStringLiteral("提示"), QStringLiteral("请先选中一个充电站"));
+        return;
+    }
+    const bool nowFav = !isFavorite(id);
+    setFavorite(id, nowFav);
+    statusBar()->showMessage(nowFav ? QStringLiteral("已加入收藏")
+                                    : QStringLiteral("已取消收藏"), 2500);
+    refreshStations();
+}
+
+void MainWindow::onFavoriteFilterToggled(bool)
+{
+    refreshStations();
+}
+
+void MainWindow::updateReservationCountdown()
+{
+    if (!m_reservationInfo)
+        return;
+    if (m_reservation.id <= 0) {
+        m_reservationInfo->setText(QStringLiteral("当前无有效预约"));
+        return;
+    }
+
+    const QDateTime expires = QDateTime::fromString(m_reservation.expiresAt,
+                                                    QStringLiteral("yyyy-MM-dd HH:mm:ss"));
+    if (!expires.isValid()) {
+        m_reservationInfo->setText(
+            QStringLiteral("有效预约：%1 / %2\n预约号 %3\n到期 %4")
+                .arg(m_reservation.stationName, m_reservation.pileCode,
+                     m_reservation.reservationNo, m_reservation.expiresAt));
+        return;
+    }
+
+    const qint64 secs = QDateTime::currentDateTime().secsTo(expires);
+    if (secs <= 0) {
+        m_reservationInfo->setText(QStringLiteral("预约已到期，正在刷新…"));
+        m_reservation = ChargingReservation{};
+        // 到期后刷新一次桩状态
+        QTimer::singleShot(300, this, &MainWindow::refreshPilesForCharge);
+        return;
+    }
+
+    const int mm = int(secs / 60);
+    const int ss = int(secs % 60);
+    m_reservationInfo->setText(
+        QStringLiteral("有效预约：%1 / %2\n预约号 %3\n剩余 %4:%5（到期 %6）")
+            .arg(m_reservation.stationName, m_reservation.pileCode, m_reservation.reservationNo)
+            .arg(mm, 2, 10, QChar('0'))
+            .arg(ss, 2, 10, QChar('0'))
+            .arg(m_reservation.expiresAt));
+}
+
+void MainWindow::onReservationTick()
+{
+    updateReservationCountdown();
+}
+
+void MainWindow::restoreSession()
+{
+    if (m_sessionRestored)
+        return;
+    m_sessionRestored = true;
+
+    QStringList recovered;
+    ChargingOrder order;
+    if (ServerApiClient::instance().getOngoingOrderByUser(m_user.id, order)) {
+        recovered << QStringLiteral("进行中订单 %1（%2 / %3，已充 %4 kWh）")
+                         .arg(order.orderNo, order.stationName, order.pileCode)
+                         .arg(order.energyKwh, 0, 'f', 2);
+        refreshOngoingBanner();
+        onBottomNav(1);
+    }
+
+    ChargingReservation reservation;
+    if (ServerApiClient::instance().getActiveReservation(reservation)) {
+        m_reservation = reservation;
+        recovered << QStringLiteral("有效预约 %1（%2 / %3，到期 %4）")
+                         .arg(reservation.reservationNo, reservation.stationName,
+                              reservation.pileCode, reservation.expiresAt);
+        refreshPilesForCharge();
+        updateReservationCountdown();
+        if (m_tabStack->currentIndex() != 1)
+            onBottomNav(1);
+    }
+
+    if (!recovered.isEmpty()) {
+        statusBar()->showMessage(QStringLiteral("已恢复会话"), 4000);
+        QMessageBox::information(this, QStringLiteral("会话恢复"),
+                                 QStringLiteral("检测到未完成业务，已为您恢复：\n\n- ")
+                                     + recovered.join(QStringLiteral("\n- ")));
+    } else {
+        statusBar()->showMessage(QStringLiteral("无进行中订单或预约"), 2500);
+    }
+}
+
+void MainWindow::applyTheme(bool dark)
+{
+    m_darkMode = dark;
+    qApp->setStyleSheet(dark ? StyleHelper::userClientDarkStyle()
+                             : StyleHelper::userClientStyle());
+    if (m_darkModeBtn) {
+        m_darkModeBtn->blockSignals(true);
+        m_darkModeBtn->setChecked(dark);
+        m_darkModeBtn->setText(dark ? QStringLiteral("深色模式：开")
+                                   : QStringLiteral("深色模式：关"));
+        m_darkModeBtn->blockSignals(false);
+    }
+    if (m_tabStack)
+        updateNavActive(m_tabStack->currentIndex());
+}
+
+void MainWindow::onToggleDarkMode(bool dark)
+{
+    applyTheme(dark);
+    QSettings settings;
+    settings.setValue(QStringLiteral("ui/darkMode"), dark);
+    statusBar()->showMessage(dark ? QStringLiteral("已切换深色模式")
+                                  : QStringLiteral("已切换浅色模式"), 2000);
+}
+

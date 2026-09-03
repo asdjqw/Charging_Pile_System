@@ -3,8 +3,10 @@
 #include "Models.h"
 
 #include <QMainWindow>
+#include <QSet>
 #include <QVector>
 
+class QCheckBox;
 class QLabel;
 class QLineEdit;
 class QListWidget;
@@ -30,6 +32,8 @@ private slots:
     void onLocate();
     void onRegionChanged();
     void onNavigate();
+    void onToggleFavorite();
+    void onFavoriteFilterToggled(bool checked);
     void onRealLocationUpdated(double lat, double lng, const QString &label, const QString &source);
     void onRealLocationFailed(const QString &reason);
     void refreshPilesForCharge();
@@ -38,11 +42,14 @@ private slots:
     void onStartCharge();
     void onStopCharge();
     void onChargeTick();
+    void onReservationTick();
     void refreshProfile();
     void onSaveProfile();
     void onChooseAvatar();
     void onRecharge();
     void refreshOrders();
+    void onToggleDarkMode(bool dark);
+    void restoreSession();
 
 private:
     void buildUi();
@@ -51,10 +58,19 @@ private:
     QWidget *buildProfilePage();
     QWidget *buildBottomNav();
     void refreshOngoingBanner();
+    void updateReservationCountdown();
     void applyUserLocation(const QString &regionOrAddress);
     void requestRealLocation();
+    void loadFavorites();
+    void saveFavorites();
+    bool isFavorite(int stationId) const;
+    void setFavorite(int stationId, bool on);
+    void applyTheme(bool dark);
+    void updateNavActive(int index);
+    void appendStationItem(const Station &s);
     int selectedStationId() const;
     int selectedPileId() const;
+    int selectedListStationId() const;
 
     User m_user;
     LocationProvider *m_locationProvider = nullptr;
@@ -65,8 +81,12 @@ private:
     QPushButton *m_locateBtn = nullptr;
     int m_visibleCount = 20;
     QVector<Station> m_cachedStations;
+    QSet<int> m_favoriteIds;
+    bool m_darkMode = false;
+    bool m_sessionRestored = false;
 
     QStackedWidget *m_tabStack = nullptr;
+    QWidget *m_bottomNav = nullptr;
     QPushButton *m_navStations = nullptr;
     QPushButton *m_navCharge = nullptr;
     QPushButton *m_navProfile = nullptr;
@@ -79,6 +99,8 @@ private:
     QLabel *m_countLabel = nullptr;
     QListWidget *m_stationList = nullptr;
     QPushButton *m_loadMoreBtn = nullptr;
+    QPushButton *m_favBtn = nullptr;
+    QCheckBox *m_favOnlyCheck = nullptr;
     QLabel *m_navInfo = nullptr;
 
     // 充电
@@ -90,6 +112,7 @@ private:
     QLabel *m_reservationInfo = nullptr;
     QProgressBar *m_chargeProgress = nullptr;
     QTimer *m_chargeTimer = nullptr;
+    QTimer *m_reservationTimer = nullptr;
     ChargingOrder m_ongoing;
     ChargingReservation m_reservation;
     double m_simulatedEnergy = 0.0;
@@ -107,4 +130,5 @@ private:
     QLabel *m_avatarLabel = nullptr;
     QLabel *m_dbInfoLabel = nullptr;
     QTableWidget *m_orderTable = nullptr;
+    QPushButton *m_darkModeBtn = nullptr;
 };

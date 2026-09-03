@@ -11,9 +11,10 @@ inline QString userClientStyle()
         QMainWindow, QDialog, QWidget#centralRoot { background: #F3F6F5; }
         QLabel#pageTitle, QLabel#titleLabel { font-size: 16px; font-weight: 600; color: #15201E; }
         QLabel#muted, QLabel#subtitleLabel { color: #64716E; font-size: 12px; }
+        QLabel#countdownLabel { color: #0D7565; font-size: 13px; font-weight: 600; }
         QLineEdit, QComboBox {
             padding: 7px 10px; border: 1px solid #D8E0DE; border-radius: 4px;
-            background: white; selection-background-color: #D7E8E4;
+            background: white; selection-background-color: #D7E8E4; color: #15201E;
         }
         QLineEdit:focus, QComboBox:focus { border-color: #0D7565; }
         QPushButton {
@@ -29,18 +30,28 @@ inline QString userClientStyle()
         QPushButton#successBtn { background: #188568; border-color: #188568; }
         QPushButton#dangerBtn { background: #C34444; border-color: #C34444; }
         QPushButton#dangerBtn:hover { background: #A83737; }
+        QPushButton#navBtn {
+            border: none; background: transparent; color: #64716E; font-size: 13px;
+        }
+        QPushButton#navBtn[active="true"] {
+            color: #0D7565; font-weight: 600;
+        }
+        QCheckBox { color: #15201E; spacing: 6px; }
         QFrame#card {
             background: white; border: 1px solid #D8E0DE; border-radius: 4px;
+        }
+        QWidget#bottomNav {
+            background: #FFFFFF; border-top: 1px solid #D8E0DE;
         }
         QListWidget { background: transparent; border: none; outline: none; }
         QListWidget::item {
             background: white; border: 1px solid #D8E0DE; border-radius: 4px;
-            margin: 4px 0; padding: 8px 10px;
+            margin: 4px 0; padding: 8px 10px; color: #15201E;
         }
         QListWidget::item:selected { border: 1px solid #0D7565; background: #E7F2EF; }
         QTableWidget {
             background: white; border: 1px solid #D8E0DE; gridline-color: #E8EEEC;
-            alternate-background-color: #F7F9F8;
+            alternate-background-color: #F7F9F8; color: #15201E;
         }
         QHeaderView::section {
             background: #EEF2F1; color: #3D4A47; padding: 6px 8px;
@@ -48,11 +59,80 @@ inline QString userClientStyle()
         }
         QProgressBar {
             border: 1px solid #D8E0DE; background: #EEF2F1; border-radius: 2px;
-            height: 14px; text-align: center;
+            height: 14px; text-align: center; color: #15201E;
         }
         QProgressBar::chunk { background: #0D7565; }
         QScrollArea { border: none; background: transparent; }
         QMessageBox { background: #F3F6F5; }
+        QStatusBar { background: #EEF2F1; color: #3D4A47; }
+    )");
+}
+
+inline QString userClientDarkStyle()
+{
+    return QStringLiteral(R"(
+        QWidget { font-family: 'Noto Sans CJK SC','Microsoft YaHei',sans-serif; color: #E8EEEC; font-size: 13px; }
+        QMainWindow, QDialog, QWidget#centralRoot { background: #121A19; }
+        QLabel#pageTitle, QLabel#titleLabel { font-size: 16px; font-weight: 600; color: #F3F6F5; }
+        QLabel#muted, QLabel#subtitleLabel { color: #8A9693; font-size: 12px; }
+        QLabel#countdownLabel { color: #3DDBB5; font-size: 13px; font-weight: 600; }
+        QLineEdit, QComboBox {
+            padding: 7px 10px; border: 1px solid #2A3835; border-radius: 4px;
+            background: #1A2422; selection-background-color: #0D7565; color: #E8EEEC;
+        }
+        QComboBox QAbstractItemView {
+            background: #1A2422; color: #E8EEEC; border: 1px solid #2A3835;
+            selection-background-color: #0D7565;
+        }
+        QLineEdit:focus, QComboBox:focus { border-color: #3DDBB5; }
+        QPushButton {
+            background: #0D7565; color: white; border: 1px solid #0D7565; border-radius: 4px;
+            padding: 7px 12px; font-size: 13px;
+        }
+        QPushButton:hover { background: #11967F; }
+        QPushButton:disabled { background: #2A3835; color: #6B7874; border-color: #2A3835; }
+        QPushButton#secondaryBtn {
+            background: #1A2422; color: #E8EEEC; border: 1px solid #2A3835;
+        }
+        QPushButton#secondaryBtn:hover { background: #24302D; }
+        QPushButton#successBtn { background: #188568; border-color: #188568; }
+        QPushButton#dangerBtn { background: #C34444; border-color: #C34444; }
+        QPushButton#dangerBtn:hover { background: #A83737; }
+        QPushButton#navBtn {
+            border: none; background: transparent; color: #8A9693; font-size: 13px;
+        }
+        QPushButton#navBtn[active="true"] {
+            color: #3DDBB5; font-weight: 600;
+        }
+        QCheckBox { color: #E8EEEC; spacing: 6px; }
+        QFrame#card {
+            background: #1A2422; border: 1px solid #2A3835; border-radius: 4px;
+        }
+        QWidget#bottomNav {
+            background: #1A2422; border-top: 1px solid #2A3835;
+        }
+        QListWidget { background: transparent; border: none; outline: none; }
+        QListWidget::item {
+            background: #1A2422; border: 1px solid #2A3835; border-radius: 4px;
+            margin: 4px 0; padding: 8px 10px; color: #E8EEEC;
+        }
+        QListWidget::item:selected { border: 1px solid #3DDBB5; background: #20302D; }
+        QTableWidget {
+            background: #1A2422; border: 1px solid #2A3835; gridline-color: #2A3835;
+            alternate-background-color: #15201E; color: #E8EEEC;
+        }
+        QHeaderView::section {
+            background: #20302D; color: #C5D0CD; padding: 6px 8px;
+            border: none; border-bottom: 1px solid #2A3835; font-weight: 600;
+        }
+        QProgressBar {
+            border: 1px solid #2A3835; background: #121A19; border-radius: 2px;
+            height: 14px; text-align: center; color: #E8EEEC;
+        }
+        QProgressBar::chunk { background: #0D7565; }
+        QScrollArea { border: none; background: transparent; }
+        QMessageBox { background: #1A2422; }
+        QStatusBar { background: #15201E; color: #C5D0CD; }
     )");
 }
 
