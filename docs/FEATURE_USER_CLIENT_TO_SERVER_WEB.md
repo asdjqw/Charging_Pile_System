@@ -287,7 +287,7 @@ Web 运营大屏（浏览器）
 
 - Ubuntu 22.04；
 - GCC/G++ 11.4；
-- CMake 3.22.1；
+- qmake（Qt 6.2.4 的 qmake6）；
 - Qt 6.2.4；
 - GNU Make 4.3；
 - C++17。
@@ -295,8 +295,8 @@ Web 运营大屏（浏览器）
 本项目不依赖特定个人开发设备，也没有引入仅限某一桌面系统的核心业务依赖。Web 大屏使用
 原生 HTML/CSS/JS 和本地 ECharts，Ubuntu 无需安装 Node.js。
 
-顶层 CMake 会构建公共库、用户端、管理/服务器端和测试程序，并把数据库脚本、CSV 和 Web
-资源复制到可执行文件附近。`scripts/build.sh` 默认使用 CMake Unix Makefiles，适配课程环境。
+顶层 `ChargePile.pro` 会构建公共库、用户端、管理端、后端和测试程序，并把数据库脚本、CSV 和 Web
+资源复制到可执行文件附近。`scripts/build.sh` 默认使用 `qmake6` + GNU Make，适配课程环境。
 
 ## 9. 运行方式
 
@@ -351,13 +351,12 @@ CHARGE_PILE_BIND_ADDRESS=0.0.0.0 ./build/admin_server/admin_server
 
 ### 10.1 自动化测试
 
-已执行干净 CMake/Qt 构建，并运行 CTest：
+已用 qmake 构建，并运行：
 
 ```bash
-ctest --test-dir build --output-on-failure
+./build/protocol_test/protocol_test
+./build/database_behavior_test/database_behavior_test
 ```
-
-当前纳入 CTest 的测试为：
 
 | 测试 | 验证内容 |
 |---|---|
@@ -455,7 +454,7 @@ ctest --test-dir build --output-on-failure
 7. Web 大屏站点列表应继续使用服务端分页，避免把 3000 多个站点一次性渲染到 DOM。
 8. 测试前应确认使用的是测试数据库；删除默认数据库会导致重新初始化，不应误删需要保留的数据。
 9. 构建目录、运行数据库、日志和个人 IDE 配置不应提交到 Git。
-10. 提交前至少执行一次干净构建、CTest 和完整预约到结算流程。
+10. 提交前至少执行一次干净构建、协议/数据库测试和完整预约到结算流程。
 
 ## 13. 分支与提交状态
 

@@ -21,7 +21,8 @@ public:
     bool ping();
 
     bool loginUser(const QString &username, const QString &password, User &outUser);
-    bool phoneLogin(const QString &phone, User &outUser, bool &created);
+    bool phoneLogin(const QString &phone, User &outUser, bool &created,
+                    const QString &password = QString());
     bool registerUser(const User &user);
     bool getUserById(int id, User &outUser);
     bool updateUser(const User &user);

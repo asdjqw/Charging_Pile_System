@@ -24,6 +24,7 @@ public:
 
     bool loginUser(const QString &username, const QString &password, User &outUser);
     bool phoneLogin(const QString &phone, User &outUser, bool &created);
+    bool loginByPhone(const QString &phone, const QString &password, User &outUser);
     bool loginAdmin(const QString &username, const QString &password, Admin &outAdmin);
     bool registerUser(const User &user);
 
@@ -91,6 +92,9 @@ private:
     bool execSqlFile(const QString &filePath);
     bool ensureSchemaAndSeed();
     bool ensurePileColumns();
+    bool migratePasswordHashes();
+    bool upgradePasswordIfNeeded(const QString &table, int id, const QString &plain,
+                                 const QString &hash, const QString &legacy);
     QString resolveDbPath(const QString &preferred) const;
     QString resolveCsvPath(const QString &preferred) const;
     double haversineKm(double lat1, double lon1, double lat2, double lon2) const;

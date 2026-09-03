@@ -8,11 +8,12 @@ CREATE TABLE IF NOT EXISTS schema_meta (
     applied_at    TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
 );
 
--- 用户。username/password 为兼容现有界面保留；新客户端以 phone 免密登录。
+-- 用户。password 仅作迁移兼容，登录校验使用 password_hash（盐值 SHA-256）。
 CREATE TABLE IF NOT EXISTS users (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     username      TEXT    NOT NULL UNIQUE,
     password      TEXT    NOT NULL DEFAULT '',
+    password_hash TEXT    NOT NULL DEFAULT '',
     phone         TEXT    NOT NULL UNIQUE
                           CHECK(length(phone) = 11 AND phone NOT GLOB '*[^0-9]*'),
     nickname      TEXT    NOT NULL DEFAULT '',

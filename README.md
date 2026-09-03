@@ -55,12 +55,11 @@ bash scripts/run_ubuntu.sh
 ```bash
 sudo apt update
 # Ubuntu 22.04 用 libqt6charts6-dev；24.04 可用 qt6-charts-dev
-sudo apt install -y build-essential cmake \
-    qt6-base-dev qt6-tools-dev libqt6charts6-dev libqt6sql6-sqlite \
-    libgl1-mesa-dev pkg-config
+sudo apt install -y build-essential qt6-base-dev qt6-tools-dev qt6-qmake \
+    libqt6charts6-dev libqt6sql6-sqlite libgl1-mesa-dev pkg-config
 ```
 
-项目以 Ubuntu Qt 6.2.4、CMake 3.22、GCC 11 和 C++17 为兼容基准。
+项目以 Ubuntu Qt 6.2.4、qmake、GCC 11 和 C++17 为兼容基准。
 
 ## 编译与运行
 
@@ -90,8 +89,8 @@ bash scripts/rebuild_run.sh
 firefox http://127.0.0.1:8080
 ```
 
-也可使用 Qt Creator：菜单「文件 → 打开文件或项目」，选择本目录的 **`CMakeLists.txt`**
-（本项目是 Qt6 + CMake，**没有** `.pro` 文件，源码目录里也看不到可双击的启动图标）。
+也可使用 Qt Creator：菜单「文件 → 打开文件或项目」，选择本目录的 **`ChargePile.pro`**
+（本项目是 Qt6 + qmake）。
 
 编译完成后，程序在 `build/` 里，不在源码根目录：
 
@@ -126,8 +125,8 @@ chmod +x scripts/*.sh
 
 ### 演示账号
 
-用户端输入 11 位手机号免密登录，手机号不存在时自动创建用户。内置演示手机号：
-`13800001111`、`13900002222`、`13700003333`。
+用户端输入 11 位手机号和密码登录，也可在登录窗注册。演示账号：
+`13800001111` / `123456`。
 
 | 类型 | 用户名 | 密码 |
 |---|---|---|
@@ -172,13 +171,17 @@ database/      SQLite schema、seed 和协议设计
 data/          北京充电站 CSV
 web/           离线 Web 运营大屏
 tests/         协议测试和 TCP 端到端测试客户端
-scripts/       Ubuntu 依赖安装与跨平台构建脚本
+ChargePile.pro  qmake 总工程（subdirs）
+scripts/       Ubuntu 依赖安装与 qmake 构建脚本
 ```
 
 ## 测试
 
 ```bash
-ctest --test-dir build --output-on-failure
+./build/protocol_test/protocol_test
+./build/database_behavior_test/database_behavior_test
+# 后端已启动时：
+./build/server_api_smoke/server_api_smoke
 ```
 
 `database_behavior_test` 验证手机号自动建号、冻结/解冻和模拟远程重启；

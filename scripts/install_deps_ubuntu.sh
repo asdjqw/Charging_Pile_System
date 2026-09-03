@@ -15,10 +15,9 @@ fi
 
 sudo apt install -y \
   build-essential \
-  cmake \
-  ninja-build \
   qt6-base-dev \
   qt6-tools-dev \
+  qt6-qmake \
   "$charts_pkg" \
   libqt6sql6-sqlite \
   libgl1-mesa-dev \

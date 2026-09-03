@@ -12,3 +12,12 @@ cmake-build-*/
 *.so
 *.AppImage
 .DS_Store
+Makefile
+Makefile.*
+.qmake.stash
+moc_*.cpp
+moc_*.h
+qrc_*.cpp
+object_script.*
+*.Debug
+*.Release

@@ -1,8 +1,11 @@
 #include "MainWindow.h"
 #include "AdminApiClient.h"
+#include "StyleHelper.h"
 
 #include <QAbstractItemView>
+#include <QApplication>
 #include <QBrush>
+#include <QColor>
 #include <QComboBox>
 #include <QDialog>
 #include <QFormLayout>
@@ -19,6 +22,8 @@
 #include <QPainter>
 #include <QPen>
 #include <QPushButton>
+#include <QScrollArea>
+#include <QSettings>
 #include <QSpinBox>
 #include <QStackedWidget>
 #include <QTableWidget>
@@ -73,7 +78,10 @@ MainWindow::MainWindow(const Admin &admin, QWidget *parent)
                                                         : m_admin.realName));
     resize(1180, 740);
     setMinimumSize(980, 640);
+    QSettings settings;
+    m_darkMode = settings.value(QStringLiteral("ui/darkMode"), false).toBool();
     buildUi();
+    applyTheme(m_darkMode);
     refreshDashboard();
     refreshPileStatus();
     refreshStations();
@@ -141,6 +149,16 @@ void MainWindow::buildUi()
     sideLayout->addWidget(who);
     sideLayout->addWidget(m_nav, 1);
 
+    m_darkModeBtn = new QPushButton(side);
+    m_darkModeBtn->setObjectName(QStringLiteral("secondaryBtn"));
+    m_darkModeBtn->setCheckable(true);
+    m_darkModeBtn->setChecked(m_darkMode);
+    m_darkModeBtn->setText(m_darkMode ? QStringLiteral("夜间模式：开")
+                                      : QStringLiteral("夜间模式：关"));
+    m_darkModeBtn->setContentsMargins(10, 0, 10, 0);
+    sideLayout->addWidget(m_darkModeBtn);
+    connect(m_darkModeBtn, &QPushButton::toggled, this, &MainWindow::onToggleDarkMode);
+
     auto *right = new QWidget(central);
     auto *rightLayout = new QVBoxLayout(right);
     rightLayout->setContentsMargins(16, 12, 16, 12);
@@ -175,9 +193,16 @@ void MainWindow::onNavChanged(int row)
 QWidget *MainWindow::buildDashboardPage()
 {
     auto *page = new QWidget(this);
-    auto *layout = new QVBoxLayout(page);
+    auto *pageLayout = new QVBoxLayout(page);
+    pageLayout->setContentsMargins(0, 0, 0, 0);
+    pageLayout->setSpacing(0);
+    auto *scroll = new QScrollArea(page);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    auto *inner = new QWidget(scroll);
+    auto *layout = new QVBoxLayout(inner);
     layout->setSpacing(10);
-    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setContentsMargins(0, 0, 4, 0);
 
     auto *grid = new QGridLayout;
     grid->addWidget(makeKpiCard(QStringLiteral("今日营收（元）"), &m_kpiTodayAmount), 0, 0);
@@ -213,6 +238,9 @@ QWidget *MainWindow::buildDashboardPage()
     connect(refreshBtn, &QPushButton::clicked, this, &MainWindow::refreshDashboard);
     connect(m_salesDays, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &MainWindow::refreshDashboard);
+    m_recentOrders->setMinimumHeight(180);
+    scroll->setWidget(inner);
+    pageLayout->addWidget(scroll);
     return page;
 }
 
@@ -392,7 +420,7 @@ void MainWindow::applySalesChart(const QJsonObject &payload)
     chart->addSeries(series);
     chart->legend()->hide();
     chart->setTitle(QString());
-    chart->setBackgroundBrush(QBrush(Qt::white));
+    chart->setBackgroundBrush(QBrush(m_darkMode ? QColor(QStringLiteral("#1A2422")) : Qt::white));
     chart->setAnimationOptions(QChart::NoAnimation);
     chart->setMargins(QMargins(8, 8, 8, 8));
 
@@ -400,6 +428,11 @@ void MainWindow::applySalesChart(const QJsonObject &payload)
     axisY->setRange(0, maxY * 1.2);
     axisY->setLabelFormat(QStringLiteral("%.0f"));
     axisY->setTitleText(QStringLiteral("营收（元）"));
+    const QColor axisColor = m_darkMode ? QColor(QStringLiteral("#C5D0CD"))
+                                        : QColor(QStringLiteral("#15201E"));
+    axisX->setLabelsColor(axisColor);
+    axisY->setLabelsColor(axisColor);
+    axisY->setTitleBrush(QBrush(axisColor));
     chart->addAxis(axisX, Qt::AlignBottom);
     chart->addAxis(axisY, Qt::AlignLeft);
     series->attachAxis(axisX);
@@ -429,9 +462,11 @@ void MainWindow::applyStatusChart(const QJsonObject &stats)
     auto *chart = new QChart();
     chart->addSeries(series);
     chart->setTitle(QString());
-    chart->setBackgroundBrush(QBrush(Qt::white));
+    chart->setBackgroundBrush(QBrush(m_darkMode ? QColor(QStringLiteral("#1A2422")) : Qt::white));
     chart->setAnimationOptions(QChart::NoAnimation);
     chart->legend()->setAlignment(Qt::AlignBottom);
+    chart->legend()->setLabelColor(m_darkMode ? QColor(QStringLiteral("#C5D0CD"))
+                                              : QColor(QStringLiteral("#15201E")));
     m_statusChartView->setChart(chart);
 }
 
@@ -673,4 +708,29 @@ void MainWindow::onToggleUserStatus()
         return;
     }
     refreshUsers();
+}
+
+void MainWindow::applyTheme(bool dark)
+{
+    m_darkMode = dark;
+    qApp->setStyleSheet(dark ? StyleHelper::adminClientDarkStyle()
+                             : StyleHelper::adminClientStyle());
+    if (m_darkModeBtn) {
+        m_darkModeBtn->blockSignals(true);
+        m_darkModeBtn->setChecked(dark);
+        m_darkModeBtn->setText(dark ? QStringLiteral("夜间模式：开")
+                                    : QStringLiteral("夜间模式：关"));
+        m_darkModeBtn->blockSignals(false);
+    }
+}
+
+void MainWindow::onToggleDarkMode(bool dark)
+{
+    applyTheme(dark);
+    QSettings settings;
+    settings.setValue(QStringLiteral("ui/darkMode"), dark);
+    if (m_salesChartView && m_salesDays)
+        refreshDashboard();
+    if (m_statusChartView)
+        refreshPileStatus();
 }

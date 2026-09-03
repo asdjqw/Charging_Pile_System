@@ -266,7 +266,17 @@ QWidget *MainWindow::buildStationsPage()
 QWidget *MainWindow::buildChargePage()
 {
     auto *page = new QWidget(this);
-    auto *layout = new QVBoxLayout(page);
+    auto *pageLayout = new QVBoxLayout(page);
+    pageLayout->setContentsMargins(0, 0, 0, 0);
+    pageLayout->setSpacing(0);
+    auto *scroll = new QScrollArea(page);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+
+    auto *content = new QWidget(scroll);
+    content->setObjectName(QStringLiteral("centralRoot"));
+    auto *layout = new QVBoxLayout(content);
     layout->setContentsMargins(14, 12, 14, 8);
     layout->setSpacing(8);
 
@@ -293,7 +303,8 @@ QWidget *MainWindow::buildChargePage()
     filterRow->addWidget(m_speedFilter, 1);
     filterRow->addWidget(m_connectorFilter, 1);
 
-    m_pileList = new QListWidget(page);
+    m_pileList = new QListWidget(content);
+    m_pileList->setMinimumHeight(180);
     m_reservationInfo = new QLabel(QStringLiteral("当前无有效预约"), page);
     m_reservationInfo->setObjectName(QStringLiteral("countdownLabel"));
     m_reservationInfo->setWordWrap(true);
@@ -342,6 +353,8 @@ QWidget *MainWindow::buildChargePage()
     connect(reserveBtn, &QPushButton::clicked, this, &MainWindow::onReservePile);
     connect(cancelReservationBtn, &QPushButton::clicked, this, &MainWindow::onCancelReservation);
     connect(stopBtn, &QPushButton::clicked, this, &MainWindow::onStopCharge);
+    scroll->setWidget(content);
+    pageLayout->addWidget(scroll);
     return page;
 }
 

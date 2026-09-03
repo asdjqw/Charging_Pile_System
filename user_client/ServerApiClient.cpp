@@ -133,9 +133,13 @@ bool ServerApiClient::loginUser(const QString &username, const QString &password
     return !m_token.isEmpty() && outUser.id > 0;
 }
 
-bool ServerApiClient::phoneLogin(const QString &phone, User &outUser, bool &created)
+bool ServerApiClient::phoneLogin(const QString &phone, User &outUser, bool &created,
+                                 const QString &password)
 {
-    const QJsonObject response = call(QStringLiteral("user.phoneLogin"), {{"phone", phone}}, false);
+    QJsonObject payload{{"phone", phone}};
+    if (!password.isEmpty())
+        payload.insert("password", password);
+    const QJsonObject response = call(QStringLiteral("user.phoneLogin"), payload, false);
     if (!accept(response))
         return false;
     const QJsonObject data = response.value("data").toObject();

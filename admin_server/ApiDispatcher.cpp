@@ -99,8 +99,13 @@ QJsonObject ApiDispatcher::dispatch(const QJsonObject &request)
     if (action == QLatin1String("user.phoneLogin")) {
         User user;
         bool created = false;
-        if (!db.phoneLogin(data.value("phone").toString(), user, created))
+        const QString password = data.value("password").toString();
+        if (!password.isEmpty()) {
+            if (!db.loginByPhone(data.value("phone").toString(), password, user))
+                return failure(request, QStringLiteral("AUTH_FAILED"), db.lastError());
+        } else if (!db.phoneLogin(data.value("phone").toString(), user, created)) {
             return failure(request, QStringLiteral("AUTH_FAILED"), db.lastError());
+        }
         const QString token = QUuid::createUuid().toString(QUuid::WithoutBraces);
         m_sessions.insert(token, {user.id, QDateTime::currentDateTimeUtc().addSecs(12 * 60 * 60)});
         return success(request, QJsonObject{{"token", token}, {"created", created},

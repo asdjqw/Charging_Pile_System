@@ -11,6 +11,7 @@ class QFrame;
 class QLabel;
 class QLineEdit;
 class QListWidget;
+class QPushButton;
 class QStackedWidget;
 class QTableWidget;
 
@@ -31,6 +32,7 @@ private slots:
     void onAddStation();
     void onStationRowClicked(int row, int column);
     void onToggleUserStatus();
+    void onToggleDarkMode(bool dark);
 
 private:
     void buildUi();
@@ -42,9 +44,12 @@ private:
     QFrame *makeKpiCard(const QString &title, QLabel **valueLabel);
     void applySalesChart(const QJsonObject &payload);
     void applyStatusChart(const QJsonObject &stats);
+    void applyTheme(bool dark);
     void showApiError(const QString &title);
 
     Admin m_admin;
+    bool m_darkMode = false;
+    QPushButton *m_darkModeBtn = nullptr;
     QListWidget *m_nav = nullptr;
     QStackedWidget *m_stack = nullptr;
 

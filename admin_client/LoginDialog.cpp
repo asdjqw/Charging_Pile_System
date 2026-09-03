@@ -7,6 +7,7 @@
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QSettings>
 #include <QVBoxLayout>
 
 LoginDialog::LoginDialog(QWidget *parent)
@@ -14,7 +15,10 @@ LoginDialog::LoginDialog(QWidget *parent)
 {
     setWindowTitle(QStringLiteral("管理员登录"));
     setFixedSize(380, 280);
-    setStyleSheet(StyleHelper::adminClientStyle());
+    QSettings settings;
+    const bool dark = settings.value(QStringLiteral("ui/darkMode"), false).toBool();
+    setStyleSheet(dark ? StyleHelper::adminClientDarkStyle()
+                       : StyleHelper::adminClientStyle());
 
     auto *root = new QVBoxLayout(this);
     root->setContentsMargins(24, 20, 24, 20);

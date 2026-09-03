@@ -63,6 +63,11 @@ inline QString userClientStyle()
         }
         QProgressBar::chunk { background: #0D7565; }
         QScrollArea { border: none; background: transparent; }
+        QScrollBar:vertical {
+            background: transparent; width: 8px; margin: 2px;
+        }
+        QScrollBar::handle:vertical { background: #C5D0CD; border-radius: 4px; min-height: 24px; }
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
         QMessageBox { background: #F3F6F5; }
         QStatusBar { background: #EEF2F1; color: #3D4A47; }
     )");
@@ -131,6 +136,11 @@ inline QString userClientDarkStyle()
         }
         QProgressBar::chunk { background: #0D7565; }
         QScrollArea { border: none; background: transparent; }
+        QScrollBar:vertical {
+            background: transparent; width: 8px; margin: 2px;
+        }
+        QScrollBar::handle:vertical { background: #3D4A47; border-radius: 4px; min-height: 24px; }
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
         QMessageBox { background: #1A2422; }
         QStatusBar { background: #15201E; color: #C5D0CD; }
     )");
@@ -164,6 +174,38 @@ inline QString adminClientStyle()
             padding: 6px 8px; border: 1px solid #D8E0DE; border-radius: 4px; background: white;
         }
         QChartView { background: white; border: 1px solid #D8E0DE; }
+    )");
+}
+
+inline QString adminClientDarkStyle()
+{
+    return userClientDarkStyle() + QStringLiteral(R"(
+        QLabel#kpiValue { font-size: 20px; font-weight: 600; color: #F3F6F5; font-family: 'Consolas','Noto Sans Mono','monospace'; }
+        QLabel#kpiTitle { color: #8A9693; font-size: 12px; }
+        QLabel#brandTitle { font-size: 14px; font-weight: 600; color: #F3F6F5; }
+        QLabel#brandSub { color: #9AA8A4; font-size: 12px; }
+        QWidget#sideBar { background: #15201E; }
+        QListWidget#sideNav {
+            background: #15201E; border: none; outline: none; padding: 0;
+        }
+        QListWidget#sideNav::item {
+            padding: 9px 14px; margin: 0; border-radius: 0;
+            color: #C5D0CD; background: transparent;
+            border: none; border-left: 3px solid transparent;
+        }
+        QListWidget#sideNav::item:selected {
+            background: #0F1716; color: #F3F6F5; border: none;
+            border-left: 3px solid #3DDBB5;
+        }
+        QListWidget#sideNav::item:hover { background: #20302D; }
+        QFrame#kpiCard {
+            background: #1A2422; border: 1px solid #2A3835; border-radius: 4px;
+        }
+        QSpinBox, QDoubleSpinBox {
+            padding: 6px 8px; border: 1px solid #2A3835; border-radius: 4px;
+            background: #1A2422; color: #E8EEEC;
+        }
+        QChartView { background: #1A2422; border: 1px solid #2A3835; }
     )");
 }
 

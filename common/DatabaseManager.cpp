@@ -1,4 +1,5 @@
 #include "DatabaseManager.h"
+#include "PasswordCrypto.h"
 
 #include <algorithm>
 
@@ -26,7 +27,7 @@ void readUserRow(const QSqlQuery &query, User &user)
 {
     user.id = query.value(0).toInt();
     user.username = query.value(1).toString();
-    user.password = query.value(2).toString();
+    user.password.clear();
     user.phone = query.value(3).toString();
     user.nickname = query.value(4).toString();
     user.avatarPath = query.value(5).toString();
@@ -39,7 +40,7 @@ void readUserRow(const QSqlQuery &query, User &user)
 
 const QString userSelect = QStringLiteral(
     "SELECT id, username, password, phone, nickname, avatar_path, balance, car_model, "
-    "plate_number, status, created_at FROM users");
+    "plate_number, status, created_at, password_hash FROM users");
 
 QString makeBusinessNo(const QString &prefix)
 {
@@ -187,7 +188,7 @@ bool DatabaseManager::ensureSchemaAndSeed()
             return false;
         qInfo().noquote() << QStringLiteral("CSV 导入完成。");
     }
-    return true;
+    return migratePasswordHashes();
 }
 
 bool DatabaseManager::ensurePileColumns()
@@ -198,6 +199,7 @@ bool DatabaseManager::ensurePileColumns()
         QStringLiteral("ALTER TABLE users ADD COLUMN avatar_path TEXT NOT NULL DEFAULT ''"),
         QStringLiteral("ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'normal'"),
         QStringLiteral("ALTER TABLE users ADD COLUMN updated_at TEXT"),
+        QStringLiteral("ALTER TABLE users ADD COLUMN password_hash TEXT NOT NULL DEFAULT ''"),
         QStringLiteral("ALTER TABLE admins ADD COLUMN password_hash TEXT NOT NULL DEFAULT ''"),
         QStringLiteral("ALTER TABLE admins ADD COLUMN status TEXT NOT NULL DEFAULT 'normal'"),
         QStringLiteral("ALTER TABLE admins ADD COLUMN last_login_at TEXT"),
@@ -232,6 +234,44 @@ bool DatabaseManager::ensurePileColumns()
     return true;
 }
 
+bool DatabaseManager::upgradePasswordIfNeeded(const QString &table, int id, const QString &plain,
+                                              const QString &hash, const QString &legacy)
+{
+    if (PasswordCrypto::isHashed(hash))
+        return true;
+    if (!PasswordCrypto::verifyPassword(plain, hash, legacy))
+        return false;
+    QSqlQuery u(m_db);
+    u.prepare(QStringLiteral("UPDATE %1 SET password_hash=?, password='' WHERE id=?").arg(table));
+    u.addBindValue(PasswordCrypto::hashPassword(plain));
+    u.addBindValue(id);
+    return u.exec();
+}
+
+bool DatabaseManager::migratePasswordHashes()
+{
+    struct Row { int id; QString legacy; QString hash; };
+    auto collect = [this](const QString &sql) {
+        QVector<Row> rows;
+        QSqlQuery q(m_db);
+        if (!q.exec(sql))
+            return rows;
+        while (q.next()) {
+            const QString legacy = q.value(1).toString();
+            const QString hash = q.value(2).toString();
+            if (PasswordCrypto::isHashed(hash) || legacy.isEmpty())
+                continue;
+            rows.push_back({q.value(0).toInt(), legacy, hash});
+        }
+        return rows;
+    };
+    for (const Row &row : collect(QStringLiteral("SELECT id, password, password_hash FROM users")))
+        upgradePasswordIfNeeded(QStringLiteral("users"), row.id, row.legacy, row.hash, row.legacy);
+    for (const Row &row : collect(QStringLiteral("SELECT id, password, password_hash FROM admins")))
+        upgradePasswordIfNeeded(QStringLiteral("admins"), row.id, row.legacy, row.hash, row.legacy);
+    return true;
+}
+
 double DatabaseManager::haversineKm(double lat1, double lon1, double lat2, double lon2) const
 {
     constexpr double R = 6371.0;
@@ -251,10 +291,15 @@ QString DatabaseManager::makeOrderNo() const
 bool DatabaseManager::loginUser(const QString &username, const QString &password, User &outUser)
 {
     QSqlQuery q(m_db);
-    q.prepare(userSelect + QStringLiteral(" WHERE username=? AND password=?"));
-    q.addBindValue(username);
-    q.addBindValue(password);
+    q.prepare(userSelect + QStringLiteral(" WHERE username=?"));
+    q.addBindValue(username.trimmed());
     if (!q.exec() || !q.next()) {
+        m_lastError = QStringLiteral("用户名或密码错误");
+        return false;
+    }
+    const QString legacy = q.value(2).toString();
+    const QString hash = q.value(11).toString();
+    if (!PasswordCrypto::verifyPassword(password, hash, legacy)) {
         m_lastError = QStringLiteral("用户名或密码错误");
         return false;
     }
@@ -263,6 +308,7 @@ bool DatabaseManager::loginUser(const QString &username, const QString &password
         m_lastError = QStringLiteral("账号已被冻结，请联系管理员");
         return false;
     }
+    upgradePasswordIfNeeded(QStringLiteral("users"), outUser.id, password, hash, legacy);
     return true;
 }
 
@@ -308,42 +354,103 @@ bool DatabaseManager::phoneLogin(const QString &phone, User &outUser, bool &crea
     return getUserById(q.lastInsertId().toInt(), outUser);
 }
 
+bool DatabaseManager::loginByPhone(const QString &phone, const QString &password, User &outUser)
+{
+    const QString normalized = phone.trimmed();
+    static const QRegularExpression phonePattern(QStringLiteral("^1[3-9]\\d{9}$"));
+    if (!phonePattern.match(normalized).hasMatch()) {
+        m_lastError = QStringLiteral("请输入有效的 11 位手机号");
+        return false;
+    }
+    if (password.size() < 6) {
+        m_lastError = QStringLiteral("请输入至少 6 位密码");
+        return false;
+    }
+    QSqlQuery q(m_db);
+    q.prepare(userSelect + QStringLiteral(" WHERE phone=?"));
+    q.addBindValue(normalized);
+    if (!q.exec() || !q.next()) {
+        m_lastError = QStringLiteral("账号不存在，请先注册");
+        return false;
+    }
+    const QString legacy = q.value(2).toString();
+    const QString hash = q.value(11).toString();
+    if (!PasswordCrypto::verifyPassword(password, hash, legacy)) {
+        m_lastError = QStringLiteral("手机号或密码错误");
+        return false;
+    }
+    readUserRow(q, outUser);
+    if (outUser.status == QLatin1String("frozen")) {
+        m_lastError = QStringLiteral("账号已被冻结，请联系管理员");
+        return false;
+    }
+    upgradePasswordIfNeeded(QStringLiteral("users"), outUser.id, password, hash, legacy);
+    return true;
+}
+
 bool DatabaseManager::loginAdmin(const QString &username, const QString &password, Admin &outAdmin)
 {
     QSqlQuery q(m_db);
-    q.prepare(QStringLiteral("SELECT id, username, password, real_name, role FROM admins WHERE username=? AND password=?"));
-    q.addBindValue(username);
-    q.addBindValue(password);
+    q.prepare(QStringLiteral(
+        "SELECT id, username, password, real_name, role, password_hash FROM admins WHERE username=?"));
+    q.addBindValue(username.trimmed());
     if (!q.exec() || !q.next()) {
+        m_lastError = QStringLiteral("管理员账号或密码错误");
+        return false;
+    }
+    const QString legacy = q.value(2).toString();
+    const QString hash = q.value(5).toString();
+    if (!PasswordCrypto::verifyPassword(password, hash, legacy)) {
         m_lastError = QStringLiteral("管理员账号或密码错误");
         return false;
     }
     outAdmin.id = q.value(0).toInt();
     outAdmin.username = q.value(1).toString();
-    outAdmin.password = q.value(2).toString();
+    outAdmin.password.clear();
     outAdmin.realName = q.value(3).toString();
     outAdmin.role = q.value(4).toString();
+    upgradePasswordIfNeeded(QStringLiteral("admins"), outAdmin.id, password, hash, legacy);
+    QSqlQuery stamp(m_db);
+    stamp.prepare(QStringLiteral("UPDATE admins SET last_login_at=datetime('now','localtime') WHERE id=?"));
+    stamp.addBindValue(outAdmin.id);
+    stamp.exec();
     return true;
 }
 
 bool DatabaseManager::registerUser(const User &user)
 {
-    if (user.username.trimmed().isEmpty() || user.password.isEmpty()) {
-        m_lastError = QStringLiteral("用户名和密码不能为空");
+    static const QRegularExpression phonePattern(QStringLiteral("^1[3-9]\\d{9}$"));
+    const QString phone = user.phone.trimmed();
+    if (!phonePattern.match(phone).hasMatch()) {
+        m_lastError = QStringLiteral("请输入有效的 11 位手机号");
         return false;
     }
-    QString phone = user.phone.trimmed();
-    if (phone.length() != 11) {
-        const uint h = qHash(user.username.trimmed());
-        phone = QStringLiteral("139%1").arg(h % 100000000, 8, 10, QChar('0'));
+    if (user.password.size() < 6) {
+        m_lastError = QStringLiteral("密码至少 6 位");
+        return false;
     }
+    QString username = user.username.trimmed();
+    if (username.isEmpty())
+        username = QStringLiteral("u%1").arg(phone);
+    QSqlQuery exists(m_db);
+    exists.prepare(QStringLiteral("SELECT id FROM users WHERE phone=? OR username=?"));
+    exists.addBindValue(phone);
+    exists.addBindValue(username);
+    if (exists.exec() && exists.next()) {
+        m_lastError = QStringLiteral("该手机号或用户名已注册");
+        return false;
+    }
+    const QString nickname = user.nickname.trimmed().isEmpty()
+                                 ? QStringLiteral("用户%1").arg(phone.right(4))
+                                 : user.nickname.trimmed();
     QSqlQuery q(m_db);
-    q.prepare(QStringLiteral("INSERT INTO users(username, password, phone, nickname, balance, car_model, plate_number) "
-                             "VALUES(?,?,?,?,?,?,?)"));
-    q.addBindValue(user.username.trimmed());
-    q.addBindValue(user.password);
+    q.prepare(QStringLiteral(
+        "INSERT INTO users(username, password, password_hash, phone, nickname, balance, car_model, plate_number) "
+        "VALUES(?,'',?,?,?,?,?,?)"));
+    q.addBindValue(username);
+    q.addBindValue(PasswordCrypto::hashPassword(user.password));
     q.addBindValue(phone);
-    q.addBindValue(user.nickname.isEmpty() ? user.username.trimmed() : user.nickname);
+    q.addBindValue(nickname);
     q.addBindValue(user.balance > 0 ? user.balance : 50.0);
     q.addBindValue(user.carModel.isEmpty() ? QStringLiteral("未填写") : user.carModel);
     q.addBindValue(user.plateNumber.isEmpty() ? QStringLiteral("未填写") : user.plateNumber);
@@ -375,16 +482,32 @@ bool DatabaseManager::updateUser(const User &user)
         return false;
     }
     QSqlQuery q(m_db);
-    q.prepare(QStringLiteral(
-        "UPDATE users SET phone=?, nickname=?, avatar_path=?, car_model=?, plate_number=?, password=?, "
-        "updated_at=datetime('now','localtime') WHERE id=?"));
-    q.addBindValue(user.phone);
-    q.addBindValue(user.nickname);
-    q.addBindValue(user.avatarPath);
-    q.addBindValue(user.carModel);
-    q.addBindValue(user.plateNumber);
-    q.addBindValue(user.password);
-    q.addBindValue(user.id);
+    if (!user.password.isEmpty()) {
+        if (user.password.size() < 6) {
+            m_lastError = QStringLiteral("新密码至少 6 位");
+            return false;
+        }
+        q.prepare(QStringLiteral(
+            "UPDATE users SET phone=?, nickname=?, avatar_path=?, car_model=?, plate_number=?, "
+            "password='', password_hash=?, updated_at=datetime('now','localtime') WHERE id=?"));
+        q.addBindValue(user.phone);
+        q.addBindValue(user.nickname);
+        q.addBindValue(user.avatarPath);
+        q.addBindValue(user.carModel);
+        q.addBindValue(user.plateNumber);
+        q.addBindValue(PasswordCrypto::hashPassword(user.password));
+        q.addBindValue(user.id);
+    } else {
+        q.prepare(QStringLiteral(
+            "UPDATE users SET phone=?, nickname=?, avatar_path=?, car_model=?, plate_number=?, "
+            "updated_at=datetime('now','localtime') WHERE id=?"));
+        q.addBindValue(user.phone);
+        q.addBindValue(user.nickname);
+        q.addBindValue(user.avatarPath);
+        q.addBindValue(user.carModel);
+        q.addBindValue(user.plateNumber);
+        q.addBindValue(user.id);
+    }
     if (!q.exec()) {
         m_lastError = q.lastError().text();
         return false;

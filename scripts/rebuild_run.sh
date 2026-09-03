@@ -1,9 +1,4 @@
 #!/usr/bin/env bash
-# 一键：重新编译，再启动后端 + 管理端 + 用户端
-# 共享盘（/mnt/hgfs）无执行权限时，拷到 ~/Charge_pile_bin 再跑。
-#
-#   bash scripts/rebuild_run.sh
-#   bash scripts/rebuild_run.sh --skip-build
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -28,15 +23,9 @@ for arg in "$@"; do
     esac
 done
 
-if ! command -v cmake >/dev/null 2>&1; then
-    echo "未找到 cmake。请先执行：bash scripts/install_deps_ubuntu.sh"
-    exit 1
-fi
-
 if [[ "$SKIP_BUILD" -eq 0 ]]; then
     echo "======== 重新编译 ========"
-    cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-    cmake --build build --parallel "$(nproc 2>/dev/null || echo 4)"
+    bash "$ROOT/scripts/build.sh"
     echo
 else
     echo "跳过编译（--skip-build）"
