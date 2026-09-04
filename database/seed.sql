@@ -14,3 +14,7 @@ INSERT OR IGNORE INTO recharge_records (id, user_id, amount, created_at) VALUES
 (2, 1, 100.00, '2026-08-25 09:30:00'),
 (3, 2, 80.50, '2026-08-22 16:00:00'),
 (4, 3, 500.00, '2026-08-18 10:00:00');
+
+INSERT OR IGNORE INTO invite_codes (id, code, role, created_by) VALUES
+(1, 'CHARGE-ADMIN-2026', 'operator', 1),
+(2, 'CHARGE-AUDIT-2026', 'auditor', 1);

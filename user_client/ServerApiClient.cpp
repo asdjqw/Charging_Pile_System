@@ -156,6 +156,38 @@ bool ServerApiClient::registerUser(const User &user)
     return accept(call(QStringLiteral("user.register"), data, false));
 }
 
+bool ServerApiClient::logout()
+{
+    const bool ok = accept(call(QStringLiteral("user.logout")));
+    m_token.clear();
+    return ok;
+}
+
+bool ServerApiClient::listFavorites(QVector<int> &stationIds, QVector<int> &pileIds)
+{
+    stationIds.clear();
+    pileIds.clear();
+    const QJsonObject response = call(QStringLiteral("favorites.list"));
+    if (!accept(response))
+        return false;
+    const QJsonObject data = response.value("data").toObject();
+    for (const QJsonValue &value : data.value("stations").toArray())
+        stationIds.push_back(value.toInt());
+    for (const QJsonValue &value : data.value("piles").toArray())
+        pileIds.push_back(value.toInt());
+    return true;
+}
+
+bool ServerApiClient::toggleFavorite(const QString &targetType, int targetId, bool &nowFavorite)
+{
+    const QJsonObject response = call(QStringLiteral("favorites.toggle"),
+                                      {{"targetType", targetType}, {"targetId", targetId}});
+    if (!accept(response))
+        return false;
+    nowFavorite = response.value("data").toObject().value("favorite").toBool();
+    return true;
+}
+
 bool ServerApiClient::getUserById(int, User &outUser)
 {
     const QJsonObject response = call(QStringLiteral("user.get"));

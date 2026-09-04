@@ -108,11 +108,13 @@ bool AdminApiClient::accept(const QJsonObject &response)
         return false;
     if (!response.value("ok").toBool()) {
         m_lastError = response.value("message").toString(QStringLiteral("服务端请求失败"));
-        if (response.value("code").toString() == QLatin1String("UNAUTHORIZED"))
+        m_lastCode = response.value("code").toString();
+        if (m_lastCode == QLatin1String("UNAUTHORIZED"))
             m_token.clear();
         return false;
     }
     m_lastError.clear();
+    m_lastCode.clear();
     return true;
 }
 
@@ -131,6 +133,28 @@ bool AdminApiClient::loginAdmin(const QString &username, const QString &password
     m_token = data.value("token").toString();
     outAdmin = JsonCodec::adminFromJson(data.value("admin").toObject());
     return !m_token.isEmpty() && outAdmin.id > 0;
+}
+
+bool AdminApiClient::registerAdmin(const QString &username, const QString &password,
+                                   const QString &realName, const QString &inviteCode,
+                                   Admin &outAdmin)
+{
+    const QJsonObject response = call(QStringLiteral("admin.register"),
+                                      {{"username", username}, {"password", password},
+                                       {"realName", realName}, {"inviteCode", inviteCode}}, false);
+    if (!accept(response))
+        return false;
+    const QJsonObject data = response.value("data").toObject();
+    m_token = data.value("token").toString();
+    outAdmin = JsonCodec::adminFromJson(data.value("admin").toObject());
+    return !m_token.isEmpty() && outAdmin.id > 0;
+}
+
+bool AdminApiClient::logout()
+{
+    const bool ok = accept(call(QStringLiteral("admin.logout")));
+    m_token.clear();
+    return ok;
 }
 
 QJsonObject AdminApiClient::dashboard(int days)
@@ -166,6 +190,21 @@ bool AdminApiClient::restartPile(int pileId)
     return accept(call(QStringLiteral("admin.piles.restart"), {{"pileId", pileId}}));
 }
 
+bool AdminApiClient::savePile(Pile &pile)
+{
+    const QJsonObject response = call(QStringLiteral("admin.piles.save"), JsonCodec::toJson(pile));
+    if (!accept(response))
+        return false;
+    pile = JsonCodec::pileFromJson(response.value("data").toObject());
+    return true;
+}
+
+bool AdminApiClient::deletePile(int pileId, bool force)
+{
+    return accept(call(QStringLiteral("admin.piles.delete"),
+                       {{"pileId", pileId}, {"force", force}}));
+}
+
 QVector<Station> AdminApiClient::listStations(const QString &keyword)
 {
     QVector<Station> values;
@@ -186,6 +225,12 @@ bool AdminApiClient::saveStation(Station &station, int pileCount)
         return false;
     station = JsonCodec::stationFromJson(response.value("data").toObject());
     return true;
+}
+
+bool AdminApiClient::deleteStation(int stationId, bool force)
+{
+    return accept(call(QStringLiteral("admin.stations.delete"),
+                       {{"stationId", stationId}, {"force", force}}));
 }
 
 QVector<Pile> AdminApiClient::listStationPiles(int stationId, Station *outStation)
@@ -217,4 +262,76 @@ bool AdminApiClient::setUserStatus(int userId, const QString &status)
 {
     return accept(call(QStringLiteral("admin.users.setStatus"),
                        {{"userId", userId}, {"status", status}}));
+}
+
+QVector<ChargingOrder> AdminApiClient::listUserOrders(int userId)
+{
+    QVector<ChargingOrder> values;
+    const QJsonObject response = call(QStringLiteral("admin.users.orders"), {{"userId", userId}});
+    if (!accept(response))
+        return values;
+    for (const QJsonValue &value : response.value("data").toObject().value("items").toArray())
+        values.push_back(JsonCodec::orderFromJson(value.toObject()));
+    return values;
+}
+
+bool AdminApiClient::deleteOrder(int orderId)
+{
+    return accept(call(QStringLiteral("admin.orders.delete"), {{"orderId", orderId}}));
+}
+
+QVector<ChargingReservation> AdminApiClient::listReservations()
+{
+    QVector<ChargingReservation> values;
+    const QJsonObject response = call(QStringLiteral("admin.reservations.list"));
+    if (!accept(response))
+        return values;
+    for (const QJsonValue &value : response.value("data").toObject().value("items").toArray())
+        values.push_back(JsonCodec::reservationFromJson(value.toObject()));
+    return values;
+}
+
+bool AdminApiClient::cancelReservation(int reservationId)
+{
+    return accept(call(QStringLiteral("admin.reservations.cancel"),
+                       {{"reservationId", reservationId}}));
+}
+
+QVector<InviteCode> AdminApiClient::listInviteCodes()
+{
+    QVector<InviteCode> values;
+    const QJsonObject response = call(QStringLiteral("admin.invites.list"));
+    if (!accept(response))
+        return values;
+    for (const QJsonValue &value : response.value("data").toObject().value("items").toArray())
+        values.push_back(JsonCodec::inviteFromJson(value.toObject()));
+    return values;
+}
+
+bool AdminApiClient::createInviteCode(const QString &role, QString &outCode)
+{
+    const QJsonObject response = call(QStringLiteral("admin.invites.create"), {{"role", role}});
+    if (!accept(response))
+        return false;
+    outCode = response.value("data").toObject().value("code").toString();
+    return !outCode.isEmpty();
+}
+
+QVector<QPair<QString, bool>> AdminApiClient::listPermissions(const QString &role)
+{
+    QVector<QPair<QString, bool>> values;
+    const QJsonObject response = call(QStringLiteral("admin.permissions.list"), {{"role", role}});
+    if (!accept(response))
+        return values;
+    for (const QJsonValue &value : response.value("data").toObject().value("items").toArray()) {
+        const QJsonObject row = value.toObject();
+        values.push_back({row.value("permission").toString(), row.value("allowed").toBool()});
+    }
+    return values;
+}
+
+bool AdminApiClient::setPermission(const QString &role, const QString &permission, bool allowed)
+{
+    return accept(call(QStringLiteral("admin.permissions.set"),
+                       {{"role", role}, {"permission", permission}, {"allowed", allowed}}));
 }

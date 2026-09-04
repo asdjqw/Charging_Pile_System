@@ -3,7 +3,9 @@
 #include "Models.h"
 
 #include <QObject>
+#include <QPair>
 #include <QSqlDatabase>
+#include <QStringList>
 #include <QVector>
 
 class DatabaseManager : public QObject
@@ -26,6 +28,9 @@ public:
     bool phoneLogin(const QString &phone, User &outUser, bool &created);
     bool loginByPhone(const QString &phone, const QString &password, User &outUser);
     bool loginAdmin(const QString &username, const QString &password, Admin &outAdmin);
+    bool registerAdmin(const QString &username, const QString &password,
+                       const QString &realName, const QString &inviteCode, Admin &outAdmin);
+    bool getAdminById(int id, Admin &outAdmin);
     bool registerUser(const User &user);
 
     bool getUserById(int id, User &outUser);
@@ -43,6 +48,7 @@ public:
     bool saveStation(Station &station);
     bool createStationWithPiles(Station &station, int pileCount);
     bool deleteStation(int id);
+    bool deleteStation(int id, bool force, int adminId);
 
     QVector<Pile> listPiles(int stationId = -1,
                             const QString &status = QString(),
@@ -51,6 +57,7 @@ public:
     bool getPile(int id, Pile &out);
     bool savePile(Pile &pile);
     bool deletePile(int id);
+    bool deletePile(int id, bool force, int adminId);
     bool updatePileStatus(int pileId, const QString &status,
                           const QString &source = QStringLiteral("system"),
                           const QString &reason = QString());
@@ -59,6 +66,20 @@ public:
     bool createReservation(int userId, int pileId, ChargingReservation &outReservation);
     bool cancelReservation(int userId, int reservationId);
     bool getActiveReservation(int userId, ChargingReservation &outReservation);
+    QVector<ChargingReservation> listActiveReservations();
+    bool adminCancelReservation(int reservationId, int adminId);
+
+    bool listFavorites(int userId, const QString &targetType, QVector<int> &outIds);
+    bool toggleFavorite(int userId, const QString &targetType, int targetId, bool &nowFavorite);
+
+    bool createInviteCode(int adminId, const QString &role, QString &outCode);
+    QVector<InviteCode> listInviteCodes();
+    bool hasPermission(const QString &role, const QString &permission) const;
+    QVector<QPair<QString, bool>> listRolePermissions(const QString &role) const;
+    bool setRolePermission(const QString &role, const QString &permission, bool allowed, int adminId);
+    static QStringList allPermissionKeys();
+
+    bool deleteOrder(int orderId, int adminId);
 
     bool startCharging(int userId, int pileId, ChargingOrder &outOrder);
     bool updateChargingProgress(int userId, int orderId, double energyKwh);
@@ -85,6 +106,8 @@ public:
     };
     SalesStats salesStats() const;
     QVector<QPair<QString, double>> dailySales(int days = 7) const;
+    bool writeAdminAudit(int adminId, const QString &action, const QString &targetType,
+                         int targetId, const QString &detail);
 
 private:
     explicit DatabaseManager(QObject *parent = nullptr);
@@ -92,6 +115,7 @@ private:
     bool execSqlFile(const QString &filePath);
     bool ensureSchemaAndSeed();
     bool ensurePileColumns();
+    bool ensureDefaultPermissions();
     bool migratePasswordHashes();
     bool upgradePasswordIfNeeded(const QString &table, int id, const QString &plain,
                                  const QString &hash, const QString &legacy);
@@ -100,8 +124,6 @@ private:
     double haversineKm(double lat1, double lon1, double lat2, double lon2) const;
     QString makeOrderNo() const;
     bool expireReservations();
-    bool writeAdminAudit(int adminId, const QString &action, const QString &targetType,
-                         int targetId, const QString &detail);
     static QStringList splitCsvLine(const QString &line);
     void appendClassifiedPiles(int stationId, const QString &stationCode, uint seed,
                                double priceHint, QSqlQuery &q);

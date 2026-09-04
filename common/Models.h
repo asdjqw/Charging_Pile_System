@@ -25,6 +25,17 @@ struct Admin {
     QString role;
 };
 
+struct InviteCode {
+    int id = 0;
+    QString code;
+    QString role;
+    int createdBy = 0;
+    int usedBy = 0;
+    QString usedUsername;
+    QString usedAt;
+    QString createdAt;
+};
+
 struct Station {
     int id = 0;
     QString stationCode;
@@ -55,8 +66,11 @@ struct Pile {
     double pricePerKwh = 0.0;
     QString status;              // idle / charging / fault / offline / reserved / restarting
     QString stationName;
+    QString stationAddress;
     int totalChargeCount = 0;
     int totalChargeSeconds = 0;
+    double remainingKwh = 100.0;
+    bool favorite = false;
 };
 
 struct ChargingReservation {
@@ -69,6 +83,8 @@ struct ChargingReservation {
     QString status;
     QString pileCode;
     QString stationName;
+    QString username;
+    QString phone;
 };
 
 struct ChargingOrder {

@@ -23,6 +23,41 @@
 
 namespace {
 
+void readPileRow(const QSqlQuery &query, Pile &p)
+{
+    p.id = query.value(0).toInt();
+    p.stationId = query.value(1).toInt();
+    p.pileCode = query.value(2).toString();
+    p.pileType = query.value(3).toString();
+    p.speedClass = query.value(4).toString();
+    p.connectorStandard = query.value(5).toString();
+    p.phase = query.value(6).toString();
+    p.voltageV = query.value(7).toInt();
+    p.categoryLabel = query.value(8).toString();
+    p.powerKw = query.value(9).toDouble();
+    p.pricePerKwh = query.value(10).toDouble();
+    p.status = query.value(11).toString();
+    p.stationName = query.value(12).toString();
+    p.totalChargeCount = query.value(13).toInt();
+    p.totalChargeSeconds = query.value(14).toInt();
+    p.remainingKwh = query.value(15).toDouble();
+    p.stationAddress = query.value(16).toString();
+}
+
+const QString pileSelect = QStringLiteral(
+    "SELECT p.id, p.station_id, p.pile_code, p.pile_type, "
+    "COALESCE(p.speed_class,'slow'), COALESCE(p.connector_standard,'GB_T_AC'), "
+    "COALESCE(p.phase,'single'), COALESCE(p.voltage_v,220), COALESCE(p.category_label,''), "
+    "p.power_kw, p.price_per_kwh, p.status, s.name, "
+    "COALESCE(p.total_charge_count,0), COALESCE(p.total_charge_seconds,0), "
+    "COALESCE(p.remaining_kwh,100), s.address "
+    "FROM piles p JOIN stations s ON s.id = p.station_id");
+
+bool pileInUse(const QString &status)
+{
+    return status == QLatin1String("charging") || status == QLatin1String("reserved");
+}
+
 void readUserRow(const QSqlQuery &query, User &user)
 {
     user.id = query.value(0).toInt();
@@ -177,6 +212,8 @@ bool DatabaseManager::ensureSchemaAndSeed()
         return false;
     if (!execSqlFile(schemaPath))
         return false;
+    if (!ensureDefaultPermissions())
+        return false;
     if (needInit && QFileInfo::exists(seedPath) && !execSqlFile(seedPath))
         return false;
 
@@ -227,10 +264,64 @@ bool DatabaseManager::ensurePileColumns()
         QStringLiteral("ALTER TABLE charging_orders ADD COLUMN paid_at TEXT"),
         QStringLiteral("ALTER TABLE charging_orders ADD COLUMN updated_at TEXT"),
         QStringLiteral("ALTER TABLE recharge_records ADD COLUMN payment_no TEXT"),
-        QStringLiteral("ALTER TABLE recharge_records ADD COLUMN status TEXT NOT NULL DEFAULT 'success'")
+        QStringLiteral("ALTER TABLE recharge_records ADD COLUMN status TEXT NOT NULL DEFAULT 'success'"),
+        QStringLiteral("ALTER TABLE piles ADD COLUMN remaining_kwh REAL NOT NULL DEFAULT 100")
     };
     for (const QString &sql : migrations)
         q.exec(sql);
+    return true;
+}
+
+QStringList DatabaseManager::allPermissionKeys()
+{
+    return {
+        QStringLiteral("dashboard.read"),
+        QStringLiteral("piles.read"), QStringLiteral("piles.write"),
+        QStringLiteral("stations.read"), QStringLiteral("stations.write"),
+        QStringLiteral("users.read"), QStringLiteral("users.write"),
+        QStringLiteral("orders.read"), QStringLiteral("orders.write"),
+        QStringLiteral("reservations.read"), QStringLiteral("reservations.write"),
+        QStringLiteral("invites.write"), QStringLiteral("permissions.write")
+    };
+}
+
+bool DatabaseManager::ensureDefaultPermissions()
+{
+    QSqlQuery count(m_db);
+    if (count.exec(QStringLiteral("SELECT COUNT(*) FROM role_permissions")) && count.next()
+        && count.value(0).toInt() == 0) {
+        const QStringList keys = allPermissionKeys();
+        auto grant = [this](const QString &role, const QString &perm, bool allowed) {
+            QSqlQuery q(m_db);
+            q.prepare(QStringLiteral(
+                "INSERT OR IGNORE INTO role_permissions(role, permission, allowed) VALUES(?,?,?)"));
+            q.addBindValue(role);
+            q.addBindValue(perm);
+            q.addBindValue(allowed ? 1 : 0);
+            return q.exec();
+        };
+        for (const QString &key : keys) {
+            if (!grant(QStringLiteral("admin"), key, true))
+                return false;
+            const bool operatorWrite = key.startsWith(QLatin1String("piles."))
+                || key.startsWith(QLatin1String("stations."))
+                || key.startsWith(QLatin1String("reservations."))
+                || key == QLatin1String("dashboard.read")
+                || key == QLatin1String("users.read")
+                || key == QLatin1String("orders.read");
+            if (!grant(QStringLiteral("operator"), key, operatorWrite))
+                return false;
+            const bool auditorRead = key.endsWith(QLatin1String(".read"));
+            if (!grant(QStringLiteral("auditor"), key, auditorRead))
+                return false;
+        }
+    }
+
+    QSqlQuery invite(m_db);
+    invite.exec(QStringLiteral(
+        "INSERT OR IGNORE INTO invite_codes(id, code, role, created_by) VALUES"
+        "(1,'CHARGE-ADMIN-2026','operator',1),"
+        "(2,'CHARGE-AUDIT-2026','auditor',1)"));
     return true;
 }
 
@@ -417,6 +508,93 @@ bool DatabaseManager::loginAdmin(const QString &username, const QString &passwor
     return true;
 }
 
+bool DatabaseManager::getAdminById(int id, Admin &outAdmin)
+{
+    QSqlQuery q(m_db);
+    q.prepare(QStringLiteral("SELECT id, username, real_name, role FROM admins WHERE id=?"));
+    q.addBindValue(id);
+    if (!q.exec() || !q.next()) {
+        m_lastError = QStringLiteral("管理员不存在");
+        return false;
+    }
+    outAdmin.id = q.value(0).toInt();
+    outAdmin.username = q.value(1).toString();
+    outAdmin.realName = q.value(2).toString();
+    outAdmin.role = q.value(3).toString();
+    return true;
+}
+
+bool DatabaseManager::registerAdmin(const QString &username, const QString &password,
+                                    const QString &realName, const QString &inviteCode,
+                                    Admin &outAdmin)
+{
+    const QString name = username.trimmed();
+    const QString code = inviteCode.trimmed().toUpper();
+    if (name.isEmpty() || password.size() < 6) {
+        m_lastError = QStringLiteral("请填写账号，密码至少 6 位");
+        return false;
+    }
+    if (code.isEmpty()) {
+        m_lastError = QStringLiteral("请输入邀请码");
+        return false;
+    }
+
+    QSqlQuery exists(m_db);
+    exists.prepare(QStringLiteral("SELECT id FROM admins WHERE username=?"));
+    exists.addBindValue(name);
+    if (exists.exec() && exists.next()) {
+        m_lastError = QStringLiteral("账户已存在");
+        return false;
+    }
+
+    if (!m_db.transaction()) {
+        m_lastError = m_db.lastError().text();
+        return false;
+    }
+    QSqlQuery invite(m_db);
+    invite.prepare(QStringLiteral(
+        "SELECT id, role FROM invite_codes WHERE upper(code)=? AND used_by IS NULL"));
+    invite.addBindValue(code);
+    if (!invite.exec() || !invite.next()) {
+        m_db.rollback();
+        m_lastError = QStringLiteral("邀请码无效或已被使用");
+        return false;
+    }
+    const int inviteId = invite.value(0).toInt();
+    const QString role = invite.value(1).toString();
+
+    QSqlQuery q(m_db);
+    q.prepare(QStringLiteral(
+        "INSERT INTO admins(username, password, password_hash, real_name, role, status) "
+        "VALUES(?,'',?,?,?,'normal')"));
+    q.addBindValue(name);
+    q.addBindValue(PasswordCrypto::hashPassword(password));
+    q.addBindValue(realName.trimmed().isEmpty() ? name : realName.trimmed());
+    q.addBindValue(role);
+    if (!q.exec()) {
+        m_db.rollback();
+        const QString err = q.lastError().text();
+        m_lastError = err.contains(QLatin1String("UNIQUE"), Qt::CaseInsensitive)
+                          ? QStringLiteral("账户已存在") : err;
+        return false;
+    }
+    const int adminId = q.lastInsertId().toInt();
+    q.prepare(QStringLiteral(
+        "UPDATE invite_codes SET used_by=?, used_at=datetime('now','localtime') WHERE id=?"));
+    q.addBindValue(adminId);
+    q.addBindValue(inviteId);
+    if (!q.exec()) {
+        m_db.rollback();
+        m_lastError = q.lastError().text();
+        return false;
+    }
+    if (!m_db.commit()) {
+        m_lastError = m_db.lastError().text();
+        return false;
+    }
+    return getAdminById(adminId, outAdmin);
+}
+
 bool DatabaseManager::registerUser(const User &user)
 {
     static const QRegularExpression phonePattern(QStringLiteral("^1[3-9]\\d{9}$"));
@@ -566,7 +744,7 @@ bool DatabaseManager::rechargeUser(int userId, double amount)
     q.addBindValue(userId);
     q.addBindValue(amount);
     q.addBindValue(balanceAfter);
-    q.addBindValue(QStringLiteral("本地模拟充值 %1").arg(paymentNo));
+    q.addBindValue(QStringLiteral("钱包充值 %1").arg(paymentNo));
     if (!q.exec()) {
         m_db.rollback();
         m_lastError = q.lastError().text();
@@ -865,11 +1043,91 @@ bool DatabaseManager::createStationWithPiles(Station &station, int pileCount)
 
 bool DatabaseManager::deleteStation(int id)
 {
+    return deleteStation(id, false, 0);
+}
+
+bool DatabaseManager::deleteStation(int id, bool force, int adminId)
+{
+    Station station;
+    if (!getStation(id, station))
+        return false;
+    const auto piles = listPiles(id);
+    bool anyInUse = false;
+    for (const Pile &pile : piles) {
+        if (pileInUse(pile.status)) {
+            anyInUse = true;
+            break;
+        }
+    }
+    if (anyInUse && !force) {
+        m_lastError = QStringLiteral("IN_USE:电站「%1」内有正在使用或已预约的电桩，是否强制删除？")
+                          .arg(station.name);
+        return false;
+    }
+
+    if (!m_db.transaction()) {
+        m_lastError = m_db.lastError().text();
+        return false;
+    }
     QSqlQuery q(m_db);
-    q.prepare(QStringLiteral("DELETE FROM stations WHERE id=?"));
-    q.addBindValue(id);
-    if (!q.exec()) {
-        m_lastError = q.lastError().text();
+    auto execOrRollback = [&](const QString &sql) {
+        q.prepare(sql);
+        q.addBindValue(id);
+        if (!q.exec()) {
+            m_lastError = q.lastError().text();
+            m_db.rollback();
+            return false;
+        }
+        return true;
+    };
+    if (!execOrRollback(QStringLiteral(
+            "DELETE FROM wallet_transactions WHERE order_id IN "
+            "(SELECT id FROM charging_orders WHERE pile_id IN "
+            "(SELECT id FROM piles WHERE station_id=?))")))
+        return false;
+    if (!execOrRollback(QStringLiteral(
+            "DELETE FROM charging_orders WHERE pile_id IN (SELECT id FROM piles WHERE station_id=?)")))
+        return false;
+    if (!execOrRollback(QStringLiteral(
+            "DELETE FROM charging_reservations WHERE pile_id IN (SELECT id FROM piles WHERE station_id=?)")))
+        return false;
+    if (!execOrRollback(QStringLiteral(
+            "DELETE FROM pile_telemetry WHERE pile_id IN (SELECT id FROM piles WHERE station_id=?)")))
+        return false;
+    if (!execOrRollback(QStringLiteral(
+            "DELETE FROM pile_status_logs WHERE pile_id IN (SELECT id FROM piles WHERE station_id=?)")))
+        return false;
+    if (!execOrRollback(QStringLiteral(
+            "DELETE FROM fault_events WHERE pile_id IN (SELECT id FROM piles WHERE station_id=?)")))
+        return false;
+    if (!execOrRollback(QStringLiteral(
+            "DELETE FROM user_favorites WHERE target_type='pile' AND target_id IN "
+            "(SELECT id FROM piles WHERE station_id=?)")))
+        return false;
+    if (!execOrRollback(QStringLiteral("DELETE FROM piles WHERE station_id=?")))
+        return false;
+    if (!execOrRollback(QStringLiteral("DELETE FROM weather_observations WHERE station_id=?")))
+        return false;
+    if (!execOrRollback(QStringLiteral("DELETE FROM station_load_samples WHERE station_id=?")))
+        return false;
+    if (!execOrRollback(QStringLiteral("DELETE FROM load_forecasts WHERE station_id=?")))
+        return false;
+    if (!execOrRollback(QStringLiteral(
+            "DELETE FROM user_favorites WHERE target_type='station' AND target_id=?")))
+        return false;
+    if (!execOrRollback(QStringLiteral("DELETE FROM stations WHERE id=?")))
+        return false;
+    if (adminId > 0
+        && !writeAdminAudit(adminId, QStringLiteral("admin.station.delete"),
+                            QStringLiteral("station"), id,
+                            QStringLiteral("{\"name\":\"%1\",\"force\":%2}")
+                                .arg(station.name, force ? QStringLiteral("true")
+                                                         : QStringLiteral("false")))) {
+        m_db.rollback();
+        return false;
+    }
+    if (!m_db.commit()) {
+        m_lastError = m_db.lastError().text();
         return false;
     }
     return true;
@@ -879,13 +1137,7 @@ QVector<Pile> DatabaseManager::listPiles(int stationId, const QString &status,
                                          const QString &speedClass, const QString &connector)
 {
     QVector<Pile> list;
-    QString sql = QStringLiteral(
-        "SELECT p.id, p.station_id, p.pile_code, p.pile_type, "
-        "COALESCE(p.speed_class,'slow'), COALESCE(p.connector_standard,'GB_T_AC'), "
-        "COALESCE(p.phase,'single'), COALESCE(p.voltage_v,220), COALESCE(p.category_label,''), "
-        "p.power_kw, p.price_per_kwh, p.status, s.name, "
-        "COALESCE(p.total_charge_count,0), COALESCE(p.total_charge_seconds,0) "
-        "FROM piles p JOIN stations s ON s.id = p.station_id WHERE 1=1");
+    QString sql = pileSelect + QStringLiteral(" WHERE 1=1");
     QVariantList binds;
     if (stationId > 0) {
         sql += QStringLiteral(" AND p.station_id=?");
@@ -917,21 +1169,7 @@ QVector<Pile> DatabaseManager::listPiles(int stationId, const QString &status,
     }
     while (q.next()) {
         Pile p;
-        p.id = q.value(0).toInt();
-        p.stationId = q.value(1).toInt();
-        p.pileCode = q.value(2).toString();
-        p.pileType = q.value(3).toString();
-        p.speedClass = q.value(4).toString();
-        p.connectorStandard = q.value(5).toString();
-        p.phase = q.value(6).toString();
-        p.voltageV = q.value(7).toInt();
-        p.categoryLabel = q.value(8).toString();
-        p.powerKw = q.value(9).toDouble();
-        p.pricePerKwh = q.value(10).toDouble();
-        p.status = q.value(11).toString();
-        p.stationName = q.value(12).toString();
-        p.totalChargeCount = q.value(13).toInt();
-        p.totalChargeSeconds = q.value(14).toInt();
+        readPileRow(q, p);
         list.push_back(p);
     }
     return list;
@@ -940,33 +1178,13 @@ QVector<Pile> DatabaseManager::listPiles(int stationId, const QString &status,
 bool DatabaseManager::getPile(int id, Pile &out)
 {
     QSqlQuery q(m_db);
-    q.prepare(QStringLiteral(
-        "SELECT p.id, p.station_id, p.pile_code, p.pile_type, "
-        "COALESCE(p.speed_class,'slow'), COALESCE(p.connector_standard,'GB_T_AC'), "
-        "COALESCE(p.phase,'single'), COALESCE(p.voltage_v,220), COALESCE(p.category_label,''), "
-        "p.power_kw, p.price_per_kwh, p.status, s.name, "
-        "COALESCE(p.total_charge_count,0), COALESCE(p.total_charge_seconds,0) "
-        "FROM piles p JOIN stations s ON s.id = p.station_id WHERE p.id=?"));
+    q.prepare(pileSelect + QStringLiteral(" WHERE p.id=?"));
     q.addBindValue(id);
     if (!q.exec() || !q.next()) {
         m_lastError = QStringLiteral("充电桩不存在");
         return false;
     }
-    out.id = q.value(0).toInt();
-    out.stationId = q.value(1).toInt();
-    out.pileCode = q.value(2).toString();
-    out.pileType = q.value(3).toString();
-    out.speedClass = q.value(4).toString();
-    out.connectorStandard = q.value(5).toString();
-    out.phase = q.value(6).toString();
-    out.voltageV = q.value(7).toInt();
-    out.categoryLabel = q.value(8).toString();
-    out.powerKw = q.value(9).toDouble();
-    out.pricePerKwh = q.value(10).toDouble();
-    out.status = q.value(11).toString();
-    out.stationName = q.value(12).toString();
-    out.totalChargeCount = q.value(13).toInt();
-    out.totalChargeSeconds = q.value(14).toInt();
+    readPileRow(q, out);
     return true;
 }
 
@@ -974,12 +1192,16 @@ bool DatabaseManager::savePile(Pile &pile)
 {
     if (pile.categoryLabel.isEmpty())
         pile.categoryLabel = pileCategoryText(pile);
+    if (pile.status.isEmpty())
+        pile.status = QStringLiteral("idle");
+    if (pile.remainingKwh < 0)
+        pile.remainingKwh = 0;
     QSqlQuery q(m_db);
     if (pile.id == 0) {
         q.prepare(QStringLiteral(
             "INSERT INTO piles(station_id, pile_code, pile_type, speed_class, connector_standard, "
-            "phase, voltage_v, category_label, power_kw, price_per_kwh, status) "
-            "VALUES(?,?,?,?,?,?,?,?,?,?,?)"));
+            "phase, voltage_v, category_label, power_kw, price_per_kwh, status, remaining_kwh) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?)"));
         q.addBindValue(pile.stationId);
         q.addBindValue(pile.pileCode);
         q.addBindValue(pile.pileType);
@@ -991,26 +1213,32 @@ bool DatabaseManager::savePile(Pile &pile)
         q.addBindValue(pile.powerKw);
         q.addBindValue(pile.pricePerKwh);
         q.addBindValue(pile.status);
+        q.addBindValue(pile.remainingKwh > 0 ? pile.remainingKwh : 100.0);
         if (!q.exec()) {
             m_lastError = q.lastError().text();
             return false;
         }
         pile.id = q.lastInsertId().toInt();
     } else {
+        Pile existing;
+        if (!getPile(pile.id, existing))
+            return false;
         q.prepare(QStringLiteral(
             "UPDATE piles SET station_id=?, pile_code=?, pile_type=?, speed_class=?, connector_standard=?, "
-            "phase=?, voltage_v=?, category_label=?, power_kw=?, price_per_kwh=?, status=? WHERE id=?"));
-        q.addBindValue(pile.stationId);
-        q.addBindValue(pile.pileCode);
-        q.addBindValue(pile.pileType);
-        q.addBindValue(pile.speedClass);
-        q.addBindValue(pile.connectorStandard);
-        q.addBindValue(pile.phase);
-        q.addBindValue(pile.voltageV);
+            "phase=?, voltage_v=?, category_label=?, power_kw=?, price_per_kwh=?, status=?, remaining_kwh=?, "
+            "updated_at=datetime('now','localtime') WHERE id=?"));
+        q.addBindValue(pile.stationId > 0 ? pile.stationId : existing.stationId);
+        q.addBindValue(pile.pileCode.isEmpty() ? existing.pileCode : pile.pileCode);
+        q.addBindValue(pile.pileType.isEmpty() ? existing.pileType : pile.pileType);
+        q.addBindValue(pile.speedClass.isEmpty() ? existing.speedClass : pile.speedClass);
+        q.addBindValue(pile.connectorStandard.isEmpty() ? existing.connectorStandard : pile.connectorStandard);
+        q.addBindValue(pile.phase.isEmpty() ? existing.phase : pile.phase);
+        q.addBindValue(pile.voltageV > 0 ? pile.voltageV : existing.voltageV);
         q.addBindValue(pile.categoryLabel);
-        q.addBindValue(pile.powerKw);
-        q.addBindValue(pile.pricePerKwh);
-        q.addBindValue(pile.status);
+        q.addBindValue(pile.powerKw > 0 ? pile.powerKw : existing.powerKw);
+        q.addBindValue(pile.pricePerKwh >= 0 ? pile.pricePerKwh : existing.pricePerKwh);
+        q.addBindValue(pile.status.isEmpty() ? existing.status : pile.status);
+        q.addBindValue(pile.remainingKwh);
         q.addBindValue(pile.id);
         if (!q.exec()) {
             m_lastError = q.lastError().text();
@@ -1022,11 +1250,65 @@ bool DatabaseManager::savePile(Pile &pile)
 
 bool DatabaseManager::deletePile(int id)
 {
+    return deletePile(id, false, 0);
+}
+
+bool DatabaseManager::deletePile(int id, bool force, int adminId)
+{
+    Pile pile;
+    if (!getPile(id, pile))
+        return false;
+    if (pileInUse(pile.status) && !force) {
+        m_lastError = QStringLiteral("IN_USE:充电桩 %1 正在使用或已预约，是否强制删除？").arg(pile.pileCode);
+        return false;
+    }
+
+    if (!m_db.transaction()) {
+        m_lastError = m_db.lastError().text();
+        return false;
+    }
     QSqlQuery q(m_db);
-    q.prepare(QStringLiteral("DELETE FROM piles WHERE id=?"));
-    q.addBindValue(id);
-    if (!q.exec()) {
-        m_lastError = q.lastError().text();
+    auto execOrRollback = [&](const QString &sql, const QVariantList &binds) {
+        q.prepare(sql);
+        for (const QVariant &b : binds)
+            q.addBindValue(b);
+        if (!q.exec()) {
+            m_lastError = q.lastError().text();
+            m_db.rollback();
+            return false;
+        }
+        return true;
+    };
+    if (!execOrRollback(QStringLiteral(
+            "DELETE FROM wallet_transactions WHERE order_id IN "
+            "(SELECT id FROM charging_orders WHERE pile_id=?)"), {id}))
+        return false;
+    if (!execOrRollback(QStringLiteral("DELETE FROM charging_orders WHERE pile_id=?"), {id}))
+        return false;
+    if (!execOrRollback(QStringLiteral("DELETE FROM charging_reservations WHERE pile_id=?"), {id}))
+        return false;
+    if (!execOrRollback(QStringLiteral("DELETE FROM pile_telemetry WHERE pile_id=?"), {id}))
+        return false;
+    if (!execOrRollback(QStringLiteral("DELETE FROM pile_status_logs WHERE pile_id=?"), {id}))
+        return false;
+    if (!execOrRollback(QStringLiteral("DELETE FROM fault_events WHERE pile_id=?"), {id}))
+        return false;
+    if (!execOrRollback(QStringLiteral(
+            "DELETE FROM user_favorites WHERE target_type='pile' AND target_id=?"), {id}))
+        return false;
+    if (!execOrRollback(QStringLiteral("DELETE FROM piles WHERE id=?"), {id}))
+        return false;
+    if (adminId > 0
+        && !writeAdminAudit(adminId, QStringLiteral("admin.pile.delete"),
+                            QStringLiteral("pile"), id,
+                            QStringLiteral("{\"pileCode\":\"%1\",\"force\":%2}")
+                                .arg(pile.pileCode, force ? QStringLiteral("true")
+                                                          : QStringLiteral("false")))) {
+        m_db.rollback();
+        return false;
+    }
+    if (!m_db.commit()) {
+        m_lastError = m_db.lastError().text();
         return false;
     }
     return true;
@@ -1183,7 +1465,7 @@ bool DatabaseManager::createReservation(int userId, int pileId,
         return false;
     }
     outReservation = {reservationId, reservationNo, userId, pileId, reservedAt, expiresAt,
-                      QStringLiteral("active"), pile.pileCode, pile.stationName};
+                      QStringLiteral("active"), pile.pileCode, pile.stationName, QString(), QString()};
     return true;
 }
 
@@ -1387,6 +1669,14 @@ bool DatabaseManager::updateChargingProgress(int userId, int orderId, double ene
         m_lastError = q.lastError().text();
         return false;
     }
+    q.prepare(QStringLiteral("UPDATE piles SET remaining_kwh=MAX(0, 100.0 - ?) WHERE id=?"));
+    q.addBindValue(energyKwh);
+    q.addBindValue(pileId);
+    if (!q.exec()) {
+        m_db.rollback();
+        m_lastError = q.lastError().text();
+        return false;
+    }
     if (!m_db.commit()) {
         m_lastError = m_db.lastError().text();
         return false;
@@ -1456,7 +1746,7 @@ bool DatabaseManager::stopCharging(int orderId, double energyKwh, ChargingOrder 
     const int durationSeconds = start.isValid() ? qMax(0, int(start.secsTo(QDateTime::currentDateTime()))) : 0;
     u.prepare(QStringLiteral(
         "UPDATE piles SET total_charge_count=total_charge_count+1, "
-        "total_charge_seconds=total_charge_seconds+? WHERE id=?"));
+        "total_charge_seconds=total_charge_seconds+?, remaining_kwh=100 WHERE id=?"));
     u.addBindValue(durationSeconds);
     u.addBindValue(pileId);
     if (!u.exec()) {
@@ -1899,6 +2189,278 @@ bool DatabaseManager::importBeijingCsv(const QString &csvPath, bool force)
     }
     if (imported == 0) {
         m_lastError = QStringLiteral("CSV 未导入任何站点");
+        return false;
+    }
+    return true;
+}
+
+QVector<ChargingReservation> DatabaseManager::listActiveReservations()
+{
+    expireReservations();
+    QVector<ChargingReservation> list;
+    QSqlQuery q(m_db);
+    if (!q.exec(QStringLiteral(
+            "SELECT r.id,r.reservation_no,r.user_id,r.pile_id,r.reserved_at,r.expires_at,r.status,"
+            "p.pile_code,s.name,u.nickname,u.phone FROM charging_reservations r "
+            "JOIN piles p ON p.id=r.pile_id JOIN stations s ON s.id=p.station_id "
+            "JOIN users u ON u.id=r.user_id WHERE r.status='active' ORDER BY r.id DESC"))) {
+        m_lastError = q.lastError().text();
+        return list;
+    }
+    while (q.next()) {
+        ChargingReservation r;
+        r.id = q.value(0).toInt();
+        r.reservationNo = q.value(1).toString();
+        r.userId = q.value(2).toInt();
+        r.pileId = q.value(3).toInt();
+        r.reservedAt = q.value(4).toString();
+        r.expiresAt = q.value(5).toString();
+        r.status = q.value(6).toString();
+        r.pileCode = q.value(7).toString();
+        r.stationName = q.value(8).toString();
+        r.username = q.value(9).toString();
+        r.phone = q.value(10).toString();
+        list.push_back(r);
+    }
+    return list;
+}
+
+bool DatabaseManager::adminCancelReservation(int reservationId, int adminId)
+{
+    if (!expireReservations())
+        return false;
+    QSqlQuery q(m_db);
+    q.prepare(QStringLiteral(
+        "SELECT user_id, pile_id FROM charging_reservations WHERE id=? AND status='active'"));
+    q.addBindValue(reservationId);
+    if (!q.exec() || !q.next()) {
+        m_lastError = QStringLiteral("有效预约不存在");
+        return false;
+    }
+    const int userId = q.value(0).toInt();
+    if (!cancelReservation(userId, reservationId))
+        return false;
+    writeAdminAudit(adminId, QStringLiteral("admin.reservation.cancel"),
+                    QStringLiteral("reservation"), reservationId, QStringLiteral("{}"));
+    return true;
+}
+
+bool DatabaseManager::listFavorites(int userId, const QString &targetType, QVector<int> &outIds)
+{
+    outIds.clear();
+    QSqlQuery q(m_db);
+    q.prepare(QStringLiteral(
+        "SELECT target_id FROM user_favorites WHERE user_id=? AND target_type=? ORDER BY id"));
+    q.addBindValue(userId);
+    q.addBindValue(targetType);
+    if (!q.exec()) {
+        m_lastError = q.lastError().text();
+        return false;
+    }
+    while (q.next())
+        outIds.push_back(q.value(0).toInt());
+    return true;
+}
+
+bool DatabaseManager::toggleFavorite(int userId, const QString &targetType, int targetId,
+                                     bool &nowFavorite)
+{
+    if (targetType != QLatin1String("station") && targetType != QLatin1String("pile")) {
+        m_lastError = QStringLiteral("无效的收藏类型");
+        return false;
+    }
+    if (targetId <= 0) {
+        m_lastError = QStringLiteral("请选择收藏目标");
+        return false;
+    }
+    QSqlQuery q(m_db);
+    q.prepare(QStringLiteral(
+        "SELECT id FROM user_favorites WHERE user_id=? AND target_type=? AND target_id=?"));
+    q.addBindValue(userId);
+    q.addBindValue(targetType);
+    q.addBindValue(targetId);
+    if (!q.exec()) {
+        m_lastError = q.lastError().text();
+        return false;
+    }
+    if (q.next()) {
+        const int id = q.value(0).toInt();
+        q.prepare(QStringLiteral("DELETE FROM user_favorites WHERE id=?"));
+        q.addBindValue(id);
+        if (!q.exec()) {
+            m_lastError = q.lastError().text();
+            return false;
+        }
+        nowFavorite = false;
+        return true;
+    }
+    q.prepare(QStringLiteral(
+        "INSERT INTO user_favorites(user_id, target_type, target_id) VALUES(?,?,?)"));
+    q.addBindValue(userId);
+    q.addBindValue(targetType);
+    q.addBindValue(targetId);
+    if (!q.exec()) {
+        m_lastError = q.lastError().text();
+        return false;
+    }
+    nowFavorite = true;
+    return true;
+}
+
+bool DatabaseManager::createInviteCode(int adminId, const QString &role, QString &outCode)
+{
+    const QString grantedRole = role.trimmed().isEmpty() ? QStringLiteral("operator") : role.trimmed();
+    if (grantedRole != QLatin1String("admin") && grantedRole != QLatin1String("operator")
+        && grantedRole != QLatin1String("auditor")) {
+        m_lastError = QStringLiteral("无效的角色");
+        return false;
+    }
+    outCode = QStringLiteral("INV-%1").arg(
+        QUuid::createUuid().toString(QUuid::WithoutBraces).left(8).toUpper());
+    QSqlQuery q(m_db);
+    q.prepare(QStringLiteral("INSERT INTO invite_codes(code, role, created_by) VALUES(?,?,?)"));
+    q.addBindValue(outCode);
+    q.addBindValue(grantedRole);
+    q.addBindValue(adminId);
+    if (!q.exec()) {
+        m_lastError = q.lastError().text();
+        return false;
+    }
+    writeAdminAudit(adminId, QStringLiteral("admin.invite.create"),
+                    QStringLiteral("invite"), q.lastInsertId().toInt(),
+                    QStringLiteral("{\"role\":\"%1\"}").arg(grantedRole));
+    return true;
+}
+
+QVector<InviteCode> DatabaseManager::listInviteCodes()
+{
+    QVector<InviteCode> list;
+    QSqlQuery q(m_db);
+    q.exec(QStringLiteral(
+        "SELECT i.id, i.code, i.role, i.created_by, COALESCE(i.used_by,0), "
+        "COALESCE(a.username,''), COALESCE(i.used_at,''), i.created_at "
+        "FROM invite_codes i LEFT JOIN admins a ON a.id=i.used_by ORDER BY i.id DESC"));
+    while (q.next()) {
+        InviteCode c;
+        c.id = q.value(0).toInt();
+        c.code = q.value(1).toString();
+        c.role = q.value(2).toString();
+        c.createdBy = q.value(3).toInt();
+        c.usedBy = q.value(4).toInt();
+        c.usedUsername = q.value(5).toString();
+        c.usedAt = q.value(6).toString();
+        c.createdAt = q.value(7).toString();
+        list.push_back(c);
+    }
+    return list;
+}
+
+bool DatabaseManager::hasPermission(const QString &role, const QString &permission) const
+{
+    if (role == QLatin1String("admin"))
+        return true;
+    QSqlQuery q(m_db);
+    q.prepare(QStringLiteral(
+        "SELECT allowed FROM role_permissions WHERE role=? AND permission=?"));
+    q.addBindValue(role);
+    q.addBindValue(permission);
+    if (q.exec() && q.next())
+        return q.value(0).toInt() != 0;
+    if (permission.endsWith(QLatin1String(".read"))) {
+        QString write = permission;
+        write.replace(QStringLiteral(".read"), QStringLiteral(".write"));
+        q.prepare(QStringLiteral(
+            "SELECT allowed FROM role_permissions WHERE role=? AND permission=?"));
+        q.addBindValue(role);
+        q.addBindValue(write);
+        if (q.exec() && q.next())
+            return q.value(0).toInt() != 0;
+    }
+    return false;
+}
+
+QVector<QPair<QString, bool>> DatabaseManager::listRolePermissions(const QString &role) const
+{
+    QVector<QPair<QString, bool>> result;
+    QSqlQuery q(m_db);
+    q.prepare(QStringLiteral(
+        "SELECT permission, allowed FROM role_permissions WHERE role=? ORDER BY permission"));
+    q.addBindValue(role);
+    if (!q.exec())
+        return result;
+    while (q.next())
+        result.push_back({q.value(0).toString(), q.value(1).toInt() != 0});
+    return result;
+}
+
+bool DatabaseManager::setRolePermission(const QString &role, const QString &permission,
+                                        bool allowed, int adminId)
+{
+    if (role == QLatin1String("admin")) {
+        m_lastError = QStringLiteral("系统管理员权限不可修改");
+        return false;
+    }
+    if (!allPermissionKeys().contains(permission)) {
+        m_lastError = QStringLiteral("未知权限项");
+        return false;
+    }
+    QSqlQuery q(m_db);
+    q.prepare(QStringLiteral(
+        "INSERT INTO role_permissions(role, permission, allowed) VALUES(?,?,?) "
+        "ON CONFLICT(role, permission) DO UPDATE SET allowed=excluded.allowed"));
+    q.addBindValue(role);
+    q.addBindValue(permission);
+    q.addBindValue(allowed ? 1 : 0);
+    if (!q.exec()) {
+        m_lastError = q.lastError().text();
+        return false;
+    }
+    writeAdminAudit(adminId, QStringLiteral("admin.permission.set"),
+                    QStringLiteral("role"), 0,
+                    QStringLiteral("{\"role\":\"%1\",\"permission\":\"%2\",\"allowed\":%3}")
+                        .arg(role, permission, allowed ? QStringLiteral("true")
+                                                       : QStringLiteral("false")));
+    return true;
+}
+
+bool DatabaseManager::deleteOrder(int orderId, int adminId)
+{
+    QSqlQuery q(m_db);
+    q.prepare(QStringLiteral("SELECT status FROM charging_orders WHERE id=?"));
+    q.addBindValue(orderId);
+    if (!q.exec() || !q.next()) {
+        m_lastError = QStringLiteral("订单不存在");
+        return false;
+    }
+    if (q.value(0).toString() == QLatin1String("ongoing")) {
+        m_lastError = QStringLiteral("进行中的订单不能删除，请先结束充电");
+        return false;
+    }
+    if (!m_db.transaction()) {
+        m_lastError = m_db.lastError().text();
+        return false;
+    }
+    q.prepare(QStringLiteral("DELETE FROM wallet_transactions WHERE order_id=?"));
+    q.addBindValue(orderId);
+    if (!q.exec()) {
+        m_db.rollback();
+        m_lastError = q.lastError().text();
+        return false;
+    }
+    q.prepare(QStringLiteral("DELETE FROM charging_orders WHERE id=?"));
+    q.addBindValue(orderId);
+    if (!q.exec()) {
+        m_db.rollback();
+        m_lastError = q.lastError().text();
+        return false;
+    }
+    if (!writeAdminAudit(adminId, QStringLiteral("admin.order.delete"),
+                         QStringLiteral("order"), orderId, QStringLiteral("{}"))) {
+        m_db.rollback();
+        return false;
+    }
+    if (!m_db.commit()) {
+        m_lastError = m_db.lastError().text();
         return false;
     }
     return true;

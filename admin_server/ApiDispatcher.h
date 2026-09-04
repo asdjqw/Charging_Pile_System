@@ -30,8 +30,11 @@ private:
                         const QString &message) const;
     int authorizedUser(const QJsonObject &request);
     int authorizedAdmin(const QJsonObject &request);
+    bool adminHasPermission(int adminId, const QString &permission) const;
     QJsonObject dashboardPayload(int days) const;
     QJsonObject dispatchAdmin(const QJsonObject &request, int adminId);
+    QJsonObject denyIfNoPermission(const QJsonObject &request, int adminId,
+                                   const QString &permission) const;
 
     QHash<QString, Session> m_sessions;
     QHash<QString, AdminSession> m_adminSessions;

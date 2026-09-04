@@ -59,6 +59,26 @@ int main(int argc, char **argv)
         return 9;
     }
 
+    bool fav = false;
+    if (!db.toggleFavorite(user.id, QStringLiteral("station"), stations.first().id, fav) || !fav) {
+        out << "favorite failed: " << db.lastError() << Qt::endl;
+        return 10;
+    }
+    Admin admin;
+    if (!db.registerAdmin(QStringLiteral("newops"), QStringLiteral("ops1234"),
+                          QStringLiteral("新运维"), QStringLiteral("CHARGE-ADMIN-2026"), admin)
+        || admin.role != QLatin1String("operator")) {
+        out << "admin register failed: " << db.lastError() << Qt::endl;
+        return 11;
+    }
+    Admin dup;
+    if (db.registerAdmin(QStringLiteral("newops"), QStringLiteral("ops1234"),
+                         QStringLiteral("重复"), QStringLiteral("CHARGE-AUDIT-2026"), dup)
+        || db.lastError() != QStringLiteral("账户已存在")) {
+        out << "duplicate admin not rejected: " << db.lastError() << Qt::endl;
+        return 12;
+    }
+
     out << "ok user=" << user.id << " pile=" << pileId << Qt::endl;
     return 0;
 }

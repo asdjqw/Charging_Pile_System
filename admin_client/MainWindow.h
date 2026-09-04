@@ -7,6 +7,7 @@
 #include <QtCharts/QChartView>
 
 class QComboBox;
+class QCloseEvent;
 class QFrame;
 class QLabel;
 class QLineEdit;
@@ -14,12 +15,16 @@ class QListWidget;
 class QPushButton;
 class QStackedWidget;
 class QTableWidget;
+class QCheckBox;
 
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
 public:
     explicit MainWindow(const Admin &admin, QWidget *parent = nullptr);
+
+signals:
+    void logoutRequested();
 
 private slots:
     void onNavChanged(int row);
@@ -28,11 +33,23 @@ private slots:
     void refreshPiles();
     void refreshStations();
     void refreshUsers();
+    void refreshReservations();
+    void refreshPermissions();
     void onRestartPile();
+    void onAddPile();
+    void onEditPile();
+    void onDeletePile();
     void onAddStation();
+    void onEditStation();
+    void onDeleteStation();
     void onStationRowClicked(int row, int column);
     void onToggleUserStatus();
+    void onViewUserOrders();
+    void onCancelReservation();
+    void onCreateInvite();
+    void onTogglePermission();
     void onToggleDarkMode(bool dark);
+    void onLogout();
 
 private:
     void buildUi();
@@ -41,11 +58,17 @@ private:
     QWidget *buildPilePage();
     QWidget *buildStationPage();
     QWidget *buildUserPage();
+    QWidget *buildReservationPage();
+    QWidget *buildPermissionPage();
     QFrame *makeKpiCard(const QString &title, QLabel **valueLabel);
     void applySalesChart(const QJsonObject &payload);
     void applyStatusChart(const QJsonObject &stats);
     void applyTheme(bool dark);
     void showApiError(const QString &title);
+    bool confirmForce(const QString &title);
+    bool editPileDialog(Pile &pile, bool isNew);
+    bool editStationDialog(Station &station, int *pileCount, bool isNew);
+    void closeEvent(QCloseEvent *event) override;
 
     Admin m_admin;
     bool m_darkMode = false;
@@ -63,6 +86,8 @@ private:
     QLabel *m_statusSummary = nullptr;
     QChartView *m_statusChartView = nullptr;
     QTableWidget *m_statusDistTable = nullptr;
+    QLineEdit *m_statusKeyword = nullptr;
+    QTableWidget *m_statusPileTable = nullptr;
 
     QComboBox *m_pileStationFilter = nullptr;
     QTableWidget *m_pileTable = nullptr;
@@ -74,4 +99,10 @@ private:
 
     QLineEdit *m_userKeyword = nullptr;
     QTableWidget *m_userTable = nullptr;
+
+    QTableWidget *m_reservationTable = nullptr;
+    QTableWidget *m_inviteTable = nullptr;
+    QComboBox *m_permRoleCombo = nullptr;
+    QTableWidget *m_permTable = nullptr;
+    bool m_loggingOut = false;
 };

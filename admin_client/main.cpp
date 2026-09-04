@@ -12,6 +12,7 @@ int main(int argc, char *argv[])
     QApplication::setApplicationName(QStringLiteral("ChargePileAdmin"));
     QApplication::setOrganizationName(QStringLiteral("ChargePileLab"));
     app.setStyleSheet(StyleHelper::adminClientStyle());
+    app.setQuitOnLastWindowClosed(false);
 
     const QString host = qEnvironmentVariable("CHARGE_PILE_HOST", "127.0.0.1");
     bool portOk = false;
@@ -27,11 +28,21 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    LoginDialog login;
-    if (login.exec() != QDialog::Accepted)
-        return 0;
+    while (true) {
+        LoginDialog login;
+        if (login.exec() != QDialog::Accepted)
+            return 0;
 
-    MainWindow w(login.loggedInAdmin());
-    w.show();
-    return app.exec();
+        MainWindow w(login.loggedInAdmin());
+        bool logout = false;
+        QObject::connect(&w, &MainWindow::logoutRequested, &w, [&]() {
+            logout = true;
+            QApplication::exit(1);
+        });
+        w.show();
+        const int code = app.exec();
+        AdminApiClient::instance().logout();
+        if (!logout)
+            return code;
+    }
 }

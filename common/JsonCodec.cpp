@@ -32,15 +32,18 @@ QJsonObject toJson(const Pile &v)
             {"voltageV", v.voltageV}, {"categoryLabel", v.categoryLabel},
             {"powerKw", v.powerKw}, {"pricePerKwh", v.pricePerKwh},
             {"status", v.status}, {"stationName", v.stationName},
+            {"stationAddress", v.stationAddress},
             {"totalChargeCount", v.totalChargeCount},
-            {"totalChargeSeconds", v.totalChargeSeconds}};
+            {"totalChargeSeconds", v.totalChargeSeconds},
+            {"remainingKwh", v.remainingKwh}, {"favorite", v.favorite}};
 }
 
 QJsonObject toJson(const ChargingReservation &v)
 {
     return {{"id", v.id}, {"reservationNo", v.reservationNo}, {"userId", v.userId},
             {"pileId", v.pileId}, {"reservedAt", v.reservedAt}, {"expiresAt", v.expiresAt},
-            {"status", v.status}, {"pileCode", v.pileCode}, {"stationName", v.stationName}};
+            {"status", v.status}, {"pileCode", v.pileCode}, {"stationName", v.stationName},
+            {"username", v.username}, {"phone", v.phone}};
 }
 
 QJsonObject toJson(const ChargingOrder &v)
@@ -114,8 +117,11 @@ Pile pileFromJson(const QJsonObject &o)
     v.pricePerKwh = o.value("pricePerKwh").toDouble();
     v.status = o.value("status").toString();
     v.stationName = o.value("stationName").toString();
+    v.stationAddress = o.value("stationAddress").toString();
     v.totalChargeCount = o.value("totalChargeCount").toInt();
     v.totalChargeSeconds = o.value("totalChargeSeconds").toInt();
+    v.remainingKwh = o.value("remainingKwh").toDouble(100.0);
+    v.favorite = o.value("favorite").toBool();
     return v;
 }
 
@@ -131,6 +137,30 @@ ChargingReservation reservationFromJson(const QJsonObject &o)
     v.status = o.value("status").toString();
     v.pileCode = o.value("pileCode").toString();
     v.stationName = o.value("stationName").toString();
+    v.username = o.value("username").toString();
+    v.phone = o.value("phone").toString();
+    return v;
+}
+
+QJsonObject toJson(const InviteCode &v)
+{
+    return {{"id", v.id}, {"code", v.code}, {"role", v.role},
+            {"createdBy", v.createdBy}, {"usedBy", v.usedBy},
+            {"usedUsername", v.usedUsername}, {"usedAt", v.usedAt},
+            {"createdAt", v.createdAt}};
+}
+
+InviteCode inviteFromJson(const QJsonObject &o)
+{
+    InviteCode v;
+    v.id = o.value("id").toInt();
+    v.code = o.value("code").toString();
+    v.role = o.value("role").toString();
+    v.createdBy = o.value("createdBy").toInt();
+    v.usedBy = o.value("usedBy").toInt();
+    v.usedUsername = o.value("usedUsername").toString();
+    v.usedAt = o.value("usedAt").toString();
+    v.createdAt = o.value("createdAt").toString();
     return v;
 }
 

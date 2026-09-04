@@ -4,8 +4,10 @@
 #include "JsonCodec.h"
 #include "Models.h"
 
+#include <algorithm>
 #include <QDateTime>
 #include <QJsonArray>
+#include <QSet>
 #include <QTimer>
 #include <QUuid>
 
@@ -101,8 +103,17 @@ QJsonObject ApiDispatcher::dispatch(const QJsonObject &request)
         bool created = false;
         const QString password = data.value("password").toString();
         if (!password.isEmpty()) {
-            if (!db.loginByPhone(data.value("phone").toString(), password, user))
-                return failure(request, QStringLiteral("AUTH_FAILED"), db.lastError());
+            if (!db.loginByPhone(data.value("phone").toString(), password, user)) {
+                if (!db.lastError().contains(QStringLiteral("不存在")))
+                    return failure(request, QStringLiteral("AUTH_FAILED"), db.lastError());
+                User createdUser;
+                createdUser.phone = data.value("phone").toString();
+                createdUser.password = password;
+                if (!db.registerUser(createdUser)
+                    || !db.loginByPhone(createdUser.phone, password, user))
+                    return failure(request, QStringLiteral("AUTH_FAILED"), db.lastError());
+                created = true;
+            }
         } else if (!db.phoneLogin(data.value("phone").toString(), user, created)) {
             return failure(request, QStringLiteral("AUTH_FAILED"), db.lastError());
         }
@@ -122,9 +133,32 @@ QJsonObject ApiDispatcher::dispatch(const QJsonObject &request)
         user.carModel = data.value("carModel").toString();
         user.plateNumber = data.value("plateNumber").toString();
         user.balance = data.value("balance").toDouble(50.0);
-        if (!db.registerUser(user))
-            return failure(request, QStringLiteral("REGISTER_FAILED"), db.lastError());
+        if (!db.registerUser(user)) {
+            const QString err = db.lastError();
+            const QString code = err.contains(QStringLiteral("已注册"))
+                                     ? QStringLiteral("ACCOUNT_EXISTS")
+                                     : QStringLiteral("REGISTER_FAILED");
+            return failure(request, code, err);
+        }
         return success(request, QJsonObject(), QStringLiteral("注册成功"));
+    }
+
+    if (action == QLatin1String("admin.register")) {
+        Admin admin;
+        if (!db.registerAdmin(data.value("username").toString(),
+                              data.value("password").toString(),
+                              data.value("realName").toString(),
+                              data.value("inviteCode").toString(), admin)) {
+            const QString err = db.lastError();
+            const QString code = err == QStringLiteral("账户已存在")
+                                     ? QStringLiteral("ACCOUNT_EXISTS")
+                                     : QStringLiteral("REGISTER_FAILED");
+            return failure(request, code, err);
+        }
+        const QString token = QUuid::createUuid().toString(QUuid::WithoutBraces);
+        m_adminSessions.insert(token, {admin.id, QDateTime::currentDateTimeUtc().addSecs(12 * 60 * 60)});
+        return success(request, QJsonObject{{"token", token}, {"admin", JsonCodec::toJson(admin)}},
+                       QStringLiteral("注册成功"));
     }
 
     if (action == QLatin1String("dashboard.summary")) {
@@ -165,13 +199,26 @@ QJsonObject ApiDispatcher::dispatch(const QJsonObject &request)
         return failure(request, QStringLiteral("UNAUTHORIZED"), QStringLiteral("登录已失效，请重新登录"));
 
     if (action == QLatin1String("stations.list")) {
-        const auto values = db.listStations(data.value("latitude").toDouble(39.9042),
+        auto values = db.listStations(data.value("latitude").toDouble(39.9042),
                                             data.value("longitude").toDouble(116.4074),
                                             data.value("keyword").toString(),
                                             data.value("district").toString(),
                                             qBound(1, data.value("limit").toInt(80), 500));
+        QVector<int> favStations;
+        db.listFavorites(userId, QStringLiteral("station"), favStations);
+        const QSet<int> favSet(favStations.begin(), favStations.end());
+        std::sort(values.begin(), values.end(), [&](const Station &a, const Station &b) {
+            const bool af = favSet.contains(a.id);
+            const bool bf = favSet.contains(b.id);
+            if (af != bf)
+                return af;
+            return a.distanceKm < b.distanceKm;
+        });
+        QJsonArray favoriteIds;
+        for (int id : favStations)
+            favoriteIds.append(id);
         return success(request, QJsonObject{{"items", stationsJson(values)}, {"stationCount", db.stationCount()},
-                                 {"pileCount", db.pileCount()}});
+                                 {"pileCount", db.pileCount()}, {"favoriteStationIds", favoriteIds}});
     }
 
     if (action == QLatin1String("stations.districts")) {
@@ -182,10 +229,20 @@ QJsonObject ApiDispatcher::dispatch(const QJsonObject &request)
     }
 
     if (action == QLatin1String("piles.list")) {
-        const auto values = db.listPiles(data.value("stationId").toInt(-1),
+        auto values = db.listPiles(data.value("stationId").toInt(-1),
                                         data.value("status").toString(),
                                         data.value("speedClass").toString(),
                                         data.value("connector").toString());
+        QVector<int> favPiles;
+        db.listFavorites(userId, QStringLiteral("pile"), favPiles);
+        const QSet<int> favSet(favPiles.begin(), favPiles.end());
+        for (Pile &pile : values)
+            pile.favorite = favSet.contains(pile.id);
+        std::sort(values.begin(), values.end(), [](const Pile &a, const Pile &b) {
+            if (a.favorite != b.favorite)
+                return a.favorite;
+            return a.id < b.id;
+        });
         return success(request, QJsonObject{{"items", pilesJson(values)}});
     }
 
@@ -207,7 +264,6 @@ QJsonObject ApiDispatcher::dispatch(const QJsonObject &request)
         User user;
         if (!db.getUserById(userId, user))
             return failure(request, QStringLiteral("NOT_FOUND"), db.lastError());
-        user.phone = data.value("phone").toString();
         user.nickname = data.value("nickname").toString();
         user.avatarPath = data.value("avatarPath").toString();
         user.carModel = data.value("carModel").toString();
@@ -217,6 +273,34 @@ QJsonObject ApiDispatcher::dispatch(const QJsonObject &request)
         if (!db.updateUser(user))
             return failure(request, QStringLiteral("UPDATE_FAILED"), db.lastError());
         return success(request, JsonCodec::toJson(user));
+    }
+
+    if (action == QLatin1String("user.logout")) {
+        m_sessions.remove(request.value("token").toString());
+        return success(request, QJsonObject(), QStringLiteral("已退出登录"));
+    }
+
+    if (action == QLatin1String("favorites.list")) {
+        QVector<int> stations;
+        QVector<int> piles;
+        db.listFavorites(userId, QStringLiteral("station"), stations);
+        db.listFavorites(userId, QStringLiteral("pile"), piles);
+        QJsonArray stationIds;
+        QJsonArray pileIds;
+        for (int id : stations)
+            stationIds.append(id);
+        for (int id : piles)
+            pileIds.append(id);
+        return success(request, QJsonObject{{"stations", stationIds}, {"piles", pileIds}});
+    }
+
+    if (action == QLatin1String("favorites.toggle")) {
+        bool nowFavorite = false;
+        if (!db.toggleFavorite(userId, data.value("targetType").toString(),
+                               data.value("targetId").toInt(), nowFavorite))
+            return failure(request, QStringLiteral("FAVORITE_FAILED"), db.lastError());
+        return success(request, QJsonObject{{"favorite", nowFavorite}},
+                       nowFavorite ? QStringLiteral("已加入收藏") : QStringLiteral("已取消收藏"));
     }
 
     if (action == QLatin1String("wallet.recharge")) {
@@ -297,7 +381,28 @@ int ApiDispatcher::authorizedAdmin(const QJsonObject &request)
         m_adminSessions.erase(it);
         return 0;
     }
+    Admin admin;
+    if (!DatabaseManager::instance().getAdminById(it->adminId, admin)) {
+        m_adminSessions.erase(it);
+        return 0;
+    }
     return it->adminId;
+}
+
+bool ApiDispatcher::adminHasPermission(int adminId, const QString &permission) const
+{
+    Admin admin;
+    if (!DatabaseManager::instance().getAdminById(adminId, admin))
+        return false;
+    return DatabaseManager::instance().hasPermission(admin.role, permission);
+}
+
+QJsonObject ApiDispatcher::denyIfNoPermission(const QJsonObject &request, int adminId,
+                                              const QString &permission) const
+{
+    if (adminHasPermission(adminId, permission))
+        return {};
+    return failure(request, QStringLiteral("FORBIDDEN"), QStringLiteral("当前角色无权执行该操作"));
 }
 
 QJsonObject ApiDispatcher::dashboardPayload(int days) const
@@ -328,30 +433,78 @@ QJsonObject ApiDispatcher::dispatchAdmin(const QJsonObject &request, int adminId
     const QString action = request.value("action").toString();
     const QJsonObject data = request.value("data").toObject();
 
+    if (action == QLatin1String("admin.logout")) {
+        m_adminSessions.remove(request.value("token").toString());
+        return success(request, QJsonObject(), QStringLiteral("已退出登录"));
+    }
+
     if (action == QLatin1String("admin.dashboard")) {
+        if (const auto denied = denyIfNoPermission(request, adminId, QStringLiteral("dashboard.read"));
+            !denied.isEmpty())
+            return denied;
         const int days = data.value("days").toInt(7) == 30 ? 30 : 7;
         return success(request, dashboardPayload(days));
     }
 
     if (action == QLatin1String("admin.piles.list")) {
+        if (const auto denied = denyIfNoPermission(request, adminId, QStringLiteral("piles.read"));
+            !denied.isEmpty())
+            return denied;
         return success(request, QJsonObject{{"items", pilesJson(db.listPiles(data.value("stationId").toInt(-1),
                                                                     data.value("status").toString()))},
                                             {"stats", dashboardPayload(7).value("stats").toObject()}});
     }
 
+    if (action == QLatin1String("admin.piles.save")) {
+        if (const auto denied = denyIfNoPermission(request, adminId, QStringLiteral("piles.write"));
+            !denied.isEmpty())
+            return denied;
+        Pile pile = JsonCodec::pileFromJson(data);
+        if (!db.savePile(pile))
+            return failure(request, QStringLiteral("PILE_SAVE_FAILED"), db.lastError());
+        db.writeAdminAudit(adminId, QStringLiteral("admin.pile.save"),
+                           QStringLiteral("pile"), pile.id, QStringLiteral("{}"));
+        Pile saved;
+        db.getPile(pile.id, saved);
+        return success(request, JsonCodec::toJson(saved),
+                       pile.id > 0 && data.value("id").toInt() > 0
+                           ? QStringLiteral("电桩已更新") : QStringLiteral("电桩已新增"));
+    }
+
+    if (action == QLatin1String("admin.piles.delete")) {
+        if (const auto denied = denyIfNoPermission(request, adminId, QStringLiteral("piles.write"));
+            !denied.isEmpty())
+            return denied;
+        const int pileId = data.value("pileId").toInt();
+        const bool force = data.value("force").toBool();
+        if (!db.deletePile(pileId, force, adminId)) {
+            const QString err = db.lastError();
+            if (err.startsWith(QLatin1String("IN_USE:")))
+                return failure(request, QStringLiteral("NEED_FORCE"), err.mid(7));
+            return failure(request, QStringLiteral("PILE_DELETE_FAILED"), err);
+        }
+        return success(request, QJsonObject(), QStringLiteral("电桩已删除"));
+    }
+
     if (action == QLatin1String("admin.piles.restart")) {
+        if (const auto denied = denyIfNoPermission(request, adminId, QStringLiteral("piles.write"));
+            !denied.isEmpty())
+            return denied;
         const int pileId = data.value("pileId").toInt();
         if (!db.restartPile(pileId, adminId))
             return failure(request, QStringLiteral("RESTART_FAILED"), db.lastError());
         QTimer::singleShot(1500, this, [pileId]() {
             DatabaseManager::instance().updatePileStatus(
                 pileId, QStringLiteral("idle"), QStringLiteral("pile"),
-                QStringLiteral("模拟重启完成"));
+                QStringLiteral("远程重启完成"));
         });
         return success(request, QJsonObject(), QStringLiteral("已向电桩下发远程重启指令"));
     }
 
     if (action == QLatin1String("admin.stations.list")) {
+        if (const auto denied = denyIfNoPermission(request, adminId, QStringLiteral("stations.read"));
+            !denied.isEmpty())
+            return denied;
         const QString keyword = data.value("keyword").toString();
         return success(request, QJsonObject{
             {"items", stationsJson(db.listStations(39.9042, 116.4074, keyword, QString(), 1000, 0))},
@@ -359,6 +512,9 @@ QJsonObject ApiDispatcher::dispatchAdmin(const QJsonObject &request, int adminId
     }
 
     if (action == QLatin1String("admin.stations.save")) {
+        if (const auto denied = denyIfNoPermission(request, adminId, QStringLiteral("stations.write"));
+            !denied.isEmpty())
+            return denied;
         Station station;
         station.id = data.value("id").toInt();
         station.name = data.value("name").toString().trimmed();
@@ -372,14 +528,32 @@ QJsonObject ApiDispatcher::dispatchAdmin(const QJsonObject &request, int adminId
             if (!db.createStationWithPiles(station, pileCount))
                 return failure(request, QStringLiteral("STATION_CREATE_FAILED"), db.lastError());
             return success(request, JsonCodec::toJson(station),
-                           QStringLiteral("已新增电站（模拟）并生成 %1 个电桩").arg(station.totalPiles));
+                           QStringLiteral("已新增电站并生成 %1 个电桩").arg(station.totalPiles));
         }
         if (!db.saveStation(station))
             return failure(request, QStringLiteral("STATION_SAVE_FAILED"), db.lastError());
         return success(request, JsonCodec::toJson(station), QStringLiteral("电站已更新"));
     }
 
+    if (action == QLatin1String("admin.stations.delete")) {
+        if (const auto denied = denyIfNoPermission(request, adminId, QStringLiteral("stations.write"));
+            !denied.isEmpty())
+            return denied;
+        const int stationId = data.value("stationId").toInt();
+        const bool force = data.value("force").toBool();
+        if (!db.deleteStation(stationId, force, adminId)) {
+            const QString err = db.lastError();
+            if (err.startsWith(QLatin1String("IN_USE:")))
+                return failure(request, QStringLiteral("NEED_FORCE"), err.mid(7));
+            return failure(request, QStringLiteral("STATION_DELETE_FAILED"), err);
+        }
+        return success(request, QJsonObject(), QStringLiteral("电站及所属电桩已删除"));
+    }
+
     if (action == QLatin1String("admin.stations.piles")) {
+        if (const auto denied = denyIfNoPermission(request, adminId, QStringLiteral("stations.read"));
+            !denied.isEmpty())
+            return denied;
         const int stationId = data.value("stationId").toInt();
         Station station;
         if (!db.getStation(stationId, station))
@@ -389,6 +563,9 @@ QJsonObject ApiDispatcher::dispatchAdmin(const QJsonObject &request, int adminId
     }
 
     if (action == QLatin1String("admin.users.list")) {
+        if (const auto denied = denyIfNoPermission(request, adminId, QStringLiteral("users.read"));
+            !denied.isEmpty())
+            return denied;
         QJsonArray items;
         for (const User &user : db.listUsers(data.value("keyword").toString()))
             items.append(JsonCodec::toJson(user));
@@ -396,6 +573,9 @@ QJsonObject ApiDispatcher::dispatchAdmin(const QJsonObject &request, int adminId
     }
 
     if (action == QLatin1String("admin.users.setStatus")) {
+        if (const auto denied = denyIfNoPermission(request, adminId, QStringLiteral("users.write"));
+            !denied.isEmpty())
+            return denied;
         const int userId = data.value("userId").toInt();
         const QString status = data.value("status").toString();
         if (!db.setUserStatus(userId, status, adminId))
@@ -403,6 +583,87 @@ QJsonObject ApiDispatcher::dispatchAdmin(const QJsonObject &request, int adminId
         return success(request, QJsonObject(),
                        status == QLatin1String("frozen") ? QStringLiteral("用户已冻结")
                                                          : QStringLiteral("用户已解冻"));
+    }
+
+    if (action == QLatin1String("admin.users.orders")) {
+        if (const auto denied = denyIfNoPermission(request, adminId, QStringLiteral("orders.read"));
+            !denied.isEmpty())
+            return denied;
+        const int userId = data.value("userId").toInt();
+        return success(request, QJsonObject{{"items", ordersJson(db.listOrders(userId))}});
+    }
+
+    if (action == QLatin1String("admin.orders.delete")) {
+        if (const auto denied = denyIfNoPermission(request, adminId, QStringLiteral("orders.write"));
+            !denied.isEmpty())
+            return denied;
+        if (!db.deleteOrder(data.value("orderId").toInt(), adminId))
+            return failure(request, QStringLiteral("ORDER_DELETE_FAILED"), db.lastError());
+        return success(request, QJsonObject(), QStringLiteral("订单已删除"));
+    }
+
+    if (action == QLatin1String("admin.reservations.list")) {
+        if (const auto denied = denyIfNoPermission(request, adminId, QStringLiteral("reservations.read"));
+            !denied.isEmpty())
+            return denied;
+        QJsonArray items;
+        for (const ChargingReservation &r : db.listActiveReservations())
+            items.append(JsonCodec::toJson(r));
+        return success(request, QJsonObject{{"items", items}});
+    }
+
+    if (action == QLatin1String("admin.reservations.cancel")) {
+        if (const auto denied = denyIfNoPermission(request, adminId, QStringLiteral("reservations.write"));
+            !denied.isEmpty())
+            return denied;
+        if (!db.adminCancelReservation(data.value("reservationId").toInt(), adminId))
+            return failure(request, QStringLiteral("RESERVATION_CANCEL_FAILED"), db.lastError());
+        return success(request, QJsonObject(), QStringLiteral("预约已解除"));
+    }
+
+    if (action == QLatin1String("admin.invites.list")) {
+        if (const auto denied = denyIfNoPermission(request, adminId, QStringLiteral("invites.write"));
+            !denied.isEmpty())
+            return denied;
+        QJsonArray items;
+        for (const InviteCode &code : db.listInviteCodes())
+            items.append(JsonCodec::toJson(code));
+        return success(request, QJsonObject{{"items", items}});
+    }
+
+    if (action == QLatin1String("admin.invites.create")) {
+        if (const auto denied = denyIfNoPermission(request, adminId, QStringLiteral("invites.write"));
+            !denied.isEmpty())
+            return denied;
+        QString code;
+        if (!db.createInviteCode(adminId, data.value("role").toString(), code))
+            return failure(request, QStringLiteral("INVITE_FAILED"), db.lastError());
+        return success(request, QJsonObject{{"code", code}}, QStringLiteral("邀请码已生成"));
+    }
+
+    if (action == QLatin1String("admin.permissions.list")) {
+        if (const auto denied = denyIfNoPermission(request, adminId, QStringLiteral("permissions.write"));
+            !denied.isEmpty())
+            return denied;
+        const QString role = data.value("role").toString(QStringLiteral("operator"));
+        QJsonArray items;
+        for (const auto &entry : db.listRolePermissions(role))
+            items.append(QJsonObject{{"permission", entry.first}, {"allowed", entry.second}});
+        QJsonArray keys;
+        for (const QString &key : DatabaseManager::allPermissionKeys())
+            keys.append(key);
+        return success(request, QJsonObject{{"role", role}, {"items", items}, {"keys", keys}});
+    }
+
+    if (action == QLatin1String("admin.permissions.set")) {
+        if (const auto denied = denyIfNoPermission(request, adminId, QStringLiteral("permissions.write"));
+            !denied.isEmpty())
+            return denied;
+        if (!db.setRolePermission(data.value("role").toString(),
+                                  data.value("permission").toString(),
+                                  data.value("allowed").toBool(), adminId))
+            return failure(request, QStringLiteral("PERMISSION_FAILED"), db.lastError());
+        return success(request, QJsonObject(), QStringLiteral("权限已更新"));
     }
 
     return failure(request, QStringLiteral("UNKNOWN_ACTION"),
