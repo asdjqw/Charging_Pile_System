@@ -17,6 +17,7 @@ class QTimer;
 class QPushButton;
 class QStackedWidget;
 class QWidget;
+class QCloseEvent;
 class LocationProvider;
 
 class MainWindow : public QMainWindow
@@ -24,6 +25,9 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 public:
     explicit MainWindow(const User &user, QWidget *parent = nullptr);
+
+signals:
+    void logoutRequested();
 
 private slots:
     void onBottomNav(int index);
@@ -33,7 +37,9 @@ private slots:
     void onRegionChanged();
     void onNavigate();
     void onToggleFavorite();
+    void onTogglePileFavorite();
     void onFavoriteFilterToggled(bool checked);
+    void onPileFavoriteFilterToggled(bool checked);
     void onRealLocationUpdated(double lat, double lng, const QString &label, const QString &source);
     void onRealLocationFailed(const QString &reason);
     void refreshPilesForCharge();
@@ -51,6 +57,7 @@ private slots:
     void refreshOrders();
     void onToggleDarkMode(bool dark);
     void restoreSession();
+    void onLogout();
 
 private:
     void buildUi();
@@ -66,6 +73,7 @@ private:
     void loadFavorites();
     void saveFavorites();
     bool isFavorite(int stationId) const;
+    bool isPileFavorite(int pileId) const;
     void setFavorite(int stationId, bool on);
     void applyTheme(bool dark);
     void updateNavActive(int index);
@@ -73,6 +81,7 @@ private:
     int selectedStationId() const;
     int selectedPileId() const;
     int selectedListStationId() const;
+    void closeEvent(QCloseEvent *event) override;
 
     User m_user;
     LocationProvider *m_locationProvider = nullptr;
@@ -84,14 +93,17 @@ private:
     int m_visibleCount = 20;
     QVector<Station> m_cachedStations;
     QSet<int> m_favoriteIds;
+    QSet<int> m_favoritePileIds;
     bool m_darkMode = false;
     bool m_sessionRestored = false;
+    bool m_loggingOut = false;
 
     QStackedWidget *m_tabStack = nullptr;
     QWidget *m_bottomNav = nullptr;
     QPushButton *m_navStations = nullptr;
     QPushButton *m_navCharge = nullptr;
     QPushButton *m_navProfile = nullptr;
+    QLabel *m_chargeBanner = nullptr;
 
     // 附近电站
     QComboBox *m_regionCombo = nullptr;
@@ -114,6 +126,8 @@ private:
     QComboBox *m_speedFilter = nullptr;
     QComboBox *m_connectorFilter = nullptr;
     QListWidget *m_pileList = nullptr;
+    QCheckBox *m_pileFavOnlyCheck = nullptr;
+    QPushButton *m_pileFavBtn = nullptr;
     QLabel *m_chargeInfo = nullptr;
     QLabel *m_reservationInfo = nullptr;
     QProgressBar *m_chargeProgress = nullptr;

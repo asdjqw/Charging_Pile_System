@@ -81,6 +81,7 @@ CREATE TABLE IF NOT EXISTS piles (
     total_charge_seconds INTEGER NOT NULL DEFAULT 0 CHECK(total_charge_seconds >= 0),
     firmware_version     TEXT    NOT NULL DEFAULT '',
     last_heartbeat       TEXT,
+    remaining_kwh        REAL    NOT NULL DEFAULT 100 CHECK(remaining_kwh >= 0),
     created_at           TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
     updated_at           TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
     FOREIGN KEY (station_id) REFERENCES stations(id) ON DELETE RESTRICT
@@ -266,6 +267,36 @@ CREATE TABLE IF NOT EXISTS load_forecasts (
     UNIQUE(station_id, model_id, generated_at, target_time)
 );
 
+CREATE TABLE IF NOT EXISTS user_favorites (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id       INTEGER NOT NULL,
+    target_type   TEXT    NOT NULL CHECK(target_type IN ('station','pile')),
+    target_id     INTEGER NOT NULL,
+    created_at    TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
+    UNIQUE(user_id, target_type, target_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS invite_codes (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    code          TEXT    NOT NULL UNIQUE,
+    role          TEXT    NOT NULL DEFAULT 'operator'
+                          CHECK(role IN ('admin','operator','auditor')),
+    created_by    INTEGER NOT NULL,
+    used_by       INTEGER,
+    used_at       TEXT,
+    created_at    TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
+    FOREIGN KEY (created_by) REFERENCES admins(id) ON DELETE RESTRICT,
+    FOREIGN KEY (used_by) REFERENCES admins(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS role_permissions (
+    role          TEXT    NOT NULL,
+    permission    TEXT    NOT NULL,
+    allowed       INTEGER NOT NULL DEFAULT 1 CHECK(allowed IN (0,1)),
+    PRIMARY KEY (role, permission)
+);
+
 CREATE TABLE IF NOT EXISTS admin_audit_logs (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     admin_id      INTEGER NOT NULL,
@@ -304,6 +335,8 @@ CREATE INDEX IF NOT EXISTS idx_fault_pile_status ON fault_events(pile_id, status
 CREATE INDEX IF NOT EXISTS idx_load_samples_station_time ON station_load_samples(station_id, sampled_at);
 CREATE INDEX IF NOT EXISTS idx_forecasts_station_target ON load_forecasts(station_id, target_time, horizon_hours);
 CREATE INDEX IF NOT EXISTS idx_audit_admin_time ON admin_audit_logs(admin_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_favorites_user_type ON user_favorites(user_id, target_type);
+CREATE INDEX IF NOT EXISTS idx_invite_unused ON invite_codes(code, used_by);
 
 INSERT INTO schema_meta(version)
 SELECT 2 WHERE NOT EXISTS (SELECT 1 FROM schema_meta);

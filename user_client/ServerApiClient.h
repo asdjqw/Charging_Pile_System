@@ -24,9 +24,13 @@ public:
     bool phoneLogin(const QString &phone, User &outUser, bool &created,
                     const QString &password = QString());
     bool registerUser(const User &user);
+    bool logout();
     bool getUserById(int id, User &outUser);
     bool updateUser(const User &user);
     bool rechargeUser(int userId, double amount);
+
+    bool listFavorites(QVector<int> &stationIds, QVector<int> &pileIds);
+    bool toggleFavorite(const QString &targetType, int targetId, bool &nowFavorite);
 
     QVector<Station> listStations(double userLat, double userLng, const QString &keyword,
                                   const QString &district, int limit);

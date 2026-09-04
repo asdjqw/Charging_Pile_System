@@ -47,7 +47,7 @@ LoginDialog::LoginDialog(QWidget *parent)
     auto *loginLayout = new QVBoxLayout(loginPage);
     loginLayout->setContentsMargins(0, 0, 0, 0);
     loginLayout->setSpacing(10);
-    auto *loginHint = new QLabel(QStringLiteral("使用已注册的手机号和密码登录。"), loginPage);
+    auto *loginHint = new QLabel(QStringLiteral("输入手机号登录。未注册号码将自动创建账号；已注册账号可填写密码。"), loginPage);
     loginHint->setObjectName(QStringLiteral("muted"));
     loginHint->setWordWrap(true);
     m_phoneEdit = new QLineEdit(loginPage);
@@ -58,7 +58,7 @@ LoginDialog::LoginDialog(QWidget *parent)
         QRegularExpression(QStringLiteral("^\\d{0,11}$")), m_phoneEdit));
     m_passwordEdit = new QLineEdit(loginPage);
     m_passwordEdit->setEchoMode(QLineEdit::Password);
-    m_passwordEdit->setPlaceholderText(QStringLiteral("密码"));
+    m_passwordEdit->setPlaceholderText(QStringLiteral("密码（可留空，未注册将自动注册）"));
     m_passwordEdit->setMinimumHeight(40);
     auto *loginBtn = new QPushButton(QStringLiteral("登录"), loginPage);
     loginBtn->setMinimumHeight(44);
@@ -165,6 +165,9 @@ void LoginDialog::onLogin()
         return;
     }
     m_user = user;
+    if (created)
+        QMessageBox::information(this, QStringLiteral("已自动注册"),
+                                 QStringLiteral("该手机号尚未注册，已为您创建账号并登录。"));
     accept();
 }
 

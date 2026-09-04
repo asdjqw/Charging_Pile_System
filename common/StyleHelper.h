@@ -12,6 +12,10 @@ inline QString userClientStyle()
         QLabel#pageTitle, QLabel#titleLabel { font-size: 16px; font-weight: 600; color: #15201E; }
         QLabel#muted, QLabel#subtitleLabel { color: #64716E; font-size: 12px; }
         QLabel#countdownLabel { color: #0D7565; font-size: 13px; font-weight: 600; }
+        QLabel#chargeBanner {
+            background: #0D7565; color: white; font-size: 12px; font-weight: 600;
+            padding: 8px 14px;
+        }
         QLineEdit, QComboBox {
             padding: 7px 10px; border: 1px solid #D8E0DE; border-radius: 4px;
             background: white; selection-background-color: #D7E8E4; color: #15201E;
@@ -81,6 +85,10 @@ inline QString userClientDarkStyle()
         QLabel#pageTitle, QLabel#titleLabel { font-size: 16px; font-weight: 600; color: #F3F6F5; }
         QLabel#muted, QLabel#subtitleLabel { color: #8A9693; font-size: 12px; }
         QLabel#countdownLabel { color: #3DDBB5; font-size: 13px; font-weight: 600; }
+        QLabel#chargeBanner {
+            background: #0A5F52; color: #E8EEEC; font-size: 12px; font-weight: 600;
+            padding: 8px 14px;
+        }
         QLineEdit, QComboBox {
             padding: 7px 10px; border: 1px solid #2A3835; border-radius: 4px;
             background: #1A2422; selection-background-color: #0D7565; color: #E8EEEC;

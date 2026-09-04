@@ -6,6 +6,7 @@
 #include <QAbstractItemView>
 #include <QApplication>
 #include <QCheckBox>
+#include <QCloseEvent>
 #include <QComboBox>
 #include <QDateTime>
 #include <QDesktopServices>
@@ -24,6 +25,7 @@
 #include <QPixmap>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QSet>
 #include <QSettings>
 #include <QSizePolicy>
 #include <QStackedWidget>
@@ -126,6 +128,11 @@ void MainWindow::buildUi()
     m_tabStack->addWidget(buildStationsPage());
     m_tabStack->addWidget(buildChargePage());
     m_tabStack->addWidget(buildProfilePage());
+    m_chargeBanner = new QLabel(central);
+    m_chargeBanner->setObjectName(QStringLiteral("chargeBanner"));
+    m_chargeBanner->setWordWrap(true);
+    m_chargeBanner->hide();
+    root->addWidget(m_chargeBanner);
     root->addWidget(m_tabStack, 1);
     root->addWidget(buildBottomNav());
 }
@@ -352,6 +359,12 @@ QWidget *MainWindow::buildChargePage()
     filterRow->addWidget(m_connectorFilter, 1);
     m_pileList = new QListWidget(reserveContent);
     m_pileList->setMinimumHeight(220);
+    m_pileFavOnlyCheck = new QCheckBox(QStringLiteral("只看收藏电桩"), reserveContent);
+    m_pileFavBtn = new QPushButton(QStringLiteral("收藏电桩"), reserveContent);
+    m_pileFavBtn->setObjectName(QStringLiteral("secondaryBtn"));
+    auto *pileFavRow = new QHBoxLayout;
+    pileFavRow->addWidget(m_pileFavBtn, 1);
+    pileFavRow->addWidget(m_pileFavOnlyCheck);
     auto *reserveBtn = new QPushButton(QStringLiteral("预约 15 分钟"), reserveContent);
     reserveBtn->setMinimumHeight(46);
     reserveLayout->addWidget(reserveTitle);
@@ -360,6 +373,7 @@ QWidget *MainWindow::buildChargePage()
     reserveLayout->addWidget(new QLabel(QStringLiteral("筛选"), reserveContent));
     reserveLayout->addLayout(filterRow);
     reserveLayout->addWidget(m_pileList, 1);
+    reserveLayout->addLayout(pileFavRow);
     reserveLayout->addWidget(reserveBtn);
     reserveScroll->setWidget(reserveContent);
     reserveOuter->addWidget(reserveScroll);
@@ -463,6 +477,8 @@ QWidget *MainWindow::buildChargePage()
     connect(reserveBtn, &QPushButton::clicked, this, &MainWindow::onReservePile);
     connect(cancelReservationBtn, &QPushButton::clicked, this, &MainWindow::onCancelReservation);
     connect(stopBtn, &QPushButton::clicked, this, &MainWindow::onStopCharge);
+    connect(m_pileFavBtn, &QPushButton::clicked, this, &MainWindow::onTogglePileFavorite);
+    connect(m_pileFavOnlyCheck, &QCheckBox::toggled, this, &MainWindow::onPileFavoriteFilterToggled);
     connect(m_subNavReserve, &QPushButton::clicked, this, [this]() { onChargeSubNav(0); });
     connect(m_subNavMyReserve, &QPushButton::clicked, this, [this]() { onChargeSubNav(1); });
     connect(m_subNavCharge, &QPushButton::clicked, this, [this]() { onChargeSubNav(2); });
@@ -574,6 +590,13 @@ QWidget *MainWindow::buildProfilePage()
 
     auto *ordersTitle = new QLabel(QStringLiteral("我的充电记录"), content);
     ordersTitle->setObjectName(QStringLiteral("pageTitle"));
+    auto *refreshOrdersBtn = new QPushButton(QStringLiteral("刷新记录"), content);
+    refreshOrdersBtn->setObjectName(QStringLiteral("secondaryBtn"));
+    refreshOrdersBtn->setMinimumHeight(36);
+    auto *ordersHeader = new QHBoxLayout;
+    ordersHeader->addWidget(ordersTitle);
+    ordersHeader->addStretch();
+    ordersHeader->addWidget(refreshOrdersBtn);
 
     m_orderTable = new QTableWidget(content);
     m_orderTable->setColumnCount(5);
@@ -600,9 +623,13 @@ QWidget *MainWindow::buildProfilePage()
     layout->addWidget(saveBtn);
     layout->addWidget(m_darkModeBtn);
     layout->addWidget(walletCard);
-    layout->addWidget(ordersTitle);
+    layout->addLayout(ordersHeader);
     layout->addWidget(m_orderTable);
     layout->addWidget(m_dbInfoLabel);
+    auto *logoutBtn = new QPushButton(QStringLiteral("退出登录"), content);
+    logoutBtn->setObjectName(QStringLiteral("dangerBtn"));
+    logoutBtn->setMinimumHeight(40);
+    layout->addWidget(logoutBtn);
     layout->addStretch();
 
     scroll->setWidget(content);
@@ -612,6 +639,8 @@ QWidget *MainWindow::buildProfilePage()
     connect(avatarBtn, &QPushButton::clicked, this, &MainWindow::onChooseAvatar);
     connect(rechargeBtn, &QPushButton::clicked, this, &MainWindow::onRecharge);
     connect(m_darkModeBtn, &QPushButton::toggled, this, &MainWindow::onToggleDarkMode);
+    connect(refreshOrdersBtn, &QPushButton::clicked, this, &MainWindow::refreshOrders);
+    connect(logoutBtn, &QPushButton::clicked, this, &MainWindow::onLogout);
     return page;
 }
 
@@ -843,8 +872,11 @@ void MainWindow::refreshPilesForCharge()
     const QString connector = m_connectorFilter->currentData().toString();
     const auto piles = ServerApiClient::instance().listPiles(stationId, QString(), speed, connector);
     for (const Pile &p : piles) {
-        const QString text = QStringLiteral("%1\n%2\n%3 kW · ¥%4/kWh · %5")
-                                 .arg(p.pileCode, pileCategoryText(p))
+        if (m_pileFavOnlyCheck && m_pileFavOnlyCheck->isChecked() && !p.favorite && !isPileFavorite(p.id))
+            continue;
+        const QString star = (p.favorite || isPileFavorite(p.id)) ? QStringLiteral("★ ") : QString();
+        const QString text = QStringLiteral("%1%2\n%3\n%4 kW · ¥%5/kWh · %6")
+                                 .arg(star, p.pileCode, pileCategoryText(p))
                                  .arg(p.powerKw, 0, 'f', 1)
                                  .arg(p.pricePerKwh, 0, 'f', 2)
                                  .arg(statusTextPile(p.status));
@@ -920,12 +952,21 @@ void MainWindow::refreshOngoingBanner()
                                   .arg(m_simulatedEnergy, 0, 'f', 2)
                                   .arg(m_simulatedEnergy * m_currentPrice, 0, 'f', 2));
         m_chargeProgress->setValue(qMin(100, int(m_simulatedEnergy * 2)));
+        if (m_chargeBanner) {
+            m_chargeBanner->setText(QStringLiteral("正在充电：%1 / %2 · 已充 %3 kWh · 预估 ¥%4")
+                                        .arg(order.stationName, order.pileCode)
+                                        .arg(m_simulatedEnergy, 0, 'f', 2)
+                                        .arg(m_simulatedEnergy * m_currentPrice, 0, 'f', 2));
+            m_chargeBanner->show();
+        }
     } else {
         m_ongoing = ChargingOrder{};
         m_chargeTimer->stop();
         m_simulatedEnergy = 0;
         m_chargeProgress->setValue(0);
         m_chargeInfo->setText(QStringLiteral("当前无进行中的充电，可按分类筛选空闲桩后开始"));
+        if (m_chargeBanner)
+            m_chargeBanner->hide();
     }
 }
 
@@ -979,6 +1020,12 @@ void MainWindow::onChargeTick()
                               .arg(m_simulatedEnergy, 0, 'f', 3)
                               .arg(fee, 0, 'f', 2));
     m_chargeProgress->setValue(qMin(100, int(m_simulatedEnergy * 3)));
+    if (m_chargeBanner && m_chargeBanner->isVisible()) {
+        m_chargeBanner->setText(QStringLiteral("正在充电：%1 / %2 · 已充 %3 kWh · 预估 ¥%4")
+                                    .arg(m_ongoing.stationName, m_ongoing.pileCode)
+                                    .arg(m_simulatedEnergy, 0, 'f', 2)
+                                    .arg(fee, 0, 'f', 2));
+    }
 }
 
 void MainWindow::onStopCharge()
@@ -1101,6 +1148,13 @@ void MainWindow::refreshOrders()
 
 void MainWindow::loadFavorites()
 {
+    QVector<int> stations;
+    QVector<int> piles;
+    if (ServerApiClient::instance().listFavorites(stations, piles)) {
+        m_favoriteIds = QSet<int>(stations.begin(), stations.end());
+        m_favoritePileIds = QSet<int>(piles.begin(), piles.end());
+        return;
+    }
     QSettings settings;
     const QVariantList list = settings.value(
         QStringLiteral("favorites/%1").arg(m_user.id)).toList();
@@ -1111,11 +1165,6 @@ void MainWindow::loadFavorites()
 
 void MainWindow::saveFavorites()
 {
-    QVariantList list;
-    for (int id : m_favoriteIds)
-        list.append(id);
-    QSettings settings;
-    settings.setValue(QStringLiteral("favorites/%1").arg(m_user.id), list);
 }
 
 bool MainWindow::isFavorite(int stationId) const
@@ -1123,13 +1172,23 @@ bool MainWindow::isFavorite(int stationId) const
     return m_favoriteIds.contains(stationId);
 }
 
-void MainWindow::setFavorite(int stationId, bool on)
+bool MainWindow::isPileFavorite(int pileId) const
 {
-    if (on)
+    return m_favoritePileIds.contains(pileId);
+}
+
+void MainWindow::setFavorite(int stationId, bool)
+{
+    bool nowFav = false;
+    if (!ServerApiClient::instance().toggleFavorite(QStringLiteral("station"), stationId, nowFav)) {
+        QMessageBox::warning(this, QStringLiteral("收藏失败"),
+                             ServerApiClient::instance().lastError());
+        return;
+    }
+    if (nowFav)
         m_favoriteIds.insert(stationId);
     else
         m_favoriteIds.remove(stationId);
-    saveFavorites();
 }
 
 int MainWindow::selectedListStationId() const
@@ -1145,16 +1204,55 @@ void MainWindow::onToggleFavorite()
         QMessageBox::information(this, QStringLiteral("提示"), QStringLiteral("请先选中一个充电站"));
         return;
     }
-    const bool nowFav = !isFavorite(id);
-    setFavorite(id, nowFav);
-    statusBar()->showMessage(nowFav ? QStringLiteral("已加入收藏")
-                                    : QStringLiteral("已取消收藏"), 2500);
+    setFavorite(id, !isFavorite(id));
+    statusBar()->showMessage(isFavorite(id) ? QStringLiteral("已加入收藏")
+                                            : QStringLiteral("已取消收藏"), 2500);
     refreshStations();
+}
+
+void MainWindow::onTogglePileFavorite()
+{
+    const int pileId = selectedPileId();
+    if (pileId <= 0) {
+        QMessageBox::information(this, QStringLiteral("提示"), QStringLiteral("请先选中一个充电桩"));
+        return;
+    }
+    bool nowFav = false;
+    if (!ServerApiClient::instance().toggleFavorite(QStringLiteral("pile"), pileId, nowFav)) {
+        QMessageBox::warning(this, QStringLiteral("收藏失败"),
+                             ServerApiClient::instance().lastError());
+        return;
+    }
+    if (nowFav)
+        m_favoritePileIds.insert(pileId);
+    else
+        m_favoritePileIds.remove(pileId);
+    statusBar()->showMessage(nowFav ? QStringLiteral("已收藏该电桩")
+                                    : QStringLiteral("已取消电桩收藏"), 2500);
+    refreshPilesForCharge();
 }
 
 void MainWindow::onFavoriteFilterToggled(bool)
 {
     refreshStations();
+}
+
+void MainWindow::onPileFavoriteFilterToggled(bool)
+{
+    refreshPilesForCharge();
+}
+
+void MainWindow::onLogout()
+{
+    m_loggingOut = true;
+    emit logoutRequested();
+}
+
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+    event->accept();
+    if (!m_loggingOut)
+        QApplication::quit();
 }
 
 void MainWindow::updateReservationCountdown()
