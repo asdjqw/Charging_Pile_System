@@ -16,9 +16,20 @@ int main(int argc, char **argv)
     }
 
     User user;
-    bool created = false;
-    if (!db.phoneLogin(QStringLiteral("13655558888"), user, created) || !created) {
+    user.phone = QStringLiteral("13655558888");
+    user.password = QStringLiteral("test123");
+    user.nickname = QStringLiteral("测试用户");
+    if (!db.registerUser(user)) {
         out << "phone registration failed: " << db.lastError() << Qt::endl;
+        return 2;
+    }
+    // 已注册手机号应拒绝重复注册
+    if (db.registerUser(user)) {
+        out << "duplicate registration unexpectedly succeeded" << Qt::endl;
+        return 2;
+    }
+    if (!db.loginByPhone(user.phone, user.password, user)) {
+        out << "login after register failed: " << db.lastError() << Qt::endl;
         return 2;
     }
     if (!db.setUserStatus(user.id, QStringLiteral("frozen"), 1)) {
@@ -26,12 +37,12 @@ int main(int argc, char **argv)
         return 3;
     }
     User blocked;
-    if (db.phoneLogin(user.phone, blocked, created)) {
+    if (db.loginByPhone(user.phone, QStringLiteral("test123"), blocked)) {
         out << "frozen user unexpectedly logged in" << Qt::endl;
         return 4;
     }
     if (!db.setUserStatus(user.id, QStringLiteral("normal"), 1)
-        || !db.phoneLogin(user.phone, blocked, created) || created) {
+        || !db.loginByPhone(user.phone, QStringLiteral("test123"), blocked)) {
         out << "unfreeze failed: " << db.lastError() << Qt::endl;
         return 5;
     }
@@ -48,6 +59,11 @@ int main(int argc, char **argv)
     }
     const int pileId = piles.first().id;
     Pile pile;
+    if (!db.updatePileStatus(pileId, QStringLiteral("fault"), QStringLiteral("test"),
+                             QStringLiteral("测试置为故障后再模拟维修"))) {
+        out << "set fault failed: " << db.lastError() << Qt::endl;
+        return 8;
+    }
     if (!db.restartPile(pileId, 1) || !db.getPile(pileId, pile)
         || pile.status != QLatin1String("restarting")) {
         out << "restart command failed: " << db.lastError() << Qt::endl;

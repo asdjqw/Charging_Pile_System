@@ -43,6 +43,7 @@ private slots:
     void onStopCharge();
     void onChargeTick();
     void onReservationTick();
+    void onChargeSubNav(int index);
     void refreshProfile();
     void onSaveProfile();
     void onChooseAvatar();
@@ -59,6 +60,7 @@ private:
     QWidget *buildBottomNav();
     void refreshOngoingBanner();
     void updateReservationCountdown();
+    void updateChargeSubNavActive(int index);
     void applyUserLocation(const QString &regionOrAddress);
     void requestRealLocation();
     void loadFavorites();
@@ -103,7 +105,11 @@ private:
     QCheckBox *m_favOnlyCheck = nullptr;
     QLabel *m_navInfo = nullptr;
 
-    // 充电
+    // 充电 / 预约子页
+    QPushButton *m_subNavReserve = nullptr;
+    QPushButton *m_subNavMyReserve = nullptr;
+    QPushButton *m_subNavCharge = nullptr;
+    QStackedWidget *m_chargeSubStack = nullptr;
     QComboBox *m_stationCombo = nullptr;
     QComboBox *m_speedFilter = nullptr;
     QComboBox *m_connectorFilter = nullptr;

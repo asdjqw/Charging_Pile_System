@@ -23,11 +23,14 @@ public:
     bool loginAdmin(const QString &username, const QString &password, Admin &outAdmin);
 
     QJsonObject dashboard(int days);
-    QVector<Pile> listPiles(int stationId = -1, const QString &status = QString());
+    QStringList districts();
+    QVector<Pile> listPiles(int stationId = -1, const QString &status = QString(),
+                            const QString &district = QString());
     QJsonObject pileStats();
     bool restartPile(int pileId);
 
-    QVector<Station> listStations(const QString &keyword = QString());
+    QVector<Station> listStations(const QString &keyword = QString(),
+                                  const QString &district = QString());
     bool saveStation(Station &station, int pileCount);
     QVector<Pile> listStationPiles(int stationId, Station *outStation = nullptr);
 

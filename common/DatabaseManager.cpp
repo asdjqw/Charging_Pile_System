@@ -329,29 +329,16 @@ bool DatabaseManager::phoneLogin(const QString &phone, User &outUser, bool &crea
         m_lastError = q.lastError().text();
         return false;
     }
-    if (q.next()) {
-        readUserRow(q, outUser);
-        if (outUser.status == QLatin1String("frozen")) {
-            m_lastError = QStringLiteral("账号已被冻结，请联系管理员");
-            return false;
-        }
-        return true;
-    }
-
-    const QString username = QStringLiteral("u%1").arg(normalized);
-    const QString nickname = QStringLiteral("用户%1").arg(normalized.right(4));
-    q.prepare(QStringLiteral(
-        "INSERT INTO users(username, password, phone, nickname, balance, car_model, plate_number) "
-        "VALUES(?,'',?,?,0,'未填写','未填写')"));
-    q.addBindValue(username);
-    q.addBindValue(normalized);
-    q.addBindValue(nickname);
-    if (!q.exec()) {
-        m_lastError = q.lastError().text();
+    if (!q.next()) {
+        m_lastError = QStringLiteral("账号不存在，请先注册");
         return false;
     }
-    created = true;
-    return getUserById(q.lastInsertId().toInt(), outUser);
+    readUserRow(q, outUser);
+    if (outUser.status == QLatin1String("frozen")) {
+        m_lastError = QStringLiteral("账号已被冻结，请联系管理员");
+        return false;
+    }
+    return true;
 }
 
 bool DatabaseManager::loginByPhone(const QString &phone, const QString &password, User &outUser)
@@ -437,7 +424,7 @@ bool DatabaseManager::registerUser(const User &user)
     exists.addBindValue(phone);
     exists.addBindValue(username);
     if (exists.exec() && exists.next()) {
-        m_lastError = QStringLiteral("该手机号或用户名已注册");
+        m_lastError = QStringLiteral("该手机号已注册，请直接登录");
         return false;
     }
     const QString nickname = user.nickname.trimmed().isEmpty()
@@ -876,7 +863,8 @@ bool DatabaseManager::deleteStation(int id)
 }
 
 QVector<Pile> DatabaseManager::listPiles(int stationId, const QString &status,
-                                         const QString &speedClass, const QString &connector)
+                                         const QString &speedClass, const QString &connector,
+                                         const QString &district)
 {
     QVector<Pile> list;
     QString sql = QStringLiteral(
@@ -902,6 +890,10 @@ QVector<Pile> DatabaseManager::listPiles(int stationId, const QString &status,
     if (!connector.isEmpty()) {
         sql += QStringLiteral(" AND p.connector_standard=?");
         binds << connector;
+    }
+    if (!district.trimmed().isEmpty()) {
+        sql += QStringLiteral(" AND s.region_code=?");
+        binds << district.trimmed();
     }
     sql += QStringLiteral(" ORDER BY p.id");
     if (stationId <= 0)
@@ -1072,8 +1064,9 @@ bool DatabaseManager::restartPile(int pileId, int adminId)
     Pile pile;
     if (!getPile(pileId, pile))
         return false;
-    if (pile.status == QLatin1String("charging") || pile.status == QLatin1String("reserved")) {
-        m_lastError = QStringLiteral("充电中或已预约的电桩不能远程重启");
+    // 远程重启仅用于故障桩的模拟维修流程
+    if (pile.status != QLatin1String("fault")) {
+        m_lastError = QStringLiteral("仅故障状态的电桩可执行模拟维修（远程重启）");
         return false;
     }
     if (!m_db.transaction()) {
@@ -1081,10 +1074,10 @@ bool DatabaseManager::restartPile(int pileId, int adminId)
         return false;
     }
     if (!updatePileStatus(pileId, QStringLiteral("restarting"), QStringLiteral("admin"),
-                          QStringLiteral("管理员下发远程重启指令"))
+                          QStringLiteral("管理员模拟维修：远程重启"))
         || !writeAdminAudit(adminId, QStringLiteral("admin.pile.restart"),
                             QStringLiteral("pile"), pileId,
-                            QStringLiteral("{\"pileCode\":\"%1\"}").arg(pile.pileCode))) {
+                            QStringLiteral("{\"pileCode\":\"%1\",\"action\":\"repair\"}").arg(pile.pileCode))) {
         m_db.rollback();
         return false;
     }

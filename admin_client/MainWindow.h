@@ -33,6 +33,8 @@ private slots:
     void onStationRowClicked(int row, int column);
     void onToggleUserStatus();
     void onToggleDarkMode(bool dark);
+    void onPileDistrictChanged();
+    void onPileSelectionChanged();
 
 private:
     void buildUi();
@@ -46,6 +48,8 @@ private:
     void applyStatusChart(const QJsonObject &stats);
     void applyTheme(bool dark);
     void showApiError(const QString &title);
+    void rebuildPileStationFilter(bool keepSelection);
+    void updateRestartButtonVisibility();
 
     Admin m_admin;
     bool m_darkMode = false;
@@ -64,7 +68,10 @@ private:
     QChartView *m_statusChartView = nullptr;
     QTableWidget *m_statusDistTable = nullptr;
 
+    QComboBox *m_pileDistrictFilter = nullptr;
     QComboBox *m_pileStationFilter = nullptr;
+    QComboBox *m_pileStatusFilter = nullptr;
+    QPushButton *m_pileRestartBtn = nullptr;
     QTableWidget *m_pileTable = nullptr;
 
     QLineEdit *m_stationKeyword = nullptr;

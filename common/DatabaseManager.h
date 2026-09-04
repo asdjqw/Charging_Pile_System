@@ -47,7 +47,8 @@ public:
     QVector<Pile> listPiles(int stationId = -1,
                             const QString &status = QString(),
                             const QString &speedClass = QString(),
-                            const QString &connector = QString());
+                            const QString &connector = QString(),
+                            const QString &district = QString());
     bool getPile(int id, Pile &out);
     bool savePile(Pile &pile);
     bool deletePile(int id);

@@ -141,11 +141,24 @@ QJsonObject AdminApiClient::dashboard(int days)
     return response.value("data").toObject();
 }
 
-QVector<Pile> AdminApiClient::listPiles(int stationId, const QString &status)
+QStringList AdminApiClient::districts()
+{
+    QStringList values;
+    const QJsonObject response = call(QStringLiteral("admin.stations.districts"));
+    if (!accept(response))
+        return values;
+    for (const QJsonValue &value : response.value("data").toObject().value("items").toArray())
+        values << value.toString();
+    return values;
+}
+
+QVector<Pile> AdminApiClient::listPiles(int stationId, const QString &status, const QString &district)
 {
     QVector<Pile> values;
     const QJsonObject response = call(QStringLiteral("admin.piles.list"),
-                                      {{"stationId", stationId}, {"status", status}});
+                                      {{"stationId", stationId},
+                                       {"status", status},
+                                       {"district", district}});
     if (!accept(response))
         return values;
     for (const QJsonValue &value : response.value("data").toObject().value("items").toArray())
@@ -166,10 +179,11 @@ bool AdminApiClient::restartPile(int pileId)
     return accept(call(QStringLiteral("admin.piles.restart"), {{"pileId", pileId}}));
 }
 
-QVector<Station> AdminApiClient::listStations(const QString &keyword)
+QVector<Station> AdminApiClient::listStations(const QString &keyword, const QString &district)
 {
     QVector<Station> values;
-    const QJsonObject response = call(QStringLiteral("admin.stations.list"), {{"keyword", keyword}});
+    const QJsonObject response = call(QStringLiteral("admin.stations.list"),
+                                      {{"keyword", keyword}, {"district", district}});
     if (!accept(response))
         return values;
     for (const QJsonValue &value : response.value("data").toObject().value("items").toArray())

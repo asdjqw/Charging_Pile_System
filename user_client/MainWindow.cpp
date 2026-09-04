@@ -77,9 +77,10 @@ MainWindow::MainWindow(const User &user, QWidget *parent)
     , m_user(user)
 {
     setWindowTitle(QStringLiteral("充电用户端 - %1").arg(m_user.username));
-    resize(400, 700);
-    setMinimumSize(360, 620);
-    setMaximumWidth(440);
+    // 默认等比例放大约 1.12 倍（相对原先 400×700）
+    resize(448, 784);
+    setMinimumSize(400, 700);
+    setMaximumWidth(500);
 
     m_locationProvider = new LocationProvider(this);
     connect(m_locationProvider, &LocationProvider::locationUpdated,
@@ -184,6 +185,35 @@ void MainWindow::onBottomNav(int index)
     }
 }
 
+void MainWindow::updateChargeSubNavActive(int index)
+{
+    auto setActive = [](QPushButton *btn, bool on) {
+        if (!btn)
+            return;
+        btn->setProperty("active", on);
+        btn->style()->unpolish(btn);
+        btn->style()->polish(btn);
+        btn->update();
+    };
+    setActive(m_subNavReserve, index == 0);
+    setActive(m_subNavMyReserve, index == 1);
+    setActive(m_subNavCharge, index == 2);
+}
+
+void MainWindow::onChargeSubNav(int index)
+{
+    if (!m_chargeSubStack)
+        return;
+    m_chargeSubStack->setCurrentIndex(index);
+    updateChargeSubNavActive(index);
+    if (index == 0)
+        refreshPilesForCharge();
+    if (index == 1)
+        updateReservationCountdown();
+    if (index == 2)
+        refreshOngoingBanner();
+}
+
 QWidget *MainWindow::buildStationsPage()
 {
     auto *page = new QWidget(this);
@@ -269,76 +299,156 @@ QWidget *MainWindow::buildChargePage()
     auto *pageLayout = new QVBoxLayout(page);
     pageLayout->setContentsMargins(0, 0, 0, 0);
     pageLayout->setSpacing(0);
-    auto *scroll = new QScrollArea(page);
-    scroll->setWidgetResizable(true);
-    scroll->setFrameShape(QFrame::NoFrame);
-    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 
-    auto *content = new QWidget(scroll);
-    content->setObjectName(QStringLiteral("centralRoot"));
-    auto *layout = new QVBoxLayout(content);
-    layout->setContentsMargins(14, 12, 14, 8);
-    layout->setSpacing(8);
+    auto *subNav = new QWidget(page);
+    subNav->setObjectName(QStringLiteral("bottomNav"));
+    subNav->setFixedHeight(44);
+    auto *subLayout = new QHBoxLayout(subNav);
+    subLayout->setContentsMargins(0, 0, 0, 0);
+    subLayout->setSpacing(0);
+    m_subNavReserve = new QPushButton(QStringLiteral("预约"), subNav);
+    m_subNavMyReserve = new QPushButton(QStringLiteral("我的预约"), subNav);
+    m_subNavCharge = new QPushButton(QStringLiteral("充电"), subNav);
+    for (auto *btn : {m_subNavReserve, m_subNavMyReserve, m_subNavCharge}) {
+        btn->setFlat(true);
+        btn->setObjectName(QStringLiteral("navBtn"));
+        btn->setMinimumHeight(44);
+        subLayout->addWidget(btn, 1);
+    }
 
-    auto *header = new QLabel(QStringLiteral("充电"), page);
-    header->setObjectName(QStringLiteral("pageTitle"));
+    m_chargeSubStack = new QStackedWidget(page);
 
-    m_stationCombo = new QComboBox(page);
-    m_speedFilter = new QComboBox(page);
+    // —— 预约：选站选桩 ——
+    auto *reservePage = new QWidget(m_chargeSubStack);
+    auto *reserveOuter = new QVBoxLayout(reservePage);
+    reserveOuter->setContentsMargins(0, 0, 0, 0);
+    auto *reserveScroll = new QScrollArea(reservePage);
+    reserveScroll->setWidgetResizable(true);
+    reserveScroll->setFrameShape(QFrame::NoFrame);
+    reserveScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    auto *reserveContent = new QWidget(reserveScroll);
+    reserveContent->setObjectName(QStringLiteral("centralRoot"));
+    auto *reserveLayout = new QVBoxLayout(reserveContent);
+    reserveLayout->setContentsMargins(16, 14, 16, 12);
+    reserveLayout->setSpacing(10);
+    auto *reserveTitle = new QLabel(QStringLiteral("预约充电桩"), reserveContent);
+    reserveTitle->setObjectName(QStringLiteral("pageTitle"));
+    m_stationCombo = new QComboBox(reserveContent);
+    m_speedFilter = new QComboBox(reserveContent);
     m_speedFilter->addItem(QStringLiteral("全部速度"), QString());
     m_speedFilter->addItem(QStringLiteral("慢充"), QStringLiteral("slow"));
     m_speedFilter->addItem(QStringLiteral("常规"), QStringLiteral("standard"));
     m_speedFilter->addItem(QStringLiteral("快充"), QStringLiteral("fast"));
     m_speedFilter->addItem(QStringLiteral("超充"), QStringLiteral("ultra"));
-
-    m_connectorFilter = new QComboBox(page);
+    m_connectorFilter = new QComboBox(reserveContent);
     m_connectorFilter->addItem(QStringLiteral("全部接口"), QString());
     m_connectorFilter->addItem(QStringLiteral("国标交流"), QStringLiteral("GB_T_AC"));
     m_connectorFilter->addItem(QStringLiteral("国标直流"), QStringLiteral("GB_T_DC"));
     m_connectorFilter->addItem(QStringLiteral("CCS2"), QStringLiteral("CCS2"));
     m_connectorFilter->addItem(QStringLiteral("CHAdeMO"), QStringLiteral("CHAdeMO"));
     m_connectorFilter->addItem(QStringLiteral("特斯拉NACS"), QStringLiteral("TeslaNACS"));
-
     auto *filterRow = new QHBoxLayout;
     filterRow->addWidget(m_speedFilter, 1);
     filterRow->addWidget(m_connectorFilter, 1);
+    m_pileList = new QListWidget(reserveContent);
+    m_pileList->setMinimumHeight(220);
+    auto *reserveBtn = new QPushButton(QStringLiteral("预约 15 分钟"), reserveContent);
+    reserveBtn->setMinimumHeight(46);
+    reserveLayout->addWidget(reserveTitle);
+    reserveLayout->addWidget(new QLabel(QStringLiteral("选择充电站"), reserveContent));
+    reserveLayout->addWidget(m_stationCombo);
+    reserveLayout->addWidget(new QLabel(QStringLiteral("筛选"), reserveContent));
+    reserveLayout->addLayout(filterRow);
+    reserveLayout->addWidget(m_pileList, 1);
+    reserveLayout->addWidget(reserveBtn);
+    reserveScroll->setWidget(reserveContent);
+    reserveOuter->addWidget(reserveScroll);
 
-    m_pileList = new QListWidget(content);
-    m_pileList->setMinimumHeight(180);
-    m_reservationInfo = new QLabel(QStringLiteral("当前无有效预约"), page);
+    // —— 我的预约：详情 ——
+    auto *myPage = new QWidget(m_chargeSubStack);
+    auto *myOuter = new QVBoxLayout(myPage);
+    myOuter->setContentsMargins(0, 0, 0, 0);
+    auto *myScroll = new QScrollArea(myPage);
+    myScroll->setWidgetResizable(true);
+    myScroll->setFrameShape(QFrame::NoFrame);
+    myScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    auto *myContent = new QWidget(myScroll);
+    myContent->setObjectName(QStringLiteral("centralRoot"));
+    auto *myLayout = new QVBoxLayout(myContent);
+    myLayout->setContentsMargins(16, 14, 16, 12);
+    myLayout->setSpacing(12);
+    auto *myTitle = new QLabel(QStringLiteral("我的预约"), myContent);
+    myTitle->setObjectName(QStringLiteral("pageTitle"));
+    auto *detailCard = new QFrame(myContent);
+    detailCard->setObjectName(QStringLiteral("card"));
+    auto *detailLayout = new QVBoxLayout(detailCard);
+    detailLayout->setContentsMargins(14, 14, 14, 14);
+    m_reservationInfo = new QLabel(QStringLiteral("当前无有效预约"), detailCard);
     m_reservationInfo->setObjectName(QStringLiteral("countdownLabel"));
     m_reservationInfo->setWordWrap(true);
-    m_chargeInfo = new QLabel(QStringLiteral("当前无进行中的充电"), page);
+    m_reservationInfo->setMinimumHeight(120);
+    detailLayout->addWidget(m_reservationInfo);
+    auto *cancelReservationBtn = new QPushButton(QStringLiteral("取消预约"), myContent);
+    cancelReservationBtn->setObjectName(QStringLiteral("secondaryBtn"));
+    cancelReservationBtn->setMinimumHeight(44);
+    auto *myHint = new QLabel(
+        QStringLiteral("预约成功后可在此查看站点、电桩、预约号与剩余时间。"), myContent);
+    myHint->setObjectName(QStringLiteral("muted"));
+    myHint->setWordWrap(true);
+    myLayout->addWidget(myTitle);
+    myLayout->addWidget(detailCard);
+    myLayout->addWidget(cancelReservationBtn);
+    myLayout->addWidget(myHint);
+    myLayout->addStretch();
+    myScroll->setWidget(myContent);
+    myOuter->addWidget(myScroll);
+
+    // —— 充电 ——
+    auto *chargePage = new QWidget(m_chargeSubStack);
+    auto *chargeOuter = new QVBoxLayout(chargePage);
+    chargeOuter->setContentsMargins(0, 0, 0, 0);
+    auto *chargeScroll = new QScrollArea(chargePage);
+    chargeScroll->setWidgetResizable(true);
+    chargeScroll->setFrameShape(QFrame::NoFrame);
+    chargeScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    auto *chargeContent = new QWidget(chargeScroll);
+    chargeContent->setObjectName(QStringLiteral("centralRoot"));
+    auto *chargeLayout = new QVBoxLayout(chargeContent);
+    chargeLayout->setContentsMargins(16, 14, 16, 12);
+    chargeLayout->setSpacing(10);
+    auto *chargeTitle = new QLabel(QStringLiteral("充电"), chargeContent);
+    chargeTitle->setObjectName(QStringLiteral("pageTitle"));
+    m_chargeInfo = new QLabel(QStringLiteral("当前无进行中的充电"), chargeContent);
     m_chargeInfo->setWordWrap(true);
-    m_chargeProgress = new QProgressBar(page);
+    m_chargeProgress = new QProgressBar(chargeContent);
     m_chargeProgress->setRange(0, 100);
     m_chargeProgress->setValue(0);
-
-    auto *chargeBtns = new QGridLayout;
-    chargeBtns->setHorizontalSpacing(6);
-    chargeBtns->setVerticalSpacing(6);
-    auto *reserveBtn = new QPushButton(QStringLiteral("预约15分钟"), page);
-    reserveBtn->setObjectName(QStringLiteral("secondaryBtn"));
-    auto *cancelReservationBtn = new QPushButton(QStringLiteral("取消预约"), page);
-    cancelReservationBtn->setObjectName(QStringLiteral("secondaryBtn"));
-    auto *startBtn = new QPushButton(QStringLiteral("开始充电"), page);
-    auto *stopBtn = new QPushButton(QStringLiteral("结束充电"), page);
+    auto *startBtn = new QPushButton(QStringLiteral("开始充电"), chargeContent);
+    startBtn->setMinimumHeight(46);
+    auto *stopBtn = new QPushButton(QStringLiteral("结束充电"), chargeContent);
     stopBtn->setObjectName(QStringLiteral("dangerBtn"));
-    chargeBtns->addWidget(reserveBtn, 0, 0);
-    chargeBtns->addWidget(cancelReservationBtn, 0, 1);
-    chargeBtns->addWidget(startBtn, 1, 0);
-    chargeBtns->addWidget(stopBtn, 1, 1);
+    stopBtn->setMinimumHeight(44);
+    auto *chargeHint = new QLabel(
+        QStringLiteral("可先在「预约」页选择空闲桩，或直接对已预约电桩开始充电。"), chargeContent);
+    chargeHint->setObjectName(QStringLiteral("muted"));
+    chargeHint->setWordWrap(true);
+    chargeLayout->addWidget(chargeTitle);
+    chargeLayout->addWidget(m_chargeInfo);
+    chargeLayout->addWidget(m_chargeProgress);
+    chargeLayout->addWidget(startBtn);
+    chargeLayout->addWidget(stopBtn);
+    chargeLayout->addWidget(chargeHint);
+    chargeLayout->addStretch();
+    chargeScroll->setWidget(chargeContent);
+    chargeOuter->addWidget(chargeScroll);
 
-    layout->addWidget(header);
-    layout->addWidget(new QLabel(QStringLiteral("选择充电站"), page));
-    layout->addWidget(m_stationCombo);
-    layout->addWidget(new QLabel(QStringLiteral("筛选"), page));
-    layout->addLayout(filterRow);
-    layout->addWidget(m_pileList, 1);
-    layout->addWidget(m_reservationInfo);
-    layout->addWidget(m_chargeInfo);
-    layout->addWidget(m_chargeProgress);
-    layout->addLayout(chargeBtns);
+    m_chargeSubStack->addWidget(reservePage);
+    m_chargeSubStack->addWidget(myPage);
+    m_chargeSubStack->addWidget(chargePage);
+
+    pageLayout->addWidget(subNav);
+    pageLayout->addWidget(m_chargeSubStack, 1);
+    updateChargeSubNavActive(0);
 
     m_chargeTimer = new QTimer(this);
     m_chargeTimer->setInterval(1000);
@@ -353,8 +463,9 @@ QWidget *MainWindow::buildChargePage()
     connect(reserveBtn, &QPushButton::clicked, this, &MainWindow::onReservePile);
     connect(cancelReservationBtn, &QPushButton::clicked, this, &MainWindow::onCancelReservation);
     connect(stopBtn, &QPushButton::clicked, this, &MainWindow::onStopCharge);
-    scroll->setWidget(content);
-    pageLayout->addWidget(scroll);
+    connect(m_subNavReserve, &QPushButton::clicked, this, [this]() { onChargeSubNav(0); });
+    connect(m_subNavMyReserve, &QPushButton::clicked, this, [this]() { onChargeSubNav(1); });
+    connect(m_subNavCharge, &QPushButton::clicked, this, [this]() { onChargeSubNav(2); });
     return page;
 }
 
@@ -766,8 +877,11 @@ void MainWindow::onReservePile()
     }
     m_reservation = reservation;
     refreshPilesForCharge();
+    updateReservationCountdown();
+    onChargeSubNav(1);
     QMessageBox::information(this, QStringLiteral("预约成功"),
-                             QStringLiteral("电桩已为您保留至 %1").arg(reservation.expiresAt));
+                             QStringLiteral("电桩已为您保留至 %1\n可在「我的预约」查看详情。")
+                                 .arg(reservation.expiresAt));
 }
 
 void MainWindow::onCancelReservation()
@@ -782,6 +896,7 @@ void MainWindow::onCancelReservation()
         return;
     }
     m_reservation = ChargingReservation{};
+    updateReservationCountdown();
     refreshPilesForCharge();
 }
 
@@ -1047,7 +1162,8 @@ void MainWindow::updateReservationCountdown()
     if (!m_reservationInfo)
         return;
     if (m_reservation.id <= 0) {
-        m_reservationInfo->setText(QStringLiteral("当前无有效预约"));
+        m_reservationInfo->setText(
+            QStringLiteral("当前无有效预约\n\n请在「预约」页选择空闲电桩进行预约。"));
         return;
     }
 
@@ -1055,7 +1171,7 @@ void MainWindow::updateReservationCountdown()
                                                     QStringLiteral("yyyy-MM-dd HH:mm:ss"));
     if (!expires.isValid()) {
         m_reservationInfo->setText(
-            QStringLiteral("有效预约：%1 / %2\n预约号 %3\n到期 %4")
+            QStringLiteral("站点：%1\n电桩：%2\n预约号：%3\n到期时间：%4")
                 .arg(m_reservation.stationName, m_reservation.pileCode,
                      m_reservation.reservationNo, m_reservation.expiresAt));
         return;
@@ -1065,7 +1181,6 @@ void MainWindow::updateReservationCountdown()
     if (secs <= 0) {
         m_reservationInfo->setText(QStringLiteral("预约已到期，正在刷新…"));
         m_reservation = ChargingReservation{};
-        // 到期后刷新一次桩状态
         QTimer::singleShot(300, this, &MainWindow::refreshPilesForCharge);
         return;
     }
@@ -1073,7 +1188,7 @@ void MainWindow::updateReservationCountdown()
     const int mm = int(secs / 60);
     const int ss = int(secs % 60);
     m_reservationInfo->setText(
-        QStringLiteral("有效预约：%1 / %2\n预约号 %3\n剩余 %4:%5（到期 %6）")
+        QStringLiteral("站点：%1\n电桩：%2\n预约号：%3\n剩余时间：%4:%5\n到期时间：%6")
             .arg(m_reservation.stationName, m_reservation.pileCode, m_reservation.reservationNo)
             .arg(mm, 2, 10, QChar('0'))
             .arg(ss, 2, 10, QChar('0'))
@@ -1099,6 +1214,7 @@ void MainWindow::restoreSession()
                          .arg(order.energyKwh, 0, 'f', 2);
         refreshOngoingBanner();
         onBottomNav(1);
+        onChargeSubNav(2);
     }
 
     ChargingReservation reservation;
@@ -1109,8 +1225,8 @@ void MainWindow::restoreSession()
                               reservation.pileCode, reservation.expiresAt);
         refreshPilesForCharge();
         updateReservationCountdown();
-        if (m_tabStack->currentIndex() != 1)
-            onBottomNav(1);
+        onBottomNav(1);
+        onChargeSubNav(1);
     }
 
     if (!recovered.isEmpty()) {

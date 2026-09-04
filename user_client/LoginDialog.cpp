@@ -18,7 +18,8 @@ LoginDialog::LoginDialog(QWidget *parent)
     : QDialog(parent)
 {
     setWindowTitle(QStringLiteral("用户登录"));
-    setFixedSize(400, 700);
+    // 与主窗口同比例放大（约 1.12 倍）
+    setFixedSize(448, 784);
     QSettings settings;
     const bool dark = settings.value(QStringLiteral("ui/darkMode"), false).toBool();
     setStyleSheet(dark ? StyleHelper::userClientDarkStyle()
@@ -147,6 +148,14 @@ void LoginDialog::showRegisterPage()
 
 void LoginDialog::onLogin()
 {
+    if (m_phoneEdit->text().trimmed().size() != 11) {
+        QMessageBox::warning(this, QStringLiteral("提示"), QStringLiteral("请输入 11 位手机号"));
+        return;
+    }
+    if (m_passwordEdit->text().isEmpty()) {
+        QMessageBox::warning(this, QStringLiteral("提示"), QStringLiteral("请输入密码"));
+        return;
+    }
     User user;
     bool created = false;
     if (!ServerApiClient::instance().phoneLogin(m_phoneEdit->text().trimmed(), user, created,
@@ -161,6 +170,14 @@ void LoginDialog::onLogin()
 
 void LoginDialog::onRegister()
 {
+    if (m_regPhoneEdit->text().trimmed().size() != 11) {
+        QMessageBox::warning(this, QStringLiteral("提示"), QStringLiteral("请输入 11 位手机号"));
+        return;
+    }
+    if (m_regPasswordEdit->text().size() < 6) {
+        QMessageBox::warning(this, QStringLiteral("提示"), QStringLiteral("密码至少 6 位"));
+        return;
+    }
     if (m_regPasswordEdit->text() != m_regConfirmEdit->text()) {
         QMessageBox::warning(this, QStringLiteral("提示"), QStringLiteral("两次输入的密码不一致"));
         return;

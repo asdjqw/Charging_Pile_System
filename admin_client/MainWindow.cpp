@@ -279,19 +279,40 @@ QWidget *MainWindow::buildPilePage()
     auto *page = new QWidget(this);
     auto *layout = new QVBoxLayout(page);
 
-    auto *row = new QHBoxLayout;
+    auto *titleRow = new QHBoxLayout;
     auto *title = new QLabel(QStringLiteral("充电桩管理"), page);
     title->setObjectName(QStringLiteral("pageTitle"));
-    m_pileStationFilter = new QComboBox(page);
     auto *refreshBtn = new QPushButton(QStringLiteral("刷新"), page);
-    auto *restartBtn = new QPushButton(QStringLiteral("远程重启"), page);
-    restartBtn->setObjectName(QStringLiteral("secondaryBtn"));
-    row->addWidget(title);
-    row->addStretch();
-    row->addWidget(new QLabel(QStringLiteral("所属电站"), page));
-    row->addWidget(m_pileStationFilter, 1);
-    row->addWidget(restartBtn);
-    row->addWidget(refreshBtn);
+    m_pileRestartBtn = new QPushButton(QStringLiteral("模拟维修（远程重启）"), page);
+    m_pileRestartBtn->setObjectName(QStringLiteral("secondaryBtn"));
+    m_pileRestartBtn->setVisible(false);
+    titleRow->addWidget(title);
+    titleRow->addStretch();
+    titleRow->addWidget(m_pileRestartBtn);
+    titleRow->addWidget(refreshBtn);
+
+    auto *filterRow = new QHBoxLayout;
+    m_pileDistrictFilter = new QComboBox(page);
+    m_pileStationFilter = new QComboBox(page);
+    m_pileStatusFilter = new QComboBox(page);
+    m_pileStatusFilter->addItem(QStringLiteral("全部状态"), QString());
+    m_pileStatusFilter->addItem(QStringLiteral("空闲"), QStringLiteral("idle"));
+    m_pileStatusFilter->addItem(QStringLiteral("已预约"), QStringLiteral("reserved"));
+    m_pileStatusFilter->addItem(QStringLiteral("充电中"), QStringLiteral("charging"));
+    m_pileStatusFilter->addItem(QStringLiteral("故障"), QStringLiteral("fault"));
+    m_pileStatusFilter->addItem(QStringLiteral("离线"), QStringLiteral("offline"));
+    m_pileStatusFilter->addItem(QStringLiteral("维修中"), QStringLiteral("restarting"));
+    filterRow->addWidget(new QLabel(QStringLiteral("城区"), page));
+    filterRow->addWidget(m_pileDistrictFilter, 1);
+    filterRow->addWidget(new QLabel(QStringLiteral("站点"), page));
+    filterRow->addWidget(m_pileStationFilter, 2);
+    filterRow->addWidget(new QLabel(QStringLiteral("电桩状态"), page));
+    filterRow->addWidget(m_pileStatusFilter, 1);
+
+    auto *hint = new QLabel(
+        QStringLiteral("筛选路径：城区 → 站点 → 状态。「模拟维修」仅在选中故障电桩时出现。"), page);
+    hint->setObjectName(QStringLiteral("muted"));
+    hint->setWordWrap(true);
 
     m_pileTable = new QTableWidget(page);
     setupTable(m_pileTable, {
@@ -300,12 +321,20 @@ QWidget *MainWindow::buildPilePage()
         QStringLiteral("累计充电次数"), QStringLiteral("累计充电时长")
     });
 
-    layout->addLayout(row);
+    layout->addLayout(titleRow);
+    layout->addLayout(filterRow);
+    layout->addWidget(hint);
     layout->addWidget(m_pileTable, 1);
     connect(refreshBtn, &QPushButton::clicked, this, &MainWindow::refreshPiles);
+    connect(m_pileDistrictFilter, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &MainWindow::onPileDistrictChanged);
     connect(m_pileStationFilter, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &MainWindow::refreshPiles);
-    connect(restartBtn, &QPushButton::clicked, this, &MainWindow::onRestartPile);
+    connect(m_pileStatusFilter, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &MainWindow::refreshPiles);
+    connect(m_pileRestartBtn, &QPushButton::clicked, this, &MainWindow::onRestartPile);
+    connect(m_pileTable, &QTableWidget::itemSelectionChanged,
+            this, &MainWindow::onPileSelectionChanged);
     return page;
 }
 
@@ -529,30 +558,88 @@ void MainWindow::refreshPileStatus()
     applyStatusChart(stats);
 }
 
-void MainWindow::refreshPiles()
+void MainWindow::rebuildPileStationFilter(bool keepSelection)
 {
-    const bool hadSelection = m_pileStationFilter->count() > 0;
-    const int current = m_pileStationFilter->currentData().toInt();
-    const auto stations = AdminApiClient::instance().listStations();
+    const int currentStation = m_pileStationFilter->currentData().toInt();
+    const QString district = m_pileDistrictFilter->currentData().toString();
+    const auto stations = AdminApiClient::instance().listStations(QString(), district);
+
     m_pileStationFilter->blockSignals(true);
     m_pileStationFilter->clear();
-    m_pileStationFilter->addItem(QStringLiteral("全部站点（最多 500 条）"), -1);
+    m_pileStationFilter->addItem(
+        district.isEmpty() ? QStringLiteral("全部站点（最多 500 条）")
+                           : QStringLiteral("该城区全部站点"),
+        -1);
     for (const Station &station : stations)
         m_pileStationFilter->addItem(station.name, station.id);
-    if (hadSelection) {
-        const int idx = m_pileStationFilter->findData(current);
+    if (keepSelection) {
+        const int idx = m_pileStationFilter->findData(currentStation);
         m_pileStationFilter->setCurrentIndex(idx >= 0 ? idx : 0);
-    } else if (m_pileStationFilter->count() > 1) {
-        m_pileStationFilter->setCurrentIndex(1);
+    } else {
+        m_pileStationFilter->setCurrentIndex(0);
     }
     m_pileStationFilter->blockSignals(false);
+}
 
+void MainWindow::updateRestartButtonVisibility()
+{
+    if (!m_pileRestartBtn || !m_pileTable)
+        return;
+    const int row = m_pileTable->currentRow();
+    bool show = false;
+    if (row >= 0 && m_pileTable->item(row, 0)) {
+        const QString status = m_pileTable->item(row, 0)->data(Qt::UserRole + 1).toString();
+        show = (status == QLatin1String("fault"));
+    }
+    m_pileRestartBtn->setVisible(show);
+}
+
+void MainWindow::onPileDistrictChanged()
+{
+    rebuildPileStationFilter(false);
+    refreshPiles();
+}
+
+void MainWindow::onPileSelectionChanged()
+{
+    updateRestartButtonVisibility();
+}
+
+void MainWindow::refreshPiles()
+{
+    const QString currentDistrict = m_pileDistrictFilter->currentData().toString();
+    const QString currentStatus = m_pileStatusFilter->currentData().toString();
+    const bool hadDistrict = m_pileDistrictFilter->count() > 0;
+
+    m_pileDistrictFilter->blockSignals(true);
+    m_pileDistrictFilter->clear();
+    m_pileDistrictFilter->addItem(QStringLiteral("全部城区"), QString());
+    for (const QString &district : AdminApiClient::instance().districts())
+        m_pileDistrictFilter->addItem(district, district);
+    if (hadDistrict) {
+        const int idx = m_pileDistrictFilter->findData(currentDistrict);
+        m_pileDistrictFilter->setCurrentIndex(idx >= 0 ? idx : 0);
+    }
+    m_pileDistrictFilter->blockSignals(false);
+
+    m_pileStatusFilter->blockSignals(true);
+    const int statusIdx = m_pileStatusFilter->findData(currentStatus);
+    if (statusIdx >= 0)
+        m_pileStatusFilter->setCurrentIndex(statusIdx);
+    m_pileStatusFilter->blockSignals(false);
+
+    rebuildPileStationFilter(true);
+
+    const QString district = m_pileDistrictFilter->currentData().toString();
     const int stationId = m_pileStationFilter->currentData().toInt();
-    const auto piles = AdminApiClient::instance().listPiles(stationId);
+    const QString status = m_pileStatusFilter->currentData().toString();
+    const auto piles = AdminApiClient::instance().listPiles(stationId, status, district);
     m_pileTable->setRowCount(piles.size());
     for (int i = 0; i < piles.size(); ++i) {
         const Pile &p = piles[i];
-        m_pileTable->setItem(i, 0, textItem(p.pileCode, p.id));
+        auto *codeItem = textItem(p.pileCode, p.id);
+        codeItem->setData(Qt::UserRole + 1, p.status);
+        m_pileTable->setItem(i, 0, codeItem);
         m_pileTable->setItem(i, 1, textItem(p.stationName));
         m_pileTable->setItem(i, 2, textItem(chargeKindText(p)));
         m_pileTable->setItem(i, 3, textItem(QString::number(p.powerKw, 'f', 1)));
@@ -560,6 +647,7 @@ void MainWindow::refreshPiles()
         m_pileTable->setItem(i, 5, textItem(QString::number(p.totalChargeCount)));
         m_pileTable->setItem(i, 6, textItem(QStringLiteral("%1 分钟").arg(p.totalChargeSeconds / 60)));
     }
+    updateRestartButtonVisibility();
 }
 
 void MainWindow::refreshStations()
@@ -598,21 +686,29 @@ void MainWindow::onRestartPile()
 {
     const int row = m_pileTable->currentRow();
     if (row < 0) {
-        QMessageBox::information(this, QStringLiteral("提示"), QStringLiteral("请先选中电桩"));
+        QMessageBox::information(this, QStringLiteral("提示"), QStringLiteral("请先选中故障电桩"));
         return;
     }
     const int pileId = m_pileTable->item(row, 0)->data(Qt::UserRole).toInt();
     const QString code = m_pileTable->item(row, 0)->text();
-    if (QMessageBox::question(this, QStringLiteral("远程重启"),
-                              QStringLiteral("确认向电桩 %1 发送模拟重启指令？").arg(code))
+    const QString status = m_pileTable->item(row, 0)->data(Qt::UserRole + 1).toString();
+    if (status != QLatin1String("fault")) {
+        QMessageBox::information(this, QStringLiteral("提示"),
+                                 QStringLiteral("仅故障电桩可执行模拟维修（远程重启）。"));
+        return;
+    }
+    if (QMessageBox::question(this, QStringLiteral("模拟维修"),
+                              QStringLiteral("确认对故障电桩 %1 执行模拟维修？\n"
+                                             "状态将变为「维修中」，约 1.5 秒后恢复空闲。")
+                                  .arg(code))
         != QMessageBox::Yes)
         return;
     if (!AdminApiClient::instance().restartPile(pileId)) {
-        showApiError(QStringLiteral("远程重启失败"));
+        showApiError(QStringLiteral("模拟维修失败"));
         return;
     }
     QMessageBox::information(this, QStringLiteral("已下发"),
-                             QStringLiteral("重启指令已发送，约 1.5 秒后桩将恢复空闲。"));
+                             QStringLiteral("模拟维修已开始，电桩进入维修中，稍后恢复空闲。"));
     refreshPiles();
     QTimer::singleShot(1800, this, [this]() {
         refreshPiles();

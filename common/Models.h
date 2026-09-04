@@ -93,7 +93,7 @@ inline QString statusTextPile(const QString &status)
     if (status == QLatin1String("charging")) return QStringLiteral("充电中");
     if (status == QLatin1String("fault")) return QStringLiteral("故障");
     if (status == QLatin1String("offline")) return QStringLiteral("离线");
-    if (status == QLatin1String("restarting")) return QStringLiteral("重启中");
+    if (status == QLatin1String("restarting")) return QStringLiteral("维修中");
     return status;
 }
 

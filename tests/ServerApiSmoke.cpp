@@ -20,14 +20,27 @@ int main(int argc, char **argv)
     bool created = false;
     const QString newPhone = QStringLiteral("136%1").arg(
         QDateTime::currentMSecsSinceEpoch() % 100000000, 8, 10, QLatin1Char('0'));
-    if (!client.phoneLogin(newPhone, autoCreatedUser, created)
-        || !created || autoCreatedUser.nickname != QStringLiteral("用户%1").arg(newPhone.right(4))) {
-        out << "automatic registration failed: " << client.lastError() << Qt::endl;
+    User reg;
+    reg.phone = newPhone;
+    reg.password = QStringLiteral("test123");
+    reg.nickname = QStringLiteral("用户%1").arg(newPhone.right(4));
+    if (!client.registerUser(reg)) {
+        out << "registration failed: " << client.lastError() << Qt::endl;
+        return 2;
+    }
+    // 重复注册应失败
+    if (client.registerUser(reg)) {
+        out << "duplicate registration unexpectedly succeeded" << Qt::endl;
+        return 2;
+    }
+    if (!client.phoneLogin(newPhone, autoCreatedUser, created, reg.password)
+        || autoCreatedUser.nickname != reg.nickname) {
+        out << "login after registration failed: " << client.lastError() << Qt::endl;
         return 2;
     }
 
     User user;
-    if (!client.phoneLogin(QStringLiteral("13800001111"), user, created)) {
+    if (!client.phoneLogin(QStringLiteral("13800001111"), user, created, QStringLiteral("123456"))) {
         out << "login failed: " << client.lastError() << Qt::endl;
         return 3;
     }

@@ -100,17 +100,17 @@ QJsonObject ApiDispatcher::dispatch(const QJsonObject &request)
         User user;
         bool created = false;
         const QString password = data.value("password").toString();
-        if (!password.isEmpty()) {
-            if (!db.loginByPhone(data.value("phone").toString(), password, user))
-                return failure(request, QStringLiteral("AUTH_FAILED"), db.lastError());
-        } else if (!db.phoneLogin(data.value("phone").toString(), user, created)) {
+        // 已提供独立注册接口，登录不再自动开户
+        if (password.isEmpty())
+            return failure(request, QStringLiteral("AUTH_FAILED"),
+                           QStringLiteral("请输入密码登录；新用户请先注册"));
+        if (!db.loginByPhone(data.value("phone").toString(), password, user))
             return failure(request, QStringLiteral("AUTH_FAILED"), db.lastError());
-        }
         const QString token = QUuid::createUuid().toString(QUuid::WithoutBraces);
         m_sessions.insert(token, {user.id, QDateTime::currentDateTimeUtc().addSecs(12 * 60 * 60)});
         return success(request, QJsonObject{{"token", token}, {"created", created},
                                             {"user", JsonCodec::toJson(user)}},
-                       created ? QStringLiteral("已创建新用户") : QStringLiteral("登录成功"));
+                       QStringLiteral("登录成功"));
     }
 
     if (action == QLatin1String("user.register")) {
@@ -333,9 +333,19 @@ QJsonObject ApiDispatcher::dispatchAdmin(const QJsonObject &request, int adminId
         return success(request, dashboardPayload(days));
     }
 
+    if (action == QLatin1String("admin.stations.districts")) {
+        QJsonArray values;
+        for (const QString &district : db.districts())
+            values.append(district);
+        return success(request, QJsonObject{{"items", values}});
+    }
+
     if (action == QLatin1String("admin.piles.list")) {
-        return success(request, QJsonObject{{"items", pilesJson(db.listPiles(data.value("stationId").toInt(-1),
-                                                                    data.value("status").toString()))},
+        return success(request, QJsonObject{{"items", pilesJson(db.listPiles(
+                                            data.value("stationId").toInt(-1),
+                                            data.value("status").toString(),
+                                            QString(), QString(),
+                                            data.value("district").toString()))},
                                             {"stats", dashboardPayload(7).value("stats").toObject()}});
     }
 
@@ -346,16 +356,17 @@ QJsonObject ApiDispatcher::dispatchAdmin(const QJsonObject &request, int adminId
         QTimer::singleShot(1500, this, [pileId]() {
             DatabaseManager::instance().updatePileStatus(
                 pileId, QStringLiteral("idle"), QStringLiteral("pile"),
-                QStringLiteral("模拟重启完成"));
+                QStringLiteral("模拟维修完成，电桩恢复空闲"));
         });
-        return success(request, QJsonObject(), QStringLiteral("已向电桩下发远程重启指令"));
+        return success(request, QJsonObject(), QStringLiteral("已进入模拟维修（远程重启）"));
     }
 
     if (action == QLatin1String("admin.stations.list")) {
         const QString keyword = data.value("keyword").toString();
+        const QString district = data.value("district").toString();
         return success(request, QJsonObject{
-            {"items", stationsJson(db.listStations(39.9042, 116.4074, keyword, QString(), 1000, 0))},
-            {"total", db.stationCount(keyword)}});
+            {"items", stationsJson(db.listStations(39.9042, 116.4074, keyword, district, 1000, 0))},
+            {"total", db.stationCount(keyword, district)}});
     }
 
     if (action == QLatin1String("admin.stations.save")) {
