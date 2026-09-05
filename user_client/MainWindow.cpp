@@ -27,6 +27,7 @@
 #include <QScrollArea>
 #include <QSet>
 #include <QSettings>
+#include <QSize>
 #include <QSizePolicy>
 #include <QStackedWidget>
 #include <QStatusBar>
@@ -72,6 +73,21 @@ QPair<double, double> realDistrictCoords(const QString &region)
     return {39.9042, 116.4074};
 }
 
+void prepareCardList(QListWidget *list)
+{
+    list->setSpacing(6);
+    list->setWordWrap(true);
+    list->setUniformItemSizes(false);
+    list->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    list->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+    list->setFrameShape(QFrame::NoFrame);
+}
+
+int cardItemHeight(const QListWidget *list, int lines)
+{
+    return qMax(72, lines * list->fontMetrics().lineSpacing() + 28);
+}
+
 } // namespace
 
 MainWindow::MainWindow(const User &user, QWidget *parent)
@@ -79,10 +95,10 @@ MainWindow::MainWindow(const User &user, QWidget *parent)
     , m_user(user)
 {
     setWindowTitle(QStringLiteral("充电用户端 - %1").arg(m_user.username));
-    // 默认等比例放大约 1.12 倍（相对原先 400×700）
-    resize(448, 784);
-    setMinimumSize(400, 700);
-    setMaximumWidth(500);
+    // 手机端默认窗口：540×960，比原先 400×700 / 448×784 更大，便于课堂演示
+    resize(540, 960);
+    setMinimumSize(480, 840);
+    setMaximumWidth(620);
 
     m_locationProvider = new LocationProvider(this);
     connect(m_locationProvider, &LocationProvider::locationUpdated,
@@ -94,24 +110,17 @@ MainWindow::MainWindow(const User &user, QWidget *parent)
     m_darkMode = settings.value(QStringLiteral("ui/darkMode"), false).toBool();
     applyTheme(m_darkMode);
 
-    loadFavorites();
     buildUi();
-    statusBar()->showMessage(QStringLiteral("已登录"));
-
-    refreshStations();
-    refreshPilesForCharge();
-    refreshProfile();
-    refreshOrders();
-    refreshOngoingBanner();
-    updateReservationCountdown();
+    statusBar()->setSizeGripEnabled(false);
+    statusBar()->showMessage(QStringLiteral("正在加载…"));
 
     m_reservationTimer = new QTimer(this);
     m_reservationTimer->setInterval(1000);
     connect(m_reservationTimer, &QTimer::timeout, this, &MainWindow::onReservationTick);
     m_reservationTimer->start();
 
-    // 启动后：恢复进行中订单/预约，并检测定位
-    QTimer::singleShot(200, this, &MainWindow::restoreSession);
+    // 先画出窗口再拉数据，避免登录按钮按下后界面卡住数秒。
+    QTimer::singleShot(0, this, &MainWindow::loadInitialData);
     QTimer::singleShot(400, this, &MainWindow::requestRealLocation);
 }
 
@@ -261,6 +270,7 @@ QWidget *MainWindow::buildStationsPage()
     m_locationLabel->setWordWrap(true);
 
     m_stationList = new QListWidget(page);
+    prepareCardList(m_stationList);
     m_loadMoreBtn = new QPushButton(QStringLiteral("加载更多"), page);
     m_loadMoreBtn->setObjectName(QStringLiteral("secondaryBtn"));
     m_loadMoreBtn->hide();
@@ -359,6 +369,7 @@ QWidget *MainWindow::buildChargePage()
     filterRow->addWidget(m_connectorFilter, 1);
     m_pileList = new QListWidget(reserveContent);
     m_pileList->setMinimumHeight(220);
+    prepareCardList(m_pileList);
     m_pileFavOnlyCheck = new QCheckBox(QStringLiteral("只看收藏电桩"), reserveContent);
     m_pileFavBtn = new QPushButton(QStringLiteral("收藏电桩"), reserveContent);
     m_pileFavBtn->setObjectName(QStringLiteral("secondaryBtn"));
@@ -611,6 +622,8 @@ QWidget *MainWindow::buildProfilePage()
     m_orderTable->setMinimumHeight(220);
     m_orderTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_orderTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+    m_orderTable->setShowGrid(false);
+    m_orderTable->setFrameShape(QFrame::NoFrame);
     m_orderTable->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 
     m_dbInfoLabel = new QLabel(content);
@@ -780,6 +793,8 @@ void MainWindow::appendStationItem(const Station &s)
                              .arg(s.totalPiles)
                              .arg(statusTextStation(s.status));
     auto *item = new QListWidgetItem(text, m_stationList);
+    item->setSizeHint(QSize(qMax(m_stationList->viewport()->width(), 240),
+                            cardItemHeight(m_stationList, 3)));
     item->setData(Qt::UserRole, s.id);
     item->setData(Qt::UserRole + 1, s.latitude);
     item->setData(Qt::UserRole + 2, s.longitude);
@@ -881,6 +896,8 @@ void MainWindow::refreshPilesForCharge()
                                  .arg(p.pricePerKwh, 0, 'f', 2)
                                  .arg(statusTextPile(p.status));
         auto *item = new QListWidgetItem(text, m_pileList);
+        item->setSizeHint(QSize(qMax(m_pileList->viewport()->width(), 240),
+                                cardItemHeight(m_pileList, 3)));
         item->setData(Qt::UserRole, p.id);
         item->setData(Qt::UserRole + 1, p.pricePerKwh);
         item->setData(Qt::UserRole + 2, p.powerKw);
@@ -1298,6 +1315,16 @@ void MainWindow::onReservationTick()
     updateReservationCountdown();
 }
 
+void MainWindow::loadInitialData()
+{
+    loadFavorites();
+    refreshStations();
+    refreshProfile();
+    refreshOrders();
+    refreshOngoingBanner();
+    restoreSession();
+}
+
 void MainWindow::restoreSession()
 {
     if (m_sessionRestored)
@@ -1305,26 +1332,23 @@ void MainWindow::restoreSession()
     m_sessionRestored = true;
 
     QStringList recovered;
-    ChargingOrder order;
-    if (ServerApiClient::instance().getOngoingOrderByUser(m_user.id, order)) {
+    if (m_ongoing.id > 0) {
         recovered << QStringLiteral("进行中订单 %1（%2 / %3，已充 %4 kWh）")
-                         .arg(order.orderNo, order.stationName, order.pileCode)
-                         .arg(order.energyKwh, 0, 'f', 2);
-        refreshOngoingBanner();
+                         .arg(m_ongoing.orderNo, m_ongoing.stationName, m_ongoing.pileCode)
+                         .arg(m_ongoing.energyKwh, 0, 'f', 2);
         onBottomNav(1);
         onChargeSubNav(2);
     }
 
-    ChargingReservation reservation;
-    if (ServerApiClient::instance().getActiveReservation(reservation)) {
-        m_reservation = reservation;
+    if (m_reservation.id > 0) {
         recovered << QStringLiteral("有效预约 %1（%2 / %3，到期 %4）")
-                         .arg(reservation.reservationNo, reservation.stationName,
-                              reservation.pileCode, reservation.expiresAt);
-        refreshPilesForCharge();
+                         .arg(m_reservation.reservationNo, m_reservation.stationName,
+                              m_reservation.pileCode, m_reservation.expiresAt);
         updateReservationCountdown();
-        onBottomNav(1);
-        onChargeSubNav(1);
+        if (m_ongoing.id <= 0) {
+            onBottomNav(1);
+            onChargeSubNav(1);
+        }
     }
 
     if (!recovered.isEmpty()) {
@@ -1333,7 +1357,7 @@ void MainWindow::restoreSession()
                                  QStringLiteral("检测到未完成业务，已为您恢复：\n\n- ")
                                      + recovered.join(QStringLiteral("\n- ")));
     } else {
-        statusBar()->showMessage(QStringLiteral("无进行中订单或预约"), 2500);
+        statusBar()->showMessage(QStringLiteral("已登录"), 2500);
     }
 }
 

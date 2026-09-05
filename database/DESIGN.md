@@ -61,7 +61,7 @@ ml_models ── load_forecasts
   "requestId": "8d03b4a2-...",
   "action": "user.phoneLogin",
   "token": "",
-  "data": { "phone": "13800001111" }
+  "data": { "phone": "13800001111", "password": "123456" }
 }
 ```
 
@@ -82,10 +82,11 @@ ml_models ── load_forecasts
 
 | 动作 | 主要事务 |
 |---|---|
-| `user.phoneLogin` | 查询手机号；不存在则创建默认昵称；签发会话 |
+| `user.phoneLogin` | 校验已注册手机号和密码并签发会话；未注册须先调用 `user.register` |
+| `user.register` | 创建用户账号（登录页不再自动建号） |
 | `stations.list` | 查询站点与空闲桩；服务端计算距离并排序 |
 | `piles.list` | 查询站内电桩实时状态 |
-| `reservation.create/cancel` | 锁定或释放一个空闲桩 |
+| `reservation.create/cancel/list/active` | 锁定或释放空闲桩；同一用户最多 3 条有效预约 |
 | `charge.start` | 校验用户和桩状态，创建订单并把桩改为 `charging` |
 | `charge.stop` | 固化电量与价格，订单进入待支付或直接结算 |
 | `wallet.recharge` | 同一事务更新余额并写入钱包流水 |
@@ -100,7 +101,7 @@ ml_models ── load_forecasts
 开始充电、结算、充值、预约都应使用 `QSqlDatabase::transaction()`。失败时必须 `rollback()`，成功时检查 `commit()` 返回值。
 
 - 一个用户最多一个 `ongoing/pending_payment` 订单。
-- 一个电桩最多一个 `ongoing` 订单或一个有效预约。
+- 一个用户最多 3 条有效预约；同一电桩最多一个有效预约。
 - 订单创建时保存 `price_per_kwh` 快照，后续调价不改变历史账单。
 - 余额更新和 `wallet_transactions` 流水必须在同一事务完成。
 - 管理员冻结、远程重启等操作必须写 `admin_audit_logs`。
@@ -119,4 +120,4 @@ ml_models ── load_forecasts
 
 ## 7. 安全说明
 
-当前 `password` 字段仅为兼容已有演示程序。正式版本应只保存带随机盐的 Argon2id/bcrypt 密码摘要到 `password_hash`，并移除明文密码。手机号免密登录若用于真实环境，应增加短信验证码；Socket 上线时应使用 TLS，令牌只回传一次，数据库只保存令牌 SHA-256 摘要。
+当前 `password` 字段仅为兼容已有演示程序。正式版本应只保存带随机盐的 Argon2id/bcrypt 密码摘要到 `password_hash`，并移除明文密码。用户登录必须使用已注册账号和密码；新用户在注册页创建账号。Socket 上线时应使用 TLS，令牌只回传一次，数据库只保存令牌 SHA-256 摘要。

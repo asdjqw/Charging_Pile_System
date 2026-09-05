@@ -57,6 +57,7 @@ private slots:
     void refreshOrders();
     void onToggleDarkMode(bool dark);
     void restoreSession();
+    void loadInitialData();
     void onLogout();
 
 private:

@@ -100,28 +100,16 @@ QJsonObject ApiDispatcher::dispatch(const QJsonObject &request)
 
     if (action == QLatin1String("user.phoneLogin")) {
         User user;
-        bool created = false;
         const QString password = data.value("password").toString();
-        if (!password.isEmpty()) {
-            if (!db.loginByPhone(data.value("phone").toString(), password, user)) {
-                if (!db.lastError().contains(QStringLiteral("不存在")))
-                    return failure(request, QStringLiteral("AUTH_FAILED"), db.lastError());
-                User createdUser;
-                createdUser.phone = data.value("phone").toString();
-                createdUser.password = password;
-                if (!db.registerUser(createdUser)
-                    || !db.loginByPhone(createdUser.phone, password, user))
-                    return failure(request, QStringLiteral("AUTH_FAILED"), db.lastError());
-                created = true;
-            }
-        } else if (!db.phoneLogin(data.value("phone").toString(), user, created)) {
+        if (password.isEmpty())
+            return failure(request, QStringLiteral("AUTH_FAILED"), QStringLiteral("请输入密码"));
+        if (!db.loginByPhone(data.value("phone").toString(), password, user))
             return failure(request, QStringLiteral("AUTH_FAILED"), db.lastError());
-        }
         const QString token = QUuid::createUuid().toString(QUuid::WithoutBraces);
         m_sessions.insert(token, {user.id, QDateTime::currentDateTimeUtc().addSecs(12 * 60 * 60)});
-        return success(request, QJsonObject{{"token", token}, {"created", created},
+        return success(request, QJsonObject{{"token", token}, {"created", false},
                                             {"user", JsonCodec::toJson(user)}},
-                       created ? QStringLiteral("已创建新用户") : QStringLiteral("登录成功"));
+                       QStringLiteral("登录成功"));
     }
 
     if (action == QLatin1String("user.register")) {

@@ -7,7 +7,7 @@
 
 | 子系统 | 技术 | 功能 |
 |---|---|---|
-| 充电用户端 `user_client` | Qt6 Widgets + Network | 手机号免密登录、找桩导航、预约、充电、资料、充值和订单 |
+| 充电用户端 `user_client` | Qt6 Widgets + Network | 手机号密码登录/注册、找桩导航、预约（最多 3 个）、充电、资料、充值和订单 |
 | 管理客户端 `admin_client` | Qt6 Widgets + Charts + Network | 管理员登录、销售业绩、电桩状态、充电桩/站管理、用户风控 |
 | 后端服务 `admin_server` | Qt6 Network + SQL | TCP/HTTP 服务、业务校验、事务与 SQLite 独占访问 |
 | 数据库端 | Qt SQL + SQLite | 用户、站点、电桩、订单、账务、遥测与审计 |
@@ -125,8 +125,8 @@ chmod +x scripts/*.sh
 
 ### 演示账号
 
-用户端输入 11 位手机号和密码登录，也可在登录窗注册。演示账号：
-`13800001111` / `123456`。
+用户端输入 11 位手机号和密码登录；新用户必须走注册页，登录不会自动建号。演示账号：
+`13800001111` / `123456`。用户端默认窗口约 `540×960`。
 
 | 类型 | 用户名 | 密码 |
 |---|---|---|
@@ -184,8 +184,8 @@ scripts/       Ubuntu 依赖安装与 qmake 构建脚本
 ./build/server_api_smoke/server_api_smoke
 ```
 
-`database_behavior_test` 验证手机号自动建号、冻结/解冻和模拟远程重启；
-`server_api_smoke` 在运行中的独立服务上验证预约/取消、预约转充电、进度持久化、结算和订单查询。
+`database_behavior_test` 验证注册登录、冻结/解冻和模拟远程重启；
+`server_api_smoke` 在运行中的独立服务上验证「未注册不能登录」、预约/取消、预约转充电、进度持久化、结算和订单查询。
 
 ## 尚未包含
 

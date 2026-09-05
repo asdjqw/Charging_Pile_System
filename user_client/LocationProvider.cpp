@@ -3,6 +3,7 @@
 #include <QDBusConnection>
 #include <QDBusInterface>
 #include <QDBusMessage>
+#include <QDBusObjectPath>
 #include <QDBusReply>
 #include <QDBusVariant>
 #include <QJsonDocument>
@@ -44,11 +45,18 @@ void LocationProvider::finishFail(const QString &reason)
 
 void LocationProvider::tryGeoClue()
 {
-    // GeoClue2 系统总线定位（有 GPS/Wi‑Fi 代理时可用）
+    const QDBusConnection bus = QDBusConnection::systemBus();
+    if (!bus.isConnected()) {
+        tryIpLocate();
+        return;
+    }
+
+    // 不用默认 25 秒 D-Bus 超时，教室环境多数没有可用定位服务。
     QDBusInterface manager(QStringLiteral("org.freedesktop.GeoClue2"),
                            QStringLiteral("/org/freedesktop/GeoClue2/Manager"),
                            QStringLiteral("org.freedesktop.GeoClue2.Manager"),
-                           QDBusConnection::systemBus());
+                           bus);
+    manager.setTimeout(400);
     if (!manager.isValid()) {
         tryIpLocate();
         return;
@@ -64,17 +72,17 @@ void LocationProvider::tryGeoClue()
     QDBusInterface client(QStringLiteral("org.freedesktop.GeoClue2"),
                           path,
                           QStringLiteral("org.freedesktop.GeoClue2.Client"),
-                          QDBusConnection::systemBus());
+                          bus);
+    client.setTimeout(400);
     if (!client.isValid()) {
         tryIpLocate();
         return;
     }
 
     client.setProperty("DesktopId", QStringLiteral("charge-pile-user"));
-    client.setProperty("RequestedAccuracyLevel", QVariant::fromValue(uint(4))); // Exact
+    client.setProperty("RequestedAccuracyLevel", QVariant::fromValue(uint(4)));
     client.call(QStringLiteral("Start"));
 
-    // 轮询等待定位结果（最多约 4 秒）
     auto *timer = new QTimer(this);
     timer->setInterval(400);
     connect(timer, &QTimer::timeout, this, [this, clientPath = path, timer, tries = 0]() mutable {
@@ -83,6 +91,7 @@ void LocationProvider::tryGeoClue()
                               clientPath,
                               QStringLiteral("org.freedesktop.GeoClue2.Client"),
                               QDBusConnection::systemBus());
+        client.setTimeout(300);
         const QVariant locPathVar = client.property("Location");
         const QDBusObjectPath locPath = qvariant_cast<QDBusObjectPath>(locPathVar);
         if (locPath.path().size() > 1 && locPath.path() != QLatin1String("/")) {
@@ -90,6 +99,7 @@ void LocationProvider::tryGeoClue()
                                locPath.path(),
                                QStringLiteral("org.freedesktop.GeoClue2.Location"),
                                QDBusConnection::systemBus());
+            loc.setTimeout(300);
             const double lat = loc.property("Latitude").toDouble();
             const double lng = loc.property("Longitude").toDouble();
             timer->stop();
@@ -102,7 +112,7 @@ void LocationProvider::tryGeoClue()
                 return;
             }
         }
-        if (tries >= 10) {
+        if (tries >= 5) {
             timer->stop();
             timer->deleteLater();
             client.call(QStringLiteral("Stop"));
@@ -119,10 +129,10 @@ void LocationProvider::tryIpLocate()
         return;
     }
     m_triedIp = true;
-    // ip-api.com 免费接口，返回公网出口大致经纬度
     QNetworkRequest req(QUrl(QStringLiteral(
         "http://ip-api.com/json/?fields=status,message,lat,lon,city,regionName,country")));
     req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("ChargePileUser/1.0"));
+    req.setTransferTimeout(2500);
     m_nam->get(req);
 }
 

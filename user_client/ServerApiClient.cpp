@@ -3,7 +3,9 @@
 #include "FramedJson.h"
 #include "JsonCodec.h"
 
+#include <QAbstractSocket>
 #include <QElapsedTimer>
+#include <QHostAddress>
 #include <QJsonArray>
 #include <QTcpSocket>
 #include <QUuid>
@@ -38,8 +40,15 @@ bool ServerApiClient::ensureConnected()
         return true;
     m_socket->abort();
     m_readBuffer.clear();
-    m_socket->connectToHost(m_host, m_port);
-    if (!m_socket->waitForConnected(3000)) {
+    m_socket->setSocketOption(QAbstractSocket::LowDelayOption, 1);
+    m_socket->setSocketOption(QAbstractSocket::KeepAliveOption, 1);
+    // 主机名（含 localhost）会先试 IPv6，失败再回退 IPv4，本地常见卡住约 3 秒。
+    const QHostAddress parsed(m_host);
+    const auto protocol = parsed.protocol() == QAbstractSocket::IPv6Protocol
+                              ? QAbstractSocket::IPv6Protocol
+                              : QAbstractSocket::IPv4Protocol;
+    m_socket->connectToHost(m_host, m_port, QIODevice::ReadWrite, protocol);
+    if (!m_socket->waitForConnected(1500)) {
         m_lastError = QStringLiteral("无法连接服务端 %1：%2")
                           .arg(serverDescription(), m_socket->errorString());
         return false;

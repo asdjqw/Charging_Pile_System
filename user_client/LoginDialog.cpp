@@ -2,6 +2,7 @@
 #include "ServerApiClient.h"
 #include "StyleHelper.h"
 
+#include <QApplication>
 #include <QFrame>
 #include <QLabel>
 #include <QLineEdit>
@@ -18,8 +19,7 @@ LoginDialog::LoginDialog(QWidget *parent)
     : QDialog(parent)
 {
     setWindowTitle(QStringLiteral("用户登录"));
-    // 与主窗口同比例放大（约 1.12 倍）
-    setFixedSize(448, 784);
+    setFixedSize(520, 920);
     QSettings settings;
     const bool dark = settings.value(QStringLiteral("ui/darkMode"), false).toBool();
     setStyleSheet(dark ? StyleHelper::userClientDarkStyle()
@@ -47,7 +47,7 @@ LoginDialog::LoginDialog(QWidget *parent)
     auto *loginLayout = new QVBoxLayout(loginPage);
     loginLayout->setContentsMargins(0, 0, 0, 0);
     loginLayout->setSpacing(10);
-    auto *loginHint = new QLabel(QStringLiteral("输入手机号登录。未注册号码将自动创建账号；已注册账号可填写密码。"), loginPage);
+    auto *loginHint = new QLabel(QStringLiteral("使用已注册的手机号和密码登录。没有账号请先注册。"), loginPage);
     loginHint->setObjectName(QStringLiteral("muted"));
     loginHint->setWordWrap(true);
     m_phoneEdit = new QLineEdit(loginPage);
@@ -58,7 +58,7 @@ LoginDialog::LoginDialog(QWidget *parent)
         QRegularExpression(QStringLiteral("^\\d{0,11}$")), m_phoneEdit));
     m_passwordEdit = new QLineEdit(loginPage);
     m_passwordEdit->setEchoMode(QLineEdit::Password);
-    m_passwordEdit->setPlaceholderText(QStringLiteral("密码（可留空，未注册将自动注册）"));
+    m_passwordEdit->setPlaceholderText(QStringLiteral("密码"));
     m_passwordEdit->setMinimumHeight(40);
     auto *loginBtn = new QPushButton(QStringLiteral("登录"), loginPage);
     loginBtn->setMinimumHeight(44);
@@ -153,21 +153,24 @@ void LoginDialog::onLogin()
         return;
     }
     if (m_passwordEdit->text().isEmpty()) {
-        QMessageBox::warning(this, QStringLiteral("提示"), QStringLiteral("请输入密码"));
+        QMessageBox::warning(this, QStringLiteral("提示"),
+                             QStringLiteral("请输入密码。未注册请先点击下方注册。"));
         return;
     }
+    setEnabled(false);
+    QApplication::setOverrideCursor(Qt::WaitCursor);
     User user;
     bool created = false;
-    if (!ServerApiClient::instance().phoneLogin(m_phoneEdit->text().trimmed(), user, created,
-                                                m_passwordEdit->text())) {
+    const bool ok = ServerApiClient::instance().phoneLogin(m_phoneEdit->text().trimmed(), user,
+                                                           created, m_passwordEdit->text());
+    QApplication::restoreOverrideCursor();
+    setEnabled(true);
+    if (!ok) {
         QMessageBox::warning(this, QStringLiteral("登录失败"),
                              ServerApiClient::instance().lastError());
         return;
     }
     m_user = user;
-    if (created)
-        QMessageBox::information(this, QStringLiteral("已自动注册"),
-                                 QStringLiteral("该手机号尚未注册，已为您创建账号并登录。"));
     accept();
 }
 
@@ -189,13 +192,20 @@ void LoginDialog::onRegister()
     user.phone = m_regPhoneEdit->text().trimmed();
     user.password = m_regPasswordEdit->text();
     user.nickname = m_regNicknameEdit->text().trimmed();
-    if (!ServerApiClient::instance().registerUser(user)) {
+    setEnabled(false);
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    const bool registered = ServerApiClient::instance().registerUser(user);
+    bool created = false;
+    const bool loggedIn = registered
+        && ServerApiClient::instance().phoneLogin(user.phone, m_user, created, user.password);
+    QApplication::restoreOverrideCursor();
+    setEnabled(true);
+    if (!registered) {
         QMessageBox::warning(this, QStringLiteral("注册失败"),
                              ServerApiClient::instance().lastError());
         return;
     }
-    bool created = false;
-    if (!ServerApiClient::instance().phoneLogin(user.phone, m_user, created, user.password)) {
+    if (!loggedIn) {
         QMessageBox::warning(this, QStringLiteral("登录失败"),
                              ServerApiClient::instance().lastError());
         return;

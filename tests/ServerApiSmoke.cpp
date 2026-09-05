@@ -38,6 +38,13 @@ int main(int argc, char **argv)
         out << "login after registration failed: " << client.lastError() << Qt::endl;
         return 2;
     }
+    User missingUser;
+    const QString missingPhone = QStringLiteral("137%1").arg(
+        QDateTime::currentMSecsSinceEpoch() % 100000000, 8, 10, QLatin1Char('0'));
+    if (client.phoneLogin(missingPhone, missingUser, created, QStringLiteral("123456"))) {
+        out << "unregistered phone should not auto login" << Qt::endl;
+        return 17;
+    }
 
     User user;
     if (!client.phoneLogin(QStringLiteral("13800001111"), user, created, QStringLiteral("123456"))) {

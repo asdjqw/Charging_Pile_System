@@ -148,7 +148,7 @@ Web 运营大屏（浏览器）
 | 钱包 | `wallet.recharge` |
 | 站点 | `stations.list`、`stations.districts` |
 | 电桩 | `piles.list`、`piles.get` |
-| 预约 | `reservation.create`、`reservation.cancel`、`reservation.active` |
+| 预约 | `reservation.create`、`reservation.cancel`、`reservation.active`、`reservation.list` |
 | 充电 | `charge.start`、`charge.progress`、`charge.stop`、`charge.ongoing` |
 | 订单 | `orders.list` |
 | 大屏 | `dashboard.summary`、`dashboard.stations` |
@@ -160,9 +160,9 @@ Web 运营大屏（浏览器）
 
 数据库层集中实现了以下主要规则：
 
-- 手机号不存在时可以自动创建用户并登录；
+- 新用户必须通过 `user.register` 注册；`user.phoneLogin` 只校验已有账号和密码，不会自动建号；
 - 冻结用户不能继续预约或充电；
-- 同一用户不能同时拥有多个有效预约；
+- 同一用户最多同时拥有 3 条有效预约；
 - 只有空闲电桩可以预约；
 - 预约默认 15 分钟有效，过期后恢复电桩状态；
 - 用户只能取消自己的有效预约；
@@ -189,6 +189,11 @@ Web 运营大屏（浏览器）
 `LoginDialog` 和 `MainWindow` 已改为通过 `ServerApiClient` 完成用户业务。客户端启动时不再
 初始化数据库，也不再依赖 SQLite 驱动；管理端/服务器关闭后，客户端会明确提示无法连接，
 而不会静默读取本地数据库。
+
+用户端按手机窗口模拟：登录窗固定 `520×920`，主窗口默认 `540×960`（最小 `480×840`），
+代码分别在 `user_client/LoginDialog.cpp` 与 `user_client/MainWindow.cpp` 构造函数中设置。
+登录页只校验已注册账号；新用户必须切换到注册页调用 `user.register`。底栏提供「预约」
+入口，可查看当前最多 3 条有效预约的详情、剩余时间和导航。
 
 ## 6. D 部分：SQLite 与 Web 大屏改动
 
@@ -324,7 +329,7 @@ firefox http://127.0.0.1:8080/
 |---|---|---|
 | 管理员 | `admin` | `123456` |
 | 运维 | `ops01` | `ops123` |
-| 用户 | 任意合法 11 位手机号 | 手机号免密登录，不存在时自动创建 |
+| 用户 | `13800001111` | `123456`（须先注册；登录不会自动建号） |
 
 ### 9.3 环境变量
 
@@ -361,7 +366,7 @@ CHARGE_PILE_BIND_ADDRESS=0.0.0.0 ./build/admin_server/admin_server
 | 测试 | 验证内容 |
 |---|---|
 | `protocol_test` | 长度帧编码、拆包、粘包和 JSON 恢复 |
-| `database_behavior_test` | 手机号自动建号、用户冻结/解冻、电桩模拟重启等数据库行为 |
+| `database_behavior_test` | 注册登录、用户冻结/解冻、电桩模拟重启等数据库行为 |
 
 结果为 `2/2` 通过。
 
@@ -370,7 +375,7 @@ CHARGE_PILE_BIND_ADDRESS=0.0.0.0 ./build/admin_server/admin_server
 `server_api_smoke` 是独立的 TCP 测试客户端，需要先启动服务端，再单独运行。已验证：
 
 - 服务健康检查；
-- 手机号登录；
+- 注册后登录，以及未注册手机号不得自动登录；
 - 查询站点和电桩；
 - 创建预约；
 - 取消预约；
@@ -401,8 +406,8 @@ CHARGE_PILE_BIND_ADDRESS=0.0.0.0 ./build/admin_server/admin_server
 
 1. 启动 `admin_server`，确认终端显示 TCP `9000` 和 Web `8080` 已监听。
 2. 使用 `admin / 123456` 登录管理端，检查营收、订单、电桩和用户数据。
-3. 启动用户端，用一个 11 位手机号登录。
-4. 搜索站点，选择空闲电桩并预约。
+3. 启动用户端，用演示账号 `13800001111 / 123456` 登录；新用户点「去注册」。
+4. 搜索站点，选择空闲电桩并预约（同一账号最多 3 个）。
 5. 取消一次预约，确认电桩恢复空闲。
 6. 再次预约并开始充电，观察进度和服务端数据变化。
 7. 停止充电，核对余额、钱包流水、订单金额和电桩状态。
