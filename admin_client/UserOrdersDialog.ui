@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>UserOrdersDialog</class>
+ <widget class="QDialog" name="UserOrdersDialog">
+  <property name="windowTitle">
+   <string>充电记录</string>
+  </property>
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>720</width>
+    <height>420</height>
+   </rect>
+  </property>
+  <layout class="QVBoxLayout" name="layout">
+   <item>
+    <widget class="QTableWidget" name="orderTable"/>
+   </item>
+   <item>
+    <widget class="QPushButton" name="deleteBtn">
+     <property name="text">
+      <string>删除选中记录</string>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

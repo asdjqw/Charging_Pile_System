@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>EditPileDialog</class>
+ <widget class="QDialog" name="EditPileDialog">
+  <property name="windowTitle">
+   <string>电桩</string>
+  </property>
+  <layout class="QFormLayout" name="form">
+   <item row="0" column="0">
+    <widget class="QLabel" name="idLabel">
+     <property name="text">
+      <string>电桩ID（不可改）</string>
+     </property>
+    </widget>
+   </item>
+   <item row="0" column="1">
+    <widget class="QLineEdit" name="idEdit">
+     <property name="readOnly">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="0">
+    <widget class="QLabel" name="codeLabel">
+     <property name="text">
+      <string>电桩编号</string>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="1">
+    <widget class="QLineEdit" name="codeEdit"/>
+   </item>
+   <item row="2" column="0">
+    <widget class="QLabel" name="stationIdLabel">
+     <property name="text">
+      <string>所属电站ID</string>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="1">
+    <widget class="QSpinBox" name="stationIdSpin">
+     <property name="minimum">
+      <number>1</number>
+     </property>
+     <property name="maximum">
+      <number>999999</number>
+     </property>
+    </widget>
+   </item>
+   <item row="3" column="0">
+    <widget class="QLabel" name="typeLabel">
+     <property name="text">
+      <string>类型</string>
+     </property>
+    </widget>
+   </item>
+   <item row="3" column="1">
+    <widget class="QComboBox" name="typeCombo"/>
+   </item>
+   <item row="4" column="0">
+    <widget class="QLabel" name="speedLabel">
+     <property name="text">
+      <string>充电速度</string>
+     </property>
+    </widget>
+   </item>
+   <item row="4" column="1">
+    <widget class="QComboBox" name="speedCombo"/>
+   </item>
+   <item row="5" column="0">
+    <widget class="QLabel" name="connectorLabel">
+     <property name="text">
+      <string>接口标准</string>
+     </property>
+    </widget>
+   </item>
+   <item row="5" column="1">
+    <widget class="QComboBox" name="connectorCombo"/>
+   </item>
+   <item row="6" column="0">
+    <widget class="QLabel" name="powerLabel">
+     <property name="text">
+      <string>功率(kW)</string>
+     </property>
+    </widget>
+   </item>
+   <item row="6" column="1">
+    <widget class="QDoubleSpinBox" name="powerSpin">
+     <property name="minimum">
+      <double>1.000000000000000</double>
+     </property>
+     <property name="maximum">
+      <double>400.000000000000000</double>
+     </property>
+    </widget>
+   </item>
+   <item row="7" column="0">
+    <widget class="QLabel" name="priceLabel">
+     <property name="text">
+      <string>电价(元/kWh)</string>
+     </property>
+    </widget>
+   </item>
+   <item row="7" column="1">
+    <widget class="QDoubleSpinBox" name="priceSpin">
+     <property name="decimals">
+      <number>2</number>
+     </property>
+     <property name="maximum">
+      <double>20.000000000000000</double>
+     </property>
+    </widget>
+   </item>
+   <item row="8" column="0">
+    <widget class="QLabel" name="remainLabel">
+     <property name="text">
+      <string>剩余电量(kWh)</string>
+     </property>
+    </widget>
+   </item>
+   <item row="8" column="1">
+    <widget class="QDoubleSpinBox" name="remainSpin">
+     <property name="maximum">
+      <double>500.000000000000000</double>
+     </property>
+    </widget>
+   </item>
+   <item row="9" column="0">
+    <widget class="QLabel" name="statusLabel">
+     <property name="text">
+      <string>状态</string>
+     </property>
+    </widget>
+   </item>
+   <item row="9" column="1">
+    <widget class="QComboBox" name="statusCombo"/>
+   </item>
+   <item row="10" column="0">
+    <widget class="QLabel" name="saveSpacer">
+     <property name="text">
+      <string/>
+     </property>
+    </widget>
+   </item>
+   <item row="10" column="1">
+    <widget class="QPushButton" name="saveBtn">
+     <property name="text">
+      <string>保存</string>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

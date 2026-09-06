@@ -19,5 +19,9 @@ SOURCES += \
     ServerApiClient.cpp \
     MainWindow.cpp
 
+FORMS += \
+    LoginDialog.ui \
+    MainWindow.ui
+
 win32: CONFIG += windows
 macx: CONFIG += app_bundle

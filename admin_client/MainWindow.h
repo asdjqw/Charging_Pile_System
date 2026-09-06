@@ -6,6 +6,8 @@
 #include <QMainWindow>
 #include <QtCharts/QChartView>
 
+namespace Ui { class MainWindow; }
+
 class QComboBox;
 class QCloseEvent;
 class QFrame;
@@ -22,6 +24,7 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 public:
     explicit MainWindow(const Admin &admin, QWidget *parent = nullptr);
+    ~MainWindow() override;
 
 signals:
     void logoutRequested();
@@ -55,14 +58,8 @@ private slots:
 
 private:
     void buildUi();
-    QWidget *buildDashboardPage();
-    QWidget *buildPileStatusPage();
-    QWidget *buildPilePage();
-    QWidget *buildStationPage();
-    QWidget *buildUserPage();
-    QWidget *buildReservationPage();
-    QWidget *buildPermissionPage();
-    QFrame *makeKpiCard(const QString &title, QLabel **valueLabel);
+    void bindUiWidgets();
+    void applyStyleObjectNames();
     void applySalesChart(const QJsonObject &payload);
     void applyStatusChart(const QJsonObject &stats);
     void applyTheme(bool dark);
@@ -74,7 +71,9 @@ private:
     bool editStationDialog(Station &station, int *pileCount, bool isNew);
     void closeEvent(QCloseEvent *event) override;
 
+    Ui::MainWindow *ui = nullptr;
     Admin m_admin;
+    QComboBox *m_inviteRoleCombo = nullptr;
     bool m_darkMode = false;
     QPushButton *m_darkModeBtn = nullptr;
     QListWidget *m_nav = nullptr;

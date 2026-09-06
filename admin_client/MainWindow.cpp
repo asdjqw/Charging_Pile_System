@@ -45,6 +45,11 @@
 QT_CHARTS_USE_NAMESPACE
 #endif
 
+#include "ui_MainWindow.h"
+#include "ui_EditPileDialog.h"
+#include "ui_EditStationDialog.h"
+#include "ui_UserOrdersDialog.h"
+
 namespace {
 
 QTableWidgetItem *textItem(const QString &text, int id = 0)
@@ -74,16 +79,17 @@ void setupTable(QTableWidget *table, const QStringList &headers)
 
 MainWindow::MainWindow(const Admin &admin, QWidget *parent)
     : QMainWindow(parent)
+    , ui(new Ui::MainWindow)
     , m_admin(admin)
 {
+    QSettings settings;
+    m_darkMode = settings.value(QStringLiteral("ui/darkMode"), false).toBool();
+    buildUi();
     setWindowTitle(QStringLiteral("充电桩管理 - %1").arg(m_admin.realName.isEmpty()
                                                         ? m_admin.username
                                                         : m_admin.realName));
     resize(1180, 740);
     setMinimumSize(980, 640);
-    QSettings settings;
-    m_darkMode = settings.value(QStringLiteral("ui/darkMode"), false).toBool();
-    buildUi();
     applyTheme(m_darkMode);
     refreshDashboard();
     refreshPileStatus();
@@ -92,101 +98,205 @@ MainWindow::MainWindow(const Admin &admin, QWidget *parent)
     refreshUsers();
 }
 
-QFrame *MainWindow::makeKpiCard(const QString &title, QLabel **valueLabel)
+MainWindow::~MainWindow()
 {
-    auto *card = new QFrame(this);
-    card->setObjectName(QStringLiteral("kpiCard"));
-    auto *layout = new QVBoxLayout(card);
-    layout->setContentsMargins(12, 10, 12, 10);
-    auto *t = new QLabel(title, card);
-    t->setObjectName(QStringLiteral("kpiTitle"));
-    *valueLabel = new QLabel(QStringLiteral("-"), card);
-    (*valueLabel)->setObjectName(QStringLiteral("kpiValue"));
-    layout->addWidget(t);
-    layout->addWidget(*valueLabel);
-    return card;
+    delete ui;
+}
+
+void MainWindow::bindUiWidgets()
+{
+    m_darkModeBtn = ui->darkModeBtn;
+    m_nav = ui->sideNav;
+    m_stack = ui->stack;
+    m_kpiTodayAmount = ui->kpiTodayAmount;
+    m_kpiMonthAmount = ui->kpiMonthAmount;
+    m_kpiTotalAmount = ui->kpiTotalAmount;
+    m_salesDays = ui->salesDays;
+    m_salesChartView = ui->salesChartView;
+    m_recentOrders = ui->recentOrders;
+    m_statusSummary = ui->statusSummary;
+    m_statusChartView = ui->statusChartView;
+    m_statusDistTable = ui->statusDistTable;
+    m_statusKeyword = ui->statusKeyword;
+    m_statusPileTable = ui->statusPileTable;
+    m_pileDistrictFilter = ui->pileDistrictFilter;
+    m_pileStationFilter = ui->pileStationFilter;
+    m_pileStatusFilter = ui->pileStatusFilter;
+    m_pileRestartBtn = ui->pileRestartBtn;
+    m_pileTable = ui->pileTable;
+    m_stationKeyword = ui->stationKeyword;
+    m_stationTable = ui->stationTable;
+    m_stationDetailTitle = ui->stationDetailTitle;
+    m_stationPileTable = ui->stationPileTable;
+    m_userKeyword = ui->userKeyword;
+    m_userTable = ui->userTable;
+    m_reservationTable = ui->reservationTable;
+    m_inviteTable = ui->inviteTable;
+    m_inviteRoleCombo = ui->inviteRoleCombo;
+    m_permRoleCombo = ui->permRoleCombo;
+    m_permTable = ui->permTable;
+}
+
+void MainWindow::applyStyleObjectNames()
+{
+    ui->centralRoot->setObjectName(QStringLiteral("centralRoot"));
+    ui->sideBar->setObjectName(QStringLiteral("sideBar"));
+    ui->brandTitle->setObjectName(QStringLiteral("brandTitle"));
+    ui->brandSub->setObjectName(QStringLiteral("brandSub"));
+    ui->sideNav->setObjectName(QStringLiteral("sideNav"));
+    ui->darkModeBtn->setObjectName(QStringLiteral("secondaryBtn"));
+    ui->logoutBtn->setObjectName(QStringLiteral("dangerBtn"));
+    ui->kpiTodayCard->setObjectName(QStringLiteral("kpiCard"));
+    ui->kpiMonthCard->setObjectName(QStringLiteral("kpiCard"));
+    ui->kpiTotalCard->setObjectName(QStringLiteral("kpiCard"));
+    ui->kpiTodayTitle->setObjectName(QStringLiteral("kpiTitle"));
+    ui->kpiMonthTitle->setObjectName(QStringLiteral("kpiTitle"));
+    ui->kpiTotalTitle->setObjectName(QStringLiteral("kpiTitle"));
+    ui->kpiTodayAmount->setObjectName(QStringLiteral("kpiValue"));
+    ui->kpiMonthAmount->setObjectName(QStringLiteral("kpiValue"));
+    ui->kpiTotalAmount->setObjectName(QStringLiteral("kpiValue"));
+    ui->salesChartTitle->setObjectName(QStringLiteral("pageTitle"));
+    ui->statusTitle->setObjectName(QStringLiteral("pageTitle"));
+    ui->statusSummary->setObjectName(QStringLiteral("muted"));
+    ui->pileTitle->setObjectName(QStringLiteral("pageTitle"));
+    ui->editPileBtn->setObjectName(QStringLiteral("secondaryBtn"));
+    ui->delPileBtn->setObjectName(QStringLiteral("dangerBtn"));
+    ui->pileRestartBtn->setObjectName(QStringLiteral("secondaryBtn"));
+    ui->pileHint->setObjectName(QStringLiteral("muted"));
+    ui->stationTitle->setObjectName(QStringLiteral("pageTitle"));
+    ui->editStationBtn->setObjectName(QStringLiteral("secondaryBtn"));
+    ui->delStationBtn->setObjectName(QStringLiteral("dangerBtn"));
+    ui->stationDetailTitle->setObjectName(QStringLiteral("muted"));
+    ui->userTitle->setObjectName(QStringLiteral("pageTitle"));
+    ui->userStatusBtn->setObjectName(QStringLiteral("secondaryBtn"));
+    ui->reservationTitle->setObjectName(QStringLiteral("pageTitle"));
+    ui->cancelReservationBtn->setObjectName(QStringLiteral("dangerBtn"));
+    ui->inviteTitle->setObjectName(QStringLiteral("pageTitle"));
+    ui->inviteRefreshBtn->setObjectName(QStringLiteral("secondaryBtn"));
+    ui->permTitle->setObjectName(QStringLiteral("pageTitle"));
 }
 
 void MainWindow::buildUi()
 {
-    auto *central = new QWidget(this);
-    central->setObjectName(QStringLiteral("centralRoot"));
-    setCentralWidget(central);
-    auto *root = new QHBoxLayout(central);
-    root->setContentsMargins(0, 0, 0, 0);
-    root->setSpacing(0);
+    ui->setupUi(this);
+    bindUiWidgets();
+    applyStyleObjectNames();
 
-    auto *side = new QWidget(central);
-    side->setObjectName(QStringLiteral("sideBar"));
-    side->setFixedWidth(188);
-    auto *sideLayout = new QVBoxLayout(side);
-    sideLayout->setContentsMargins(0, 16, 0, 12);
-    sideLayout->setSpacing(4);
-
-    auto *brand = new QLabel(QStringLiteral("充电桩管理"), side);
-    brand->setObjectName(QStringLiteral("brandTitle"));
-    brand->setContentsMargins(14, 0, 14, 0);
-    auto *who = new QLabel(QStringLiteral("%1  %2")
-                               .arg(m_admin.realName.isEmpty() ? m_admin.username : m_admin.realName,
-                                    m_admin.role),
-                           side);
-    who->setObjectName(QStringLiteral("brandSub"));
-    who->setContentsMargins(14, 0, 14, 8);
-    who->setWordWrap(true);
-
-    m_nav = new QListWidget(side);
-    m_nav->setObjectName(QStringLiteral("sideNav"));
-    m_nav->setSpacing(0);
-    m_nav->setFrameShape(QFrame::NoFrame);
-    m_nav->setFocusPolicy(Qt::NoFocus);
-    m_nav->addItems({
-        QStringLiteral("销售业绩"),
-        QStringLiteral("电桩状态"),
-        QStringLiteral("充电桩管理"),
-        QStringLiteral("充电站管理"),
-        QStringLiteral("用户管理"),
-        QStringLiteral("预约管理"),
-        QStringLiteral("权限管理")
-    });
+    ui->brandTitle->setContentsMargins(14, 0, 14, 0);
+    ui->brandSub->setContentsMargins(14, 0, 14, 8);
+    ui->darkModeBtn->setContentsMargins(10, 0, 10, 0);
+    ui->brandSub->setText(QStringLiteral("%1  %2")
+                              .arg(m_admin.realName.isEmpty() ? m_admin.username : m_admin.realName,
+                                   m_admin.role));
     m_nav->setCurrentRow(0);
-
-    sideLayout->addWidget(brand);
-    sideLayout->addWidget(who);
-    sideLayout->addWidget(m_nav, 1);
-
-    m_darkModeBtn = new QPushButton(side);
-    m_darkModeBtn->setObjectName(QStringLiteral("secondaryBtn"));
-    m_darkModeBtn->setCheckable(true);
     m_darkModeBtn->setChecked(m_darkMode);
     m_darkModeBtn->setText(m_darkMode ? QStringLiteral("夜间模式：开")
                                       : QStringLiteral("夜间模式：关"));
-    m_darkModeBtn->setContentsMargins(10, 0, 10, 0);
-    sideLayout->addWidget(m_darkModeBtn);
+
+    m_salesDays->addItem(QStringLiteral("近 7 日"), 7);
+    m_salesDays->addItem(QStringLiteral("近 30 日"), 30);
+    m_salesChartView->setRenderHint(QPainter::Antialiasing);
+    m_statusChartView->setRenderHint(QPainter::Antialiasing);
+
+    m_pileStatusFilter->addItem(QStringLiteral("全部状态"), QString());
+    m_pileStatusFilter->addItem(QStringLiteral("空闲"), QStringLiteral("idle"));
+    m_pileStatusFilter->addItem(QStringLiteral("已预约"), QStringLiteral("reserved"));
+    m_pileStatusFilter->addItem(QStringLiteral("充电中"), QStringLiteral("charging"));
+    m_pileStatusFilter->addItem(QStringLiteral("故障"), QStringLiteral("fault"));
+    m_pileStatusFilter->addItem(QStringLiteral("离线"), QStringLiteral("offline"));
+    m_pileStatusFilter->addItem(QStringLiteral("维修中"), QStringLiteral("restarting"));
+
+    m_inviteRoleCombo->addItem(QStringLiteral("运维 operator"), QStringLiteral("operator"));
+    m_inviteRoleCombo->addItem(QStringLiteral("审计 auditor"), QStringLiteral("auditor"));
+    m_permRoleCombo->addItem(QStringLiteral("运维 operator"), QStringLiteral("operator"));
+    m_permRoleCombo->addItem(QStringLiteral("审计 auditor"), QStringLiteral("auditor"));
+
+    setupTable(m_recentOrders, {
+        QStringLiteral("订单号"), QStringLiteral("用户"), QStringLiteral("站点"),
+        QStringLiteral("电量(kWh)"), QStringLiteral("金额(元)"), QStringLiteral("状态")
+    });
+    setupTable(m_statusDistTable, {
+        QStringLiteral("运行状态"), QStringLiteral("数量"), QStringLiteral("占比")
+    });
+    setupTable(m_statusPileTable, {
+        QStringLiteral("电桩编号"), QStringLiteral("所属电站"), QStringLiteral("具体位置"),
+        QStringLiteral("剩余电量(kWh)"), QStringLiteral("功率(kW)"),
+        QStringLiteral("使用状态"), QStringLiteral("是否故障")
+    });
+    setupTable(m_pileTable, {
+        QStringLiteral("电桩ID"), QStringLiteral("电桩编号"), QStringLiteral("所属电站"),
+        QStringLiteral("类型"), QStringLiteral("功率(kW)"), QStringLiteral("剩余电量"),
+        QStringLiteral("当前状态"), QStringLiteral("是否故障"), QStringLiteral("具体位置")
+    });
+    setupTable(m_stationTable, {
+        QStringLiteral("充电站ID"), QStringLiteral("站名"), QStringLiteral("详细地址"),
+        QStringLiteral("经纬度"), QStringLiteral("总电桩数"), QStringLiteral("当前在线率")
+    });
+    setupTable(m_stationPileTable, {
+        QStringLiteral("电桩编号"), QStringLiteral("类型"), QStringLiteral("功率(kW)"),
+        QStringLiteral("状态"), QStringLiteral("累计次数")
+    });
+    setupTable(m_userTable, {
+        QStringLiteral("用户ID"), QStringLiteral("手机号"), QStringLiteral("昵称"),
+        QStringLiteral("钱包余额"), QStringLiteral("注册时间"), QStringLiteral("状态")
+    });
+    setupTable(m_reservationTable, {
+        QStringLiteral("预约号"), QStringLiteral("用户"), QStringLiteral("手机号"),
+        QStringLiteral("电站"), QStringLiteral("电桩"), QStringLiteral("到期时间")
+    });
+    setupTable(m_inviteTable, {
+        QStringLiteral("邀请码"), QStringLiteral("角色"), QStringLiteral("创建时间"),
+        QStringLiteral("使用人"), QStringLiteral("使用时间")
+    });
+    setupTable(m_permTable, {QStringLiteral("权限"), QStringLiteral("允许")});
+
     connect(m_darkModeBtn, &QPushButton::toggled, this, &MainWindow::onToggleDarkMode);
-
-    auto *logoutBtn = new QPushButton(QStringLiteral("退出登录"), side);
-    logoutBtn->setObjectName(QStringLiteral("dangerBtn"));
-    sideLayout->addWidget(logoutBtn);
-    connect(logoutBtn, &QPushButton::clicked, this, &MainWindow::onLogout);
-
-    auto *right = new QWidget(central);
-    auto *rightLayout = new QVBoxLayout(right);
-    rightLayout->setContentsMargins(16, 12, 16, 12);
-    rightLayout->setSpacing(8);
-
-    m_stack = new QStackedWidget(right);
-    m_stack->addWidget(buildDashboardPage());
-    m_stack->addWidget(buildPileStatusPage());
-    m_stack->addWidget(buildPilePage());
-    m_stack->addWidget(buildStationPage());
-    m_stack->addWidget(buildUserPage());
-    m_stack->addWidget(buildReservationPage());
-    m_stack->addWidget(buildPermissionPage());
-    rightLayout->addWidget(m_stack, 1);
-
-    root->addWidget(side);
-    root->addWidget(right, 1);
+    connect(ui->logoutBtn, &QPushButton::clicked, this, &MainWindow::onLogout);
     connect(m_nav, &QListWidget::currentRowChanged, this, &MainWindow::onNavChanged);
+    connect(ui->dashboardRefreshBtn, &QPushButton::clicked, this, &MainWindow::refreshDashboard);
+    connect(m_salesDays, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &MainWindow::refreshDashboard);
+    connect(ui->pileStatusRefreshBtn, &QPushButton::clicked, this, &MainWindow::refreshPileStatus);
+    connect(ui->statusQueryBtn, &QPushButton::clicked, this, &MainWindow::refreshPileStatus);
+    connect(m_statusKeyword, &QLineEdit::returnPressed, this, &MainWindow::refreshPileStatus);
+    connect(ui->pileRefreshBtn, &QPushButton::clicked, this, &MainWindow::refreshPiles);
+    connect(m_pileDistrictFilter, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &MainWindow::onPileDistrictChanged);
+    connect(m_pileStationFilter, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &MainWindow::refreshPiles);
+    connect(m_pileStatusFilter, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &MainWindow::refreshPiles);
+    connect(m_pileRestartBtn, &QPushButton::clicked, this, &MainWindow::onRestartPile);
+    connect(m_pileTable, &QTableWidget::itemSelectionChanged,
+            this, &MainWindow::onPileSelectionChanged);
+    connect(ui->addPileBtn, &QPushButton::clicked, this, &MainWindow::onAddPile);
+    connect(ui->editPileBtn, &QPushButton::clicked, this, &MainWindow::onEditPile);
+    connect(ui->delPileBtn, &QPushButton::clicked, this, &MainWindow::onDeletePile);
+    connect(ui->stationSearchBtn, &QPushButton::clicked, this, &MainWindow::refreshStations);
+    connect(m_stationKeyword, &QLineEdit::returnPressed, this, &MainWindow::refreshStations);
+    connect(ui->addStationBtn, &QPushButton::clicked, this, &MainWindow::onAddStation);
+    connect(ui->editStationBtn, &QPushButton::clicked, this, &MainWindow::onEditStation);
+    connect(ui->delStationBtn, &QPushButton::clicked, this, &MainWindow::onDeleteStation);
+    connect(m_stationTable, &QTableWidget::cellClicked, this, &MainWindow::onStationRowClicked);
+    connect(ui->userSearchBtn, &QPushButton::clicked, this, &MainWindow::refreshUsers);
+    connect(m_userKeyword, &QLineEdit::returnPressed, this, &MainWindow::refreshUsers);
+    connect(ui->userStatusBtn, &QPushButton::clicked, this, &MainWindow::onToggleUserStatus);
+    connect(ui->userOrdersBtn, &QPushButton::clicked, this, &MainWindow::onViewUserOrders);
+    connect(ui->reservationRefreshBtn, &QPushButton::clicked, this, &MainWindow::refreshReservations);
+    connect(ui->cancelReservationBtn, &QPushButton::clicked, this, &MainWindow::onCancelReservation);
+    connect(ui->createInviteBtn, &QPushButton::clicked, this, [this]() {
+        QString code;
+        if (!AdminApiClient::instance().createInviteCode(m_inviteRoleCombo->currentData().toString(), code)) {
+            showApiError(QStringLiteral("生成邀请码失败"));
+            return;
+        }
+        QMessageBox::information(this, QStringLiteral("邀请码已生成"), code);
+        refreshPermissions();
+    });
+    connect(ui->inviteRefreshBtn, &QPushButton::clicked, this, &MainWindow::refreshPermissions);
+    connect(m_permRoleCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &MainWindow::refreshPermissions);
+    connect(ui->permSaveBtn, &QPushButton::clicked, this, &MainWindow::onTogglePermission);
 }
 
 void MainWindow::onNavChanged(int row)
@@ -202,359 +312,6 @@ void MainWindow::onNavChanged(int row)
     case 6: refreshPermissions(); break;
     default: break;
     }
-}
-
-QWidget *MainWindow::buildDashboardPage()
-{
-    auto *page = new QWidget(this);
-    auto *pageLayout = new QVBoxLayout(page);
-    pageLayout->setContentsMargins(0, 0, 0, 0);
-    pageLayout->setSpacing(0);
-    auto *scroll = new QScrollArea(page);
-    scroll->setWidgetResizable(true);
-    scroll->setFrameShape(QFrame::NoFrame);
-    auto *inner = new QWidget(scroll);
-    auto *layout = new QVBoxLayout(inner);
-    layout->setSpacing(10);
-    layout->setContentsMargins(0, 0, 4, 0);
-
-    auto *grid = new QGridLayout;
-    grid->addWidget(makeKpiCard(QStringLiteral("今日营收（元）"), &m_kpiTodayAmount), 0, 0);
-    grid->addWidget(makeKpiCard(QStringLiteral("本月营收（元）"), &m_kpiMonthAmount), 0, 1);
-    grid->addWidget(makeKpiCard(QStringLiteral("总营收（元）"), &m_kpiTotalAmount), 0, 2);
-    layout->addLayout(grid);
-
-    auto *chartHeader = new QHBoxLayout;
-    auto *chartTitle = new QLabel(QStringLiteral("营收趋势"), page);
-    chartTitle->setObjectName(QStringLiteral("pageTitle"));
-    m_salesDays = new QComboBox(page);
-    m_salesDays->addItem(QStringLiteral("近 7 日"), 7);
-    m_salesDays->addItem(QStringLiteral("近 30 日"), 30);
-    auto *refreshBtn = new QPushButton(QStringLiteral("刷新"), page);
-    chartHeader->addWidget(chartTitle);
-    chartHeader->addStretch();
-    chartHeader->addWidget(m_salesDays);
-    chartHeader->addWidget(refreshBtn);
-    layout->addLayout(chartHeader);
-
-    m_salesChartView = new QChartView(page);
-    m_salesChartView->setMinimumHeight(240);
-    m_salesChartView->setRenderHint(QPainter::Antialiasing);
-    layout->addWidget(m_salesChartView, 2);
-
-    m_recentOrders = new QTableWidget(page);
-    setupTable(m_recentOrders, {
-        QStringLiteral("订单号"), QStringLiteral("用户"), QStringLiteral("站点"),
-        QStringLiteral("电量(kWh)"), QStringLiteral("金额(元)"), QStringLiteral("状态")
-    });
-    layout->addWidget(m_recentOrders, 1);
-
-    connect(refreshBtn, &QPushButton::clicked, this, &MainWindow::refreshDashboard);
-    connect(m_salesDays, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, &MainWindow::refreshDashboard);
-    m_recentOrders->setMinimumHeight(180);
-    scroll->setWidget(inner);
-    pageLayout->addWidget(scroll);
-    return page;
-}
-
-QWidget *MainWindow::buildPileStatusPage()
-{
-    auto *page = new QWidget(this);
-    auto *layout = new QVBoxLayout(page);
-    auto *title = new QLabel(QStringLiteral("电桩状态"), page);
-    title->setObjectName(QStringLiteral("pageTitle"));
-    m_statusSummary = new QLabel(page);
-    m_statusSummary->setObjectName(QStringLiteral("muted"));
-    m_statusSummary->setWordWrap(true);
-
-    auto *mid = new QHBoxLayout;
-    m_statusChartView = new QChartView(page);
-    m_statusChartView->setMinimumWidth(380);
-    m_statusChartView->setRenderHint(QPainter::Antialiasing);
-    m_statusDistTable = new QTableWidget(page);
-    setupTable(m_statusDistTable, {
-        QStringLiteral("运行状态"), QStringLiteral("数量"), QStringLiteral("占比")
-    });
-    mid->addWidget(m_statusChartView, 2);
-    mid->addWidget(m_statusDistTable, 3);
-
-    auto *queryRow = new QHBoxLayout;
-    m_statusKeyword = new QLineEdit(page);
-    m_statusKeyword->setPlaceholderText(QStringLiteral("按电桩编号/电站/地址查询"));
-    auto *queryBtn = new QPushButton(QStringLiteral("查询明细"), page);
-    queryRow->addWidget(m_statusKeyword, 1);
-    queryRow->addWidget(queryBtn);
-
-    m_statusPileTable = new QTableWidget(page);
-    setupTable(m_statusPileTable, {
-        QStringLiteral("电桩编号"), QStringLiteral("所属电站"), QStringLiteral("具体位置"),
-        QStringLiteral("剩余电量(kWh)"), QStringLiteral("功率(kW)"),
-        QStringLiteral("使用状态"), QStringLiteral("是否故障")
-    });
-
-    auto *refreshBtn = new QPushButton(QStringLiteral("刷新"), page);
-    layout->addWidget(title);
-    layout->addWidget(m_statusSummary);
-    layout->addLayout(mid, 1);
-    layout->addLayout(queryRow);
-    layout->addWidget(m_statusPileTable, 2);
-    layout->addWidget(refreshBtn, 0, Qt::AlignRight);
-    connect(refreshBtn, &QPushButton::clicked, this, &MainWindow::refreshPileStatus);
-    connect(queryBtn, &QPushButton::clicked, this, &MainWindow::refreshPileStatus);
-    connect(m_statusKeyword, &QLineEdit::returnPressed, this, &MainWindow::refreshPileStatus);
-    return page;
-}
-
-QWidget *MainWindow::buildPilePage()
-{
-    auto *page = new QWidget(this);
-    auto *layout = new QVBoxLayout(page);
-
-    auto *titleRow = new QHBoxLayout;
-    auto *title = new QLabel(QStringLiteral("充电桩管理"), page);
-    title->setObjectName(QStringLiteral("pageTitle"));
-    auto *refreshBtn = new QPushButton(QStringLiteral("刷新"), page);
-    auto *addPileBtn = new QPushButton(QStringLiteral("新增电桩"), page);
-    auto *editPileBtn = new QPushButton(QStringLiteral("修改"), page);
-    editPileBtn->setObjectName(QStringLiteral("secondaryBtn"));
-    auto *delPileBtn = new QPushButton(QStringLiteral("删除"), page);
-    delPileBtn->setObjectName(QStringLiteral("dangerBtn"));
-    m_pileRestartBtn = new QPushButton(QStringLiteral("模拟维修（远程重启）"), page);
-    m_pileRestartBtn->setObjectName(QStringLiteral("secondaryBtn"));
-    m_pileRestartBtn->setVisible(false);
-    titleRow->addWidget(title);
-    titleRow->addStretch();
-    titleRow->addWidget(addPileBtn);
-    titleRow->addWidget(editPileBtn);
-    titleRow->addWidget(delPileBtn);
-    titleRow->addWidget(m_pileRestartBtn);
-    titleRow->addWidget(refreshBtn);
-
-    auto *filterRow = new QHBoxLayout;
-    m_pileDistrictFilter = new QComboBox(page);
-    m_pileStationFilter = new QComboBox(page);
-    m_pileStatusFilter = new QComboBox(page);
-    m_pileStatusFilter->addItem(QStringLiteral("全部状态"), QString());
-    m_pileStatusFilter->addItem(QStringLiteral("空闲"), QStringLiteral("idle"));
-    m_pileStatusFilter->addItem(QStringLiteral("已预约"), QStringLiteral("reserved"));
-    m_pileStatusFilter->addItem(QStringLiteral("充电中"), QStringLiteral("charging"));
-    m_pileStatusFilter->addItem(QStringLiteral("故障"), QStringLiteral("fault"));
-    m_pileStatusFilter->addItem(QStringLiteral("离线"), QStringLiteral("offline"));
-    m_pileStatusFilter->addItem(QStringLiteral("维修中"), QStringLiteral("restarting"));
-    filterRow->addWidget(new QLabel(QStringLiteral("城区"), page));
-    filterRow->addWidget(m_pileDistrictFilter, 1);
-    filterRow->addWidget(new QLabel(QStringLiteral("站点"), page));
-    filterRow->addWidget(m_pileStationFilter, 2);
-    filterRow->addWidget(new QLabel(QStringLiteral("电桩状态"), page));
-    filterRow->addWidget(m_pileStatusFilter, 1);
-
-    auto *hint = new QLabel(
-        QStringLiteral("筛选路径：城区 → 站点 → 状态。「模拟维修」仅在选中故障电桩时出现。"), page);
-    hint->setObjectName(QStringLiteral("muted"));
-    hint->setWordWrap(true);
-
-    m_pileTable = new QTableWidget(page);
-    setupTable(m_pileTable, {
-        QStringLiteral("电桩ID"), QStringLiteral("电桩编号"), QStringLiteral("所属电站"),
-        QStringLiteral("类型"), QStringLiteral("功率(kW)"), QStringLiteral("剩余电量"),
-        QStringLiteral("当前状态"), QStringLiteral("是否故障"), QStringLiteral("具体位置")
-    });
-
-    layout->addLayout(titleRow);
-    layout->addLayout(filterRow);
-    layout->addWidget(hint);
-    layout->addWidget(m_pileTable, 1);
-    connect(refreshBtn, &QPushButton::clicked, this, &MainWindow::refreshPiles);
-    connect(m_pileDistrictFilter, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, &MainWindow::onPileDistrictChanged);
-    connect(m_pileStationFilter, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, &MainWindow::refreshPiles);
-    connect(m_pileStatusFilter, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, &MainWindow::refreshPiles);
-    connect(m_pileRestartBtn, &QPushButton::clicked, this, &MainWindow::onRestartPile);
-    connect(m_pileTable, &QTableWidget::itemSelectionChanged,
-            this, &MainWindow::onPileSelectionChanged);
-    connect(addPileBtn, &QPushButton::clicked, this, &MainWindow::onAddPile);
-    connect(editPileBtn, &QPushButton::clicked, this, &MainWindow::onEditPile);
-    connect(delPileBtn, &QPushButton::clicked, this, &MainWindow::onDeletePile);
-    return page;
-}
-
-QWidget *MainWindow::buildStationPage()
-{
-    auto *page = new QWidget(this);
-    auto *layout = new QVBoxLayout(page);
-
-    auto *row = new QHBoxLayout;
-    auto *title = new QLabel(QStringLiteral("充电站管理"), page);
-    title->setObjectName(QStringLiteral("pageTitle"));
-    m_stationKeyword = new QLineEdit(page);
-    m_stationKeyword->setPlaceholderText(QStringLiteral("按站名或地址搜索"));
-    auto *searchBtn = new QPushButton(QStringLiteral("查询"), page);
-    auto *addBtn = new QPushButton(QStringLiteral("新增电站"), page);
-    auto *editBtn = new QPushButton(QStringLiteral("修改电站"), page);
-    editBtn->setObjectName(QStringLiteral("secondaryBtn"));
-    auto *delBtn = new QPushButton(QStringLiteral("删除电站"), page);
-    delBtn->setObjectName(QStringLiteral("dangerBtn"));
-    row->addWidget(title);
-    row->addWidget(m_stationKeyword, 1);
-    row->addWidget(searchBtn);
-    row->addWidget(addBtn);
-    row->addWidget(editBtn);
-    row->addWidget(delBtn);
-
-    m_stationTable = new QTableWidget(page);
-    setupTable(m_stationTable, {
-        QStringLiteral("充电站ID"), QStringLiteral("站名"), QStringLiteral("详细地址"),
-        QStringLiteral("经纬度"), QStringLiteral("总电桩数"), QStringLiteral("当前在线率")
-    });
-
-    m_stationDetailTitle = new QLabel(QStringLiteral("点击上方电站行，查看站内电桩实时状态"), page);
-    m_stationDetailTitle->setObjectName(QStringLiteral("muted"));
-    m_stationPileTable = new QTableWidget(page);
-    setupTable(m_stationPileTable, {
-        QStringLiteral("电桩编号"), QStringLiteral("类型"), QStringLiteral("功率(kW)"),
-        QStringLiteral("状态"), QStringLiteral("累计次数")
-    });
-    m_stationPileTable->setMaximumHeight(240);
-
-    layout->addLayout(row);
-    layout->addWidget(m_stationTable, 3);
-    layout->addWidget(m_stationDetailTitle);
-    layout->addWidget(m_stationPileTable, 2);
-
-    connect(searchBtn, &QPushButton::clicked, this, &MainWindow::refreshStations);
-    connect(m_stationKeyword, &QLineEdit::returnPressed, this, &MainWindow::refreshStations);
-    connect(addBtn, &QPushButton::clicked, this, &MainWindow::onAddStation);
-    connect(editBtn, &QPushButton::clicked, this, &MainWindow::onEditStation);
-    connect(delBtn, &QPushButton::clicked, this, &MainWindow::onDeleteStation);
-    connect(m_stationTable, &QTableWidget::cellClicked, this, &MainWindow::onStationRowClicked);
-    return page;
-}
-
-QWidget *MainWindow::buildUserPage()
-{
-    auto *page = new QWidget(this);
-    auto *layout = new QVBoxLayout(page);
-
-    auto *row = new QHBoxLayout;
-    auto *title = new QLabel(QStringLiteral("用户管理"), page);
-    title->setObjectName(QStringLiteral("pageTitle"));
-    m_userKeyword = new QLineEdit(page);
-    m_userKeyword->setPlaceholderText(QStringLiteral("按手机号模糊搜索"));
-    auto *searchBtn = new QPushButton(QStringLiteral("查询"), page);
-    auto *statusBtn = new QPushButton(QStringLiteral("冻结 / 解冻"), page);
-    statusBtn->setObjectName(QStringLiteral("secondaryBtn"));
-    auto *ordersBtn = new QPushButton(QStringLiteral("充电记录"), page);
-    row->addWidget(title);
-    row->addWidget(m_userKeyword, 1);
-    row->addWidget(searchBtn);
-    row->addWidget(ordersBtn);
-    row->addWidget(statusBtn);
-
-    m_userTable = new QTableWidget(page);
-    setupTable(m_userTable, {
-        QStringLiteral("用户ID"), QStringLiteral("手机号"), QStringLiteral("昵称"),
-        QStringLiteral("钱包余额"), QStringLiteral("注册时间"), QStringLiteral("状态")
-    });
-
-    layout->addLayout(row);
-    layout->addWidget(m_userTable, 1);
-    connect(searchBtn, &QPushButton::clicked, this, &MainWindow::refreshUsers);
-    connect(m_userKeyword, &QLineEdit::returnPressed, this, &MainWindow::refreshUsers);
-    connect(statusBtn, &QPushButton::clicked, this, &MainWindow::onToggleUserStatus);
-    connect(ordersBtn, &QPushButton::clicked, this, &MainWindow::onViewUserOrders);
-    return page;
-}
-
-QWidget *MainWindow::buildReservationPage()
-{
-    auto *page = new QWidget(this);
-    auto *layout = new QVBoxLayout(page);
-    auto *row = new QHBoxLayout;
-    auto *title = new QLabel(QStringLiteral("预约管理"), page);
-    title->setObjectName(QStringLiteral("pageTitle"));
-    auto *refreshBtn = new QPushButton(QStringLiteral("刷新"), page);
-    auto *cancelBtn = new QPushButton(QStringLiteral("解除预约"), page);
-    cancelBtn->setObjectName(QStringLiteral("dangerBtn"));
-    row->addWidget(title);
-    row->addStretch();
-    row->addWidget(cancelBtn);
-    row->addWidget(refreshBtn);
-    m_reservationTable = new QTableWidget(page);
-    setupTable(m_reservationTable, {
-        QStringLiteral("预约号"), QStringLiteral("用户"), QStringLiteral("手机号"),
-        QStringLiteral("电站"), QStringLiteral("电桩"), QStringLiteral("到期时间")
-    });
-    layout->addLayout(row);
-    layout->addWidget(m_reservationTable, 1);
-    connect(refreshBtn, &QPushButton::clicked, this, &MainWindow::refreshReservations);
-    connect(cancelBtn, &QPushButton::clicked, this, &MainWindow::onCancelReservation);
-    return page;
-}
-
-QWidget *MainWindow::buildPermissionPage()
-{
-    auto *page = new QWidget(this);
-    auto *layout = new QVBoxLayout(page);
-
-    auto *inviteTitle = new QLabel(QStringLiteral("邀请码"), page);
-    inviteTitle->setObjectName(QStringLiteral("pageTitle"));
-    auto *inviteRow = new QHBoxLayout;
-    auto *roleCombo = new QComboBox(page);
-    roleCombo->addItem(QStringLiteral("运维 operator"), QStringLiteral("operator"));
-    roleCombo->addItem(QStringLiteral("审计 auditor"), QStringLiteral("auditor"));
-    auto *createBtn = new QPushButton(QStringLiteral("生成邀请码"), page);
-    auto *inviteRefresh = new QPushButton(QStringLiteral("刷新"), page);
-    inviteRefresh->setObjectName(QStringLiteral("secondaryBtn"));
-    inviteRow->addWidget(new QLabel(QStringLiteral("授予角色"), page));
-    inviteRow->addWidget(roleCombo);
-    inviteRow->addWidget(createBtn);
-    inviteRow->addStretch();
-    inviteRow->addWidget(inviteRefresh);
-    m_inviteTable = new QTableWidget(page);
-    setupTable(m_inviteTable, {
-        QStringLiteral("邀请码"), QStringLiteral("角色"), QStringLiteral("创建时间"),
-        QStringLiteral("使用人"), QStringLiteral("使用时间")
-    });
-    m_inviteTable->setMaximumHeight(220);
-
-    auto *permTitle = new QLabel(QStringLiteral("角色权限"), page);
-    permTitle->setObjectName(QStringLiteral("pageTitle"));
-    auto *permRow = new QHBoxLayout;
-    m_permRoleCombo = new QComboBox(page);
-    m_permRoleCombo->addItem(QStringLiteral("运维 operator"), QStringLiteral("operator"));
-    m_permRoleCombo->addItem(QStringLiteral("审计 auditor"), QStringLiteral("auditor"));
-    auto *permSave = new QPushButton(QStringLiteral("保存当前勾选"), page);
-    permRow->addWidget(new QLabel(QStringLiteral("角色"), page));
-    permRow->addWidget(m_permRoleCombo);
-    permRow->addStretch();
-    permRow->addWidget(permSave);
-    m_permTable = new QTableWidget(page);
-    setupTable(m_permTable, {QStringLiteral("权限"), QStringLiteral("允许")});
-
-    layout->addWidget(inviteTitle);
-    layout->addLayout(inviteRow);
-    layout->addWidget(m_inviteTable);
-    layout->addWidget(permTitle);
-    layout->addLayout(permRow);
-    layout->addWidget(m_permTable, 1);
-
-    connect(createBtn, &QPushButton::clicked, this, [this, roleCombo]() {
-        QString code;
-        if (!AdminApiClient::instance().createInviteCode(roleCombo->currentData().toString(), code)) {
-            showApiError(QStringLiteral("生成邀请码失败"));
-            return;
-        }
-        QMessageBox::information(this, QStringLiteral("邀请码已生成"), code);
-        refreshPermissions();
-    });
-    connect(inviteRefresh, &QPushButton::clicked, this, &MainWindow::refreshPermissions);
-    connect(m_permRoleCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, &MainWindow::refreshPermissions);
-    connect(permSave, &QPushButton::clicked, this, &MainWindow::onTogglePermission);
-    return page;
 }
 
 void MainWindow::showApiError(const QString &title)
@@ -888,40 +645,11 @@ void MainWindow::onRestartPile()
 
 void MainWindow::onAddStation()
 {
-    QDialog dlg(this);
-    dlg.setWindowTitle(QStringLiteral("新增电站"));
-    dlg.setStyleSheet(styleSheet());
-    auto *form = new QFormLayout(&dlg);
-    auto *name = new QLineEdit(&dlg);
-    auto *addr = new QLineEdit(&dlg);
-    auto *lat = new QLineEdit(QStringLiteral("39.9042"), &dlg);
-    auto *lng = new QLineEdit(QStringLiteral("116.4074"), &dlg);
-    auto *count = new QSpinBox(&dlg);
-    count->setRange(1, 40);
-    count->setValue(4);
-    form->addRow(QStringLiteral("站名"), name);
-    form->addRow(QStringLiteral("详细地址"), addr);
-    form->addRow(QStringLiteral("纬度"), lat);
-    form->addRow(QStringLiteral("经度"), lng);
-    form->addRow(QStringLiteral("电桩数量"), count);
-    auto *ok = new QPushButton(QStringLiteral("完成新增"), &dlg);
-    form->addRow(ok);
-    connect(ok, &QPushButton::clicked, &dlg, &QDialog::accept);
-    if (dlg.exec() != QDialog::Accepted)
-        return;
-
     Station station;
-    station.name = name->text().trimmed();
-    station.address = addr->text().trimmed();
-    station.latitude = lat->text().toDouble();
-    station.longitude = lng->text().toDouble();
-    station.openHours = QStringLiteral("00:00-24:00");
-    station.status = QStringLiteral("open");
-    if (station.name.isEmpty() || station.address.isEmpty()) {
-        QMessageBox::warning(this, QStringLiteral("提示"), QStringLiteral("请填写站名和地址"));
+    int count = 4;
+    if (!editStationDialog(station, &count, true))
         return;
-    }
-    if (!AdminApiClient::instance().saveStation(station, count->value())) {
+    if (!AdminApiClient::instance().saveStation(station, count)) {
         showApiError(QStringLiteral("新增电站失败"));
         return;
     }
@@ -1000,70 +728,45 @@ bool MainWindow::confirmForce(const QString &title)
 bool MainWindow::editPileDialog(Pile &pile, bool isNew)
 {
     QDialog dlg(this);
+    Ui::EditPileDialog form;
+    form.setupUi(&dlg);
     dlg.setWindowTitle(isNew ? QStringLiteral("新增电桩") : QStringLiteral("修改电桩"));
     dlg.setStyleSheet(styleSheet());
-    auto *form = new QFormLayout(&dlg);
-    auto *idEdit = new QLineEdit(pile.id > 0 ? QString::number(pile.id) : QStringLiteral("自动生成"), &dlg);
-    idEdit->setReadOnly(true);
-    auto *code = new QLineEdit(pile.pileCode, &dlg);
-    auto *stationId = new QSpinBox(&dlg);
-    stationId->setRange(1, 999999);
-    stationId->setValue(pile.stationId > 0 ? pile.stationId : m_pileStationFilter->currentData().toInt());
-    auto *type = new QComboBox(&dlg);
-    type->addItems({QStringLiteral("AC"), QStringLiteral("DC")});
-    type->setCurrentText(pile.pileType.isEmpty() ? QStringLiteral("AC") : pile.pileType);
-    auto *speed = new QComboBox(&dlg);
-    speed->addItem(QStringLiteral("慢充"), QStringLiteral("slow"));
-    speed->addItem(QStringLiteral("常规"), QStringLiteral("standard"));
-    speed->addItem(QStringLiteral("快充"), QStringLiteral("fast"));
-    speed->addItem(QStringLiteral("超充"), QStringLiteral("ultra"));
-    const int speedIdx = speed->findData(pile.speedClass);
-    speed->setCurrentIndex(speedIdx >= 0 ? speedIdx : 0);
-    auto *connector = new QComboBox(&dlg);
-    connector->addItem(QStringLiteral("国标交流"), QStringLiteral("GB_T_AC"));
-    connector->addItem(QStringLiteral("国标直流"), QStringLiteral("GB_T_DC"));
-    connector->addItem(QStringLiteral("CCS2"), QStringLiteral("CCS2"));
-    connector->addItem(QStringLiteral("CHAdeMO"), QStringLiteral("CHAdeMO"));
-    connector->addItem(QStringLiteral("特斯拉NACS"), QStringLiteral("TeslaNACS"));
-    const int connIdx = connector->findData(pile.connectorStandard);
-    connector->setCurrentIndex(connIdx >= 0 ? connIdx : 0);
-    auto *power = new QDoubleSpinBox(&dlg);
-    power->setRange(1, 400);
-    power->setValue(pile.powerKw > 0 ? pile.powerKw : 7.0);
-    auto *price = new QDoubleSpinBox(&dlg);
-    price->setRange(0, 20);
-    price->setDecimals(2);
-    price->setValue(pile.pricePerKwh > 0 ? pile.pricePerKwh : 1.2);
-    auto *remain = new QDoubleSpinBox(&dlg);
-    remain->setRange(0, 500);
-    remain->setValue(pile.remainingKwh > 0 ? pile.remainingKwh : 100.0);
-    auto *status = new QComboBox(&dlg);
-    status->addItems({QStringLiteral("idle"), QStringLiteral("fault"), QStringLiteral("offline")});
-    status->setCurrentText(pile.status.isEmpty() ? QStringLiteral("idle") : pile.status);
-    form->addRow(QStringLiteral("电桩ID（不可改）"), idEdit);
-    form->addRow(QStringLiteral("电桩编号"), code);
-    form->addRow(QStringLiteral("所属电站ID"), stationId);
-    form->addRow(QStringLiteral("类型"), type);
-    form->addRow(QStringLiteral("充电速度"), speed);
-    form->addRow(QStringLiteral("接口标准"), connector);
-    form->addRow(QStringLiteral("功率(kW)"), power);
-    form->addRow(QStringLiteral("电价(元/kWh)"), price);
-    form->addRow(QStringLiteral("剩余电量(kWh)"), remain);
-    form->addRow(QStringLiteral("状态"), status);
-    auto *ok = new QPushButton(QStringLiteral("保存"), &dlg);
-    form->addRow(ok);
-    connect(ok, &QPushButton::clicked, &dlg, &QDialog::accept);
+    form.idEdit->setText(pile.id > 0 ? QString::number(pile.id) : QStringLiteral("自动生成"));
+    form.codeEdit->setText(pile.pileCode);
+    form.stationIdSpin->setValue(pile.stationId > 0 ? pile.stationId : m_pileStationFilter->currentData().toInt());
+    form.typeCombo->addItems({QStringLiteral("AC"), QStringLiteral("DC")});
+    form.typeCombo->setCurrentText(pile.pileType.isEmpty() ? QStringLiteral("AC") : pile.pileType);
+    form.speedCombo->addItem(QStringLiteral("慢充"), QStringLiteral("slow"));
+    form.speedCombo->addItem(QStringLiteral("常规"), QStringLiteral("standard"));
+    form.speedCombo->addItem(QStringLiteral("快充"), QStringLiteral("fast"));
+    form.speedCombo->addItem(QStringLiteral("超充"), QStringLiteral("ultra"));
+    const int speedIdx = form.speedCombo->findData(pile.speedClass);
+    form.speedCombo->setCurrentIndex(speedIdx >= 0 ? speedIdx : 0);
+    form.connectorCombo->addItem(QStringLiteral("国标交流"), QStringLiteral("GB_T_AC"));
+    form.connectorCombo->addItem(QStringLiteral("国标直流"), QStringLiteral("GB_T_DC"));
+    form.connectorCombo->addItem(QStringLiteral("CCS2"), QStringLiteral("CCS2"));
+    form.connectorCombo->addItem(QStringLiteral("CHAdeMO"), QStringLiteral("CHAdeMO"));
+    form.connectorCombo->addItem(QStringLiteral("特斯拉NACS"), QStringLiteral("TeslaNACS"));
+    const int connIdx = form.connectorCombo->findData(pile.connectorStandard);
+    form.connectorCombo->setCurrentIndex(connIdx >= 0 ? connIdx : 0);
+    form.powerSpin->setValue(pile.powerKw > 0 ? pile.powerKw : 7.0);
+    form.priceSpin->setValue(pile.pricePerKwh > 0 ? pile.pricePerKwh : 1.2);
+    form.remainSpin->setValue(pile.remainingKwh > 0 ? pile.remainingKwh : 100.0);
+    form.statusCombo->addItems({QStringLiteral("idle"), QStringLiteral("fault"), QStringLiteral("offline")});
+    form.statusCombo->setCurrentText(pile.status.isEmpty() ? QStringLiteral("idle") : pile.status);
+    connect(form.saveBtn, &QPushButton::clicked, &dlg, &QDialog::accept);
     if (dlg.exec() != QDialog::Accepted)
         return false;
-    pile.pileCode = code->text().trimmed();
-    pile.stationId = stationId->value();
-    pile.pileType = type->currentText();
-    pile.speedClass = speed->currentData().toString();
-    pile.connectorStandard = connector->currentData().toString();
-    pile.powerKw = power->value();
-    pile.pricePerKwh = price->value();
-    pile.remainingKwh = remain->value();
-    pile.status = status->currentText();
+    pile.pileCode = form.codeEdit->text().trimmed();
+    pile.stationId = form.stationIdSpin->value();
+    pile.pileType = form.typeCombo->currentText();
+    pile.speedClass = form.speedCombo->currentData().toString();
+    pile.connectorStandard = form.connectorCombo->currentData().toString();
+    pile.powerKw = form.powerSpin->value();
+    pile.pricePerKwh = form.priceSpin->value();
+    pile.remainingKwh = form.remainSpin->value();
+    pile.status = form.statusCombo->currentText();
     pile.categoryLabel.clear();
     if (pile.pileCode.isEmpty()) {
         QMessageBox::warning(this, QStringLiteral("提示"), QStringLiteral("请填写电桩编号"));
@@ -1075,42 +778,35 @@ bool MainWindow::editPileDialog(Pile &pile, bool isNew)
 bool MainWindow::editStationDialog(Station &station, int *pileCount, bool isNew)
 {
     QDialog dlg(this);
+    Ui::EditStationDialog form;
+    form.setupUi(&dlg);
     dlg.setWindowTitle(isNew ? QStringLiteral("新增电站") : QStringLiteral("修改电站"));
     dlg.setStyleSheet(styleSheet());
-    auto *form = new QFormLayout(&dlg);
-    auto *idEdit = new QLineEdit(station.id > 0 ? QString::number(station.id) : QStringLiteral("自动生成"), &dlg);
-    idEdit->setReadOnly(true);
-    auto *name = new QLineEdit(station.name, &dlg);
-    auto *addr = new QLineEdit(station.address, &dlg);
-    auto *lat = new QLineEdit(station.latitude != 0 ? QString::number(station.latitude, 'f', 6)
-                                                    : QStringLiteral("39.9042"), &dlg);
-    auto *lng = new QLineEdit(station.longitude != 0 ? QString::number(station.longitude, 'f', 6)
-                                                     : QStringLiteral("116.4074"), &dlg);
-    form->addRow(QStringLiteral("电站ID（不可改）"), idEdit);
-    form->addRow(QStringLiteral("站名"), name);
-    form->addRow(QStringLiteral("详细地址"), addr);
-    form->addRow(QStringLiteral("纬度"), lat);
-    form->addRow(QStringLiteral("经度"), lng);
-    QSpinBox *count = nullptr;
+    form.idEdit->setText(station.id > 0 ? QString::number(station.id) : QStringLiteral("自动生成"));
+    form.nameEdit->setText(station.name);
+    form.addrEdit->setText(station.address);
+    form.latEdit->setText(station.latitude != 0 ? QString::number(station.latitude, 'f', 6)
+                                                : QStringLiteral("39.9042"));
+    form.lngEdit->setText(station.longitude != 0 ? QString::number(station.longitude, 'f', 6)
+                                                 : QStringLiteral("116.4074"));
     if (isNew && pileCount) {
-        count = new QSpinBox(&dlg);
-        count->setRange(1, 40);
-        count->setValue(*pileCount > 0 ? *pileCount : 4);
-        form->addRow(QStringLiteral("电桩数量"), count);
+        form.pileCountSpin->setValue(*pileCount > 0 ? *pileCount : 4);
+        form.saveBtn->setText(QStringLiteral("完成新增"));
+    } else {
+        form.pileCountLabel->hide();
+        form.pileCountSpin->hide();
     }
-    auto *ok = new QPushButton(QStringLiteral("保存"), &dlg);
-    form->addRow(ok);
-    connect(ok, &QPushButton::clicked, &dlg, &QDialog::accept);
+    connect(form.saveBtn, &QPushButton::clicked, &dlg, &QDialog::accept);
     if (dlg.exec() != QDialog::Accepted)
         return false;
-    station.name = name->text().trimmed();
-    station.address = addr->text().trimmed();
-    station.latitude = lat->text().toDouble();
-    station.longitude = lng->text().toDouble();
+    station.name = form.nameEdit->text().trimmed();
+    station.address = form.addrEdit->text().trimmed();
+    station.latitude = form.latEdit->text().toDouble();
+    station.longitude = form.lngEdit->text().toDouble();
     station.openHours = station.openHours.isEmpty() ? QStringLiteral("00:00-24:00") : station.openHours;
     station.status = station.status.isEmpty() ? QStringLiteral("open") : station.status;
-    if (count && pileCount)
-        *pileCount = count->value();
+    if (isNew && pileCount)
+        *pileCount = form.pileCountSpin->value();
     if (station.name.isEmpty() || station.address.isEmpty()) {
         QMessageBox::warning(this, QStringLiteral("提示"), QStringLiteral("请填写站名和地址"));
         return false;
@@ -1265,16 +961,17 @@ void MainWindow::onViewUserOrders()
     const int userId = m_userTable->item(row, 0)->data(Qt::UserRole).toInt();
     const QString phone = m_userTable->item(row, 1)->text();
     QDialog dlg(this);
+    Ui::UserOrdersDialog form;
+    form.setupUi(&dlg);
     dlg.setWindowTitle(QStringLiteral("充电记录 - %1").arg(phone));
     dlg.resize(720, 420);
     dlg.setStyleSheet(styleSheet());
-    auto *layout = new QVBoxLayout(&dlg);
-    auto *table = new QTableWidget(&dlg);
-    setupTable(table, {
+    form.deleteBtn->setObjectName(QStringLiteral("dangerBtn"));
+    setupTable(form.orderTable, {
         QStringLiteral("订单号"), QStringLiteral("站点"), QStringLiteral("电量"),
         QStringLiteral("金额"), QStringLiteral("状态")
     });
-    auto fill = [this, table, userId]() {
+    auto fill = [this, table = form.orderTable, userId]() {
         const auto orders = AdminApiClient::instance().listUserOrders(userId);
         table->setRowCount(orders.size());
         for (int i = 0; i < orders.size(); ++i) {
@@ -1286,11 +983,7 @@ void MainWindow::onViewUserOrders()
             table->setItem(i, 4, textItem(statusTextOrder(o.status)));
         }
     };
-    auto *delBtn = new QPushButton(QStringLiteral("删除选中记录"), &dlg);
-    delBtn->setObjectName(QStringLiteral("dangerBtn"));
-    layout->addWidget(table, 1);
-    layout->addWidget(delBtn);
-    connect(delBtn, &QPushButton::clicked, &dlg, [this, table, fill]() {
+    connect(form.deleteBtn, &QPushButton::clicked, &dlg, [this, table = form.orderTable, fill]() {
         const int r = table->currentRow();
         if (r < 0)
             return;

@@ -7,11 +7,14 @@
 class QLineEdit;
 class QStackedWidget;
 
+namespace Ui { class LoginDialog; }
+
 class LoginDialog : public QDialog
 {
     Q_OBJECT
 public:
     explicit LoginDialog(QWidget *parent = nullptr);
+    ~LoginDialog() override;
     Admin loggedInAdmin() const { return m_admin; }
 
 private slots:
@@ -21,6 +24,7 @@ private slots:
     void showRegisterPage();
 
 private:
+    Ui::LoginDialog *ui = nullptr;
     QStackedWidget *m_stack = nullptr;
     QLineEdit *m_usernameEdit = nullptr;
     QLineEdit *m_passwordEdit = nullptr;

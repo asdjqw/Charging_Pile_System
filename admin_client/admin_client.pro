@@ -16,5 +16,12 @@ SOURCES += \
     AdminApiClient.cpp \
     MainWindow.cpp
 
+FORMS += \
+    LoginDialog.ui \
+    MainWindow.ui \
+    EditPileDialog.ui \
+    EditStationDialog.ui \
+    UserOrdersDialog.ui
+
 win32: CONFIG += windows
 macx: CONFIG += app_bundle

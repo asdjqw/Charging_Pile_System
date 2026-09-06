@@ -1,0 +1,842 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="windowTitle">
+   <string>充电桩管理</string>
+  </property>
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1180</width>
+    <height>740</height>
+   </rect>
+  </property>
+  <property name="minimumSize">
+   <size>
+    <width>980</width>
+    <height>640</height>
+   </size>
+  </property>
+  <widget class="QWidget" name="centralRoot">
+   <layout class="QHBoxLayout" name="rootLayout" stretch="0,1">
+    <property name="leftMargin">
+     <number>0</number>
+    </property>
+    <property name="topMargin">
+     <number>0</number>
+    </property>
+    <property name="rightMargin">
+     <number>0</number>
+    </property>
+    <property name="bottomMargin">
+     <number>0</number>
+    </property>
+    <property name="spacing">
+     <number>0</number>
+    </property>
+    <item>
+     <widget class="QWidget" name="sideBar">
+      <property name="minimumSize">
+       <size>
+        <width>188</width>
+        <height>0</height>
+       </size>
+      </property>
+      <property name="maximumSize">
+       <size>
+        <width>188</width>
+        <height>16777215</height>
+       </size>
+      </property>
+      <layout class="QVBoxLayout" name="sideLayout" stretch="0,0,1,0,0">
+       <property name="leftMargin">
+        <number>0</number>
+       </property>
+       <property name="topMargin">
+        <number>16</number>
+       </property>
+       <property name="rightMargin">
+        <number>0</number>
+       </property>
+       <property name="bottomMargin">
+        <number>12</number>
+       </property>
+       <property name="spacing">
+        <number>4</number>
+       </property>
+       <item>
+        <widget class="QLabel" name="brandTitle">
+         <property name="text">
+          <string>充电桩管理</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="brandSub">
+         <property name="text">
+          <string/>
+         </property>
+         <property name="wordWrap">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QListWidget" name="sideNav">
+         <property name="spacing">
+          <number>0</number>
+         </property>
+         <property name="frameShape">
+          <enum>QFrame::NoFrame</enum>
+         </property>
+         <property name="focusPolicy">
+          <enum>Qt::NoFocus</enum>
+         </property>
+         <item>
+          <property name="text">
+           <string>销售业绩</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>电桩状态</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>充电桩管理</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>充电站管理</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>用户管理</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>预约管理</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>权限管理</string>
+          </property>
+         </item>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="darkModeBtn">
+         <property name="text">
+          <string>夜间模式：关</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="logoutBtn">
+         <property name="text">
+          <string>退出登录</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+    <item>
+     <widget class="QWidget" name="rightPanel">
+      <layout class="QVBoxLayout" name="rightLayout">
+       <property name="leftMargin">
+        <number>16</number>
+       </property>
+       <property name="topMargin">
+        <number>12</number>
+       </property>
+       <property name="rightMargin">
+        <number>16</number>
+       </property>
+       <property name="bottomMargin">
+        <number>12</number>
+       </property>
+       <property name="spacing">
+        <number>8</number>
+       </property>
+       <item>
+        <widget class="QStackedWidget" name="stack">
+         <property name="currentIndex">
+          <number>0</number>
+         </property>
+         <widget class="QWidget" name="dashboardPage">
+          <layout class="QVBoxLayout" name="dashboardPageLayout">
+           <property name="leftMargin">
+            <number>0</number>
+           </property>
+           <property name="topMargin">
+            <number>0</number>
+           </property>
+           <property name="rightMargin">
+            <number>0</number>
+           </property>
+           <property name="bottomMargin">
+            <number>0</number>
+           </property>
+           <property name="spacing">
+            <number>0</number>
+           </property>
+           <item>
+            <widget class="QScrollArea" name="dashboardScroll">
+             <property name="widgetResizable">
+              <bool>true</bool>
+             </property>
+             <property name="frameShape">
+              <enum>QFrame::NoFrame</enum>
+             </property>
+             <widget class="QWidget" name="dashboardInner">
+              <layout class="QVBoxLayout" name="dashboardInnerLayout" stretch="0,0,2,1">
+               <property name="spacing">
+                <number>10</number>
+               </property>
+               <property name="leftMargin">
+                <number>0</number>
+               </property>
+               <property name="topMargin">
+                <number>0</number>
+               </property>
+               <property name="rightMargin">
+                <number>4</number>
+               </property>
+               <property name="bottomMargin">
+                <number>0</number>
+               </property>
+               <item>
+                <layout class="QGridLayout" name="kpiGrid">
+                 <item row="0" column="0">
+                  <widget class="QFrame" name="kpiTodayCard">
+                   <layout class="QVBoxLayout" name="kpiTodayLayout">
+                    <property name="leftMargin">
+                     <number>12</number>
+                    </property>
+                    <property name="topMargin">
+                     <number>10</number>
+                    </property>
+                    <property name="rightMargin">
+                     <number>12</number>
+                    </property>
+                    <property name="bottomMargin">
+                     <number>10</number>
+                    </property>
+                    <item>
+                     <widget class="QLabel" name="kpiTodayTitle">
+                      <property name="text">
+                       <string>今日营收（元）</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QLabel" name="kpiTodayAmount">
+                      <property name="text">
+                       <string>-</string>
+                      </property>
+                     </widget>
+                    </item>
+                   </layout>
+                  </widget>
+                 </item>
+                 <item row="0" column="1">
+                  <widget class="QFrame" name="kpiMonthCard">
+                   <layout class="QVBoxLayout" name="kpiMonthLayout">
+                    <property name="leftMargin">
+                     <number>12</number>
+                    </property>
+                    <property name="topMargin">
+                     <number>10</number>
+                    </property>
+                    <property name="rightMargin">
+                     <number>12</number>
+                    </property>
+                    <property name="bottomMargin">
+                     <number>10</number>
+                    </property>
+                    <item>
+                     <widget class="QLabel" name="kpiMonthTitle">
+                      <property name="text">
+                       <string>本月营收（元）</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QLabel" name="kpiMonthAmount">
+                      <property name="text">
+                       <string>-</string>
+                      </property>
+                     </widget>
+                    </item>
+                   </layout>
+                  </widget>
+                 </item>
+                 <item row="0" column="2">
+                  <widget class="QFrame" name="kpiTotalCard">
+                   <layout class="QVBoxLayout" name="kpiTotalLayout">
+                    <property name="leftMargin">
+                     <number>12</number>
+                    </property>
+                    <property name="topMargin">
+                     <number>10</number>
+                    </property>
+                    <property name="rightMargin">
+                     <number>12</number>
+                    </property>
+                    <property name="bottomMargin">
+                     <number>10</number>
+                    </property>
+                    <item>
+                     <widget class="QLabel" name="kpiTotalTitle">
+                      <property name="text">
+                       <string>总营收（元）</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QLabel" name="kpiTotalAmount">
+                      <property name="text">
+                       <string>-</string>
+                      </property>
+                     </widget>
+                    </item>
+                   </layout>
+                  </widget>
+                 </item>
+                </layout>
+               </item>
+               <item>
+                <layout class="QHBoxLayout" name="chartHeader">
+                 <item>
+                  <widget class="QLabel" name="salesChartTitle">
+                   <property name="text">
+                    <string>营收趋势</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <spacer name="chartHeaderSpacer">
+                   <property name="orientation">
+                    <enum>Qt::Horizontal</enum>
+                   </property>
+                   <property name="sizeHint" stdset="0">
+                    <size>
+                     <width>40</width>
+                     <height>20</height>
+                    </size>
+                   </property>
+                  </spacer>
+                 </item>
+                 <item>
+                  <widget class="QComboBox" name="salesDays"/>
+                 </item>
+                 <item>
+                  <widget class="QPushButton" name="dashboardRefreshBtn">
+                   <property name="text">
+                    <string>刷新</string>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
+               </item>
+               <item>
+                <widget class="QChartView" name="salesChartView">
+                 <property name="minimumSize">
+                  <size>
+                   <width>0</width>
+                   <height>240</height>
+                  </size>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QTableWidget" name="recentOrders">
+                 <property name="minimumSize">
+                  <size>
+                   <width>0</width>
+                   <height>180</height>
+                  </size>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </widget>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+         <widget class="QWidget" name="pileStatusPage">
+          <layout class="QVBoxLayout" name="pileStatusLayout" stretch="0,0,1,0,2,0">
+           <item>
+            <widget class="QLabel" name="statusTitle">
+             <property name="text">
+              <string>电桩状态</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLabel" name="statusSummary">
+             <property name="text">
+              <string/>
+             </property>
+             <property name="wordWrap">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <layout class="QHBoxLayout" name="statusMid" stretch="2,3">
+             <item>
+              <widget class="QChartView" name="statusChartView">
+               <property name="minimumSize">
+                <size>
+                 <width>380</width>
+                 <height>0</height>
+                </size>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QTableWidget" name="statusDistTable"/>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <layout class="QHBoxLayout" name="statusQueryRow" stretch="1,0">
+             <item>
+              <widget class="QLineEdit" name="statusKeyword">
+               <property name="placeholderText">
+                <string>按电桩编号/电站/地址查询</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="statusQueryBtn">
+               <property name="text">
+                <string>查询明细</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <widget class="QTableWidget" name="statusPileTable"/>
+           </item>
+           <item alignment="Qt::AlignRight">
+            <widget class="QPushButton" name="pileStatusRefreshBtn">
+             <property name="text">
+              <string>刷新</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+         <widget class="QWidget" name="pilePage">
+          <layout class="QVBoxLayout" name="pileLayout" stretch="0,0,0,1">
+           <item>
+            <layout class="QHBoxLayout" name="pileTitleRow">
+             <item>
+              <widget class="QLabel" name="pileTitle">
+               <property name="text">
+                <string>充电桩管理</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <spacer name="pileTitleSpacer">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>40</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+             <item>
+              <widget class="QPushButton" name="addPileBtn">
+               <property name="text">
+                <string>新增电桩</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="editPileBtn">
+               <property name="text">
+                <string>修改</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="delPileBtn">
+               <property name="text">
+                <string>删除</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="pileRestartBtn">
+               <property name="text">
+                <string>模拟维修（远程重启）</string>
+               </property>
+               <property name="visible">
+                <bool>false</bool>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="pileRefreshBtn">
+               <property name="text">
+                <string>刷新</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <layout class="QHBoxLayout" name="pileFilterRow" stretch="0,1,0,2,0,1">
+             <item>
+              <widget class="QLabel" name="pileDistrictLabel">
+               <property name="text">
+                <string>城区</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QComboBox" name="pileDistrictFilter"/>
+             </item>
+             <item>
+              <widget class="QLabel" name="pileStationLabel">
+               <property name="text">
+                <string>站点</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QComboBox" name="pileStationFilter"/>
+             </item>
+             <item>
+              <widget class="QLabel" name="pileStatusLabel">
+               <property name="text">
+                <string>电桩状态</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QComboBox" name="pileStatusFilter"/>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <widget class="QLabel" name="pileHint">
+             <property name="text">
+              <string>筛选路径：城区 → 站点 → 状态。「模拟维修」仅在选中故障电桩时出现。</string>
+             </property>
+             <property name="wordWrap">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QTableWidget" name="pileTable"/>
+           </item>
+          </layout>
+         </widget>
+         <widget class="QWidget" name="stationPage">
+          <layout class="QVBoxLayout" name="stationLayout" stretch="0,3,0,2">
+           <item>
+            <layout class="QHBoxLayout" name="stationRow" stretch="0,1,0,0,0,0">
+             <item>
+              <widget class="QLabel" name="stationTitle">
+               <property name="text">
+                <string>充电站管理</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLineEdit" name="stationKeyword">
+               <property name="placeholderText">
+                <string>按站名或地址搜索</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="stationSearchBtn">
+               <property name="text">
+                <string>查询</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="addStationBtn">
+               <property name="text">
+                <string>新增电站</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="editStationBtn">
+               <property name="text">
+                <string>修改电站</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="delStationBtn">
+               <property name="text">
+                <string>删除电站</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <widget class="QTableWidget" name="stationTable"/>
+           </item>
+           <item>
+            <widget class="QLabel" name="stationDetailTitle">
+             <property name="text">
+              <string>点击上方电站行，查看站内电桩实时状态</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QTableWidget" name="stationPileTable">
+             <property name="maximumSize">
+              <size>
+               <width>16777215</width>
+               <height>240</height>
+              </size>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+         <widget class="QWidget" name="userPage">
+          <layout class="QVBoxLayout" name="userLayout" stretch="0,1">
+           <item>
+            <layout class="QHBoxLayout" name="userRow">
+             <item>
+              <widget class="QLabel" name="userTitle">
+               <property name="text">
+                <string>用户管理</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLineEdit" name="userKeyword">
+               <property name="placeholderText">
+                <string>按手机号模糊搜索</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="userSearchBtn">
+               <property name="text">
+                <string>查询</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="userOrdersBtn">
+               <property name="text">
+                <string>充电记录</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="userStatusBtn">
+               <property name="text">
+                <string>冻结 / 解冻</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <widget class="QTableWidget" name="userTable"/>
+           </item>
+          </layout>
+         </widget>
+         <widget class="QWidget" name="reservationPage">
+          <layout class="QVBoxLayout" name="reservationLayout" stretch="0,1">
+           <item>
+            <layout class="QHBoxLayout" name="reservationRow">
+             <item>
+              <widget class="QLabel" name="reservationTitle">
+               <property name="text">
+                <string>预约管理</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <spacer name="reservationSpacer">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>40</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+             <item>
+              <widget class="QPushButton" name="cancelReservationBtn">
+               <property name="text">
+                <string>解除预约</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="reservationRefreshBtn">
+               <property name="text">
+                <string>刷新</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <widget class="QTableWidget" name="reservationTable"/>
+           </item>
+          </layout>
+         </widget>
+         <widget class="QWidget" name="permissionPage">
+          <layout class="QVBoxLayout" name="permissionLayout" stretch="0,0,0,0,0,1">
+           <item>
+            <widget class="QLabel" name="inviteTitle">
+             <property name="text">
+              <string>邀请码</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <layout class="QHBoxLayout" name="inviteRow">
+             <item>
+              <widget class="QLabel" name="inviteRoleLabel">
+               <property name="text">
+                <string>授予角色</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QComboBox" name="inviteRoleCombo"/>
+             </item>
+             <item>
+              <widget class="QPushButton" name="createInviteBtn">
+               <property name="text">
+                <string>生成邀请码</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <spacer name="inviteSpacer">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>40</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+             <item>
+              <widget class="QPushButton" name="inviteRefreshBtn">
+               <property name="text">
+                <string>刷新</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <widget class="QTableWidget" name="inviteTable">
+             <property name="maximumSize">
+              <size>
+               <width>16777215</width>
+               <height>220</height>
+              </size>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLabel" name="permTitle">
+             <property name="text">
+              <string>角色权限</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <layout class="QHBoxLayout" name="permRow">
+             <item>
+              <widget class="QLabel" name="permRoleLabel">
+               <property name="text">
+                <string>角色</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QComboBox" name="permRoleCombo"/>
+             </item>
+             <item>
+              <spacer name="permSpacer">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>40</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+             <item>
+              <widget class="QPushButton" name="permSaveBtn">
+               <property name="text">
+                <string>保存当前勾选</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <widget class="QTableWidget" name="permTable"/>
+           </item>
+          </layout>
+         </widget>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>QChartView</class>
+   <extends>QGraphicsView</extends>
+   <header>QtCharts/QChartView</header>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections/>
+</ui>

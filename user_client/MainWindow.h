@@ -20,11 +20,14 @@ class QWidget;
 class QCloseEvent;
 class LocationProvider;
 
+namespace Ui { class MainWindow; }
+
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
 public:
     explicit MainWindow(const User &user, QWidget *parent = nullptr);
+    ~MainWindow() override;
 
 signals:
     void logoutRequested();
@@ -62,10 +65,8 @@ private slots:
 
 private:
     void buildUi();
-    QWidget *buildStationsPage();
-    QWidget *buildChargePage();
-    QWidget *buildProfilePage();
-    QWidget *buildBottomNav();
+    void bindUiWidgets();
+    void applyStyleObjectNames();
     void refreshOngoingBanner();
     void updateReservationCountdown();
     void updateChargeSubNavActive(int index);
@@ -84,6 +85,7 @@ private:
     int selectedListStationId() const;
     void closeEvent(QCloseEvent *event) override;
 
+    Ui::MainWindow *ui = nullptr;
     User m_user;
     LocationProvider *m_locationProvider = nullptr;
     double m_userLat = 39.9042;
