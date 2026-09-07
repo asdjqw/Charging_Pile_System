@@ -6,11 +6,16 @@
 
 #include <QAbstractItemView>
 #include <QApplication>
+#include <QBrush>
 #include <QCheckBox>
 #include <QCloseEvent>
+#include <QColor>
 #include <QComboBox>
 #include <QDateTime>
 #include <QDesktopServices>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QEvent>
 #include <QFileDialog>
 #include <QFormLayout>
 #include <QFrame>
@@ -20,8 +25,10 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QListWidgetItem>
 #include <QMap>
 #include <QMessageBox>
+#include <QMouseEvent>
 #include <QProgressBar>
 #include <QPixmap>
 #include <QPushButton>
@@ -30,10 +37,12 @@
 #include <QSettings>
 #include <QSize>
 #include <QSizePolicy>
+#include <QSpinBox>
 #include <QStackedWidget>
 #include <QStatusBar>
 #include <QStyle>
 #include <QTableWidget>
+#include <QTextEdit>
 #include <QTimer>
 #include <QUrl>
 #include <QUrlQuery>
@@ -86,7 +95,39 @@ void prepareCardList(QListWidget *list)
 
 int cardItemHeight(const QListWidget *list, int lines)
 {
-    return qMax(72, lines * list->fontMetrics().lineSpacing() + 28);
+    return qMax(84, lines * list->fontMetrics().lineSpacing() + 36);
+}
+
+QString starsText(double avg, int maxStars = 5)
+{
+    const int filled = qBound(0, int(qRound(avg)), maxStars);
+    QString out;
+    for (int i = 1; i <= maxStars; ++i)
+        out += (i <= filled) ? QStringLiteral("★") : QStringLiteral("☆");
+    return out;
+}
+
+QString ratingSummary(double avg, int count)
+{
+    if (count <= 0)
+        return QStringLiteral("暂无评分");
+    return QStringLiteral("%1  %2（%3评）")
+        .arg(starsText(avg))
+        .arg(avg, 0, 'f', 1)
+        .arg(count);
+}
+
+void showLargeMessage(QWidget *parent, QMessageBox::Icon icon, const QString &title,
+                      const QString &text)
+{
+    QMessageBox box(parent);
+    box.setIcon(icon);
+    box.setWindowTitle(title);
+    box.setText(text);
+    box.setStyleSheet(QStringLiteral(
+        "QLabel{min-width:360px; min-height:96px; font-size:15px;}"
+        "QPushButton{min-width:96px; min-height:40px; font-size:14px; padding:8px 16px;}"));
+    box.exec();
 }
 
 } // namespace
@@ -252,6 +293,16 @@ void MainWindow::buildUi()
 
     prepareCardList(m_stationList);
     prepareCardList(m_pileList);
+    m_stationList->setObjectName(QStringLiteral("stationList"));
+    m_stationList->setCursor(Qt::PointingHandCursor);
+    if (m_countLabel)
+        m_countLabel->setWordWrap(true);
+    if (m_locationLabel)
+        m_locationLabel->setWordWrap(true);
+
+    // 详情浮层：不拆原布局，避免整页点击失效
+    buildStationDetailPage();
+    ui->stationsPage->installEventFilter(this);
 
     m_orderTable->setColumnCount(5);
     m_orderTable->setHorizontalHeaderLabels({
@@ -309,7 +360,74 @@ void MainWindow::buildUi()
     connect(ui->quick100Btn, &QPushButton::clicked, this, [this]() { m_rechargeEdit->setText(QStringLiteral("100")); });
     connect(ui->quick200Btn, &QPushButton::clicked, this, [this]() { m_rechargeEdit->setText(QStringLiteral("200")); });
     connect(ui->quick500Btn, &QPushButton::clicked, this, [this]() { m_rechargeEdit->setText(QStringLiteral("500")); });
+    connect(m_stationList, &QListWidget::itemClicked, this, &MainWindow::onStationItemClicked);
     applyTheme(m_darkMode);
+}
+
+void MainWindow::buildStationDetailPage()
+{
+    // 盖在 stationsPage 上的浮层；默认隐藏，不拦截列表页点击
+    m_stationDetailPage = new QWidget(ui->stationsPage);
+    m_stationDetailPage->setObjectName(QStringLiteral("centralRoot"));
+    m_stationDetailPage->setAttribute(Qt::WA_StyledBackground, true);
+    m_stationDetailPage->setGeometry(0, 0, 0, 0);
+    m_stationDetailPage->hide();
+    m_stationDetailPage->setVisible(false);
+
+    auto *root = new QVBoxLayout(m_stationDetailPage);
+    root->setContentsMargins(14, 12, 14, 8);
+    root->setSpacing(10);
+
+    auto *top = new QHBoxLayout;
+    m_detailBackBtn = new QPushButton(QStringLiteral("← 返回"));
+    m_detailBackBtn->setObjectName(QStringLiteral("secondaryBtn"));
+    m_detailBackBtn->setFixedWidth(96);
+    top->addWidget(m_detailBackBtn);
+    top->addStretch();
+    root->addLayout(top);
+
+    m_detailTitle = new QLabel;
+    m_detailTitle->setObjectName(QStringLiteral("pageTitle"));
+    m_detailTitle->setWordWrap(true);
+    root->addWidget(m_detailTitle);
+
+    m_detailStars = new QLabel;
+    m_detailStars->setObjectName(QStringLiteral("starLabel"));
+    m_detailStars->setWordWrap(true);
+    root->addWidget(m_detailStars);
+
+    m_detailAddress = new QLabel;
+    m_detailAddress->setObjectName(QStringLiteral("muted"));
+    m_detailAddress->setWordWrap(true);
+    root->addWidget(m_detailAddress);
+
+    m_detailMeta = new QLabel;
+    m_detailMeta->setObjectName(QStringLiteral("muted"));
+    m_detailMeta->setWordWrap(true);
+    root->addWidget(m_detailMeta);
+
+    auto *actions = new QHBoxLayout;
+    m_detailNavBtn = new QPushButton(QStringLiteral("导航"));
+    m_detailFavBtn = new QPushButton(QStringLiteral("收藏"));
+    m_detailFavBtn->setObjectName(QStringLiteral("secondaryBtn"));
+    m_detailChargeBtn = new QPushButton(QStringLiteral("去充电"));
+    actions->addWidget(m_detailNavBtn);
+    actions->addWidget(m_detailFavBtn);
+    actions->addWidget(m_detailChargeBtn);
+    root->addLayout(actions);
+
+    auto *reviewTitle = new QLabel(QStringLiteral("用户评价"));
+    reviewTitle->setObjectName(QStringLiteral("pageTitle"));
+    root->addWidget(reviewTitle);
+
+    m_detailReviewList = new QListWidget;
+    prepareCardList(m_detailReviewList);
+    root->addWidget(m_detailReviewList, 1);
+
+    connect(m_detailBackBtn, &QPushButton::clicked, this, &MainWindow::onStationDetailBack);
+    connect(m_detailFavBtn, &QPushButton::clicked, this, &MainWindow::onStationDetailFavorite);
+    connect(m_detailNavBtn, &QPushButton::clicked, this, &MainWindow::onStationDetailNavigate);
+    connect(m_detailChargeBtn, &QPushButton::clicked, this, &MainWindow::onStationDetailGoCharge);
 }
 
 void MainWindow::updateNavActive(int index)
@@ -329,7 +447,11 @@ void MainWindow::onBottomNav(int index)
 {
     m_tabStack->setCurrentIndex(index);
     updateNavActive(index);
-    if (index == 0) refreshStations();
+    if (index == 0) {
+        if (m_stationDetailPage)
+            m_stationDetailPage->hide();
+        refreshStations();
+    }
     if (index == 1) {
         refreshPilesForCharge();
         refreshOngoingBanner();
@@ -372,15 +494,16 @@ void MainWindow::onChargeSubNav(int index)
 
 void MainWindow::applyUserLocation(const QString &regionOrAddress)
 {
-    const auto coords = realDistrictCoords(regionOrAddress);
+    const QString text = regionOrAddress.trimmed();
+    const auto coords = realDistrictCoords(text.isEmpty() ? QStringLiteral("天安门") : text);
     m_userLat = coords.first;
     m_userLng = coords.second;
-    if (regionOrAddress.trimmed().isEmpty())
+    if (text.isEmpty())
         m_userAddress = QStringLiteral("北京市东城区天安门");
-    else if (regionOrAddress.startsWith(QStringLiteral("北京")))
-        m_userAddress = regionOrAddress;
+    else if (text.contains(QStringLiteral("北京")))
+        m_userAddress = text;
     else
-        m_userAddress = QStringLiteral("北京市%1").arg(regionOrAddress);
+        m_userAddress = QStringLiteral("北京市%1").arg(text);
 }
 
 void MainWindow::onRegionChanged()
@@ -393,6 +516,13 @@ void MainWindow::onRegionChanged()
 
 void MainWindow::requestRealLocation()
 {
+    if (!m_locationProvider)
+        return;
+    if (m_locationProvider->isBusy()) {
+        showLargeMessage(this, QMessageBox::Information, QStringLiteral("定位中"),
+                         QStringLiteral("正在获取位置，请稍候…"));
+        return;
+    }
     if (m_locateBtn) {
         m_locateBtn->setEnabled(false);
         m_locateBtn->setText(QStringLiteral("定位中…"));
@@ -403,6 +533,22 @@ void MainWindow::requestRealLocation()
 
 void MainWindow::onRealLocationUpdated(double lat, double lng, const QString &label, const QString &source)
 {
+    const bool inBeijing = (lat >= 39.4 && lat <= 41.1 && lng >= 115.4 && lng <= 117.6);
+    if (!inBeijing && source == QLatin1String("IP")) {
+        applyUserLocation(QStringLiteral("天安门"));
+        m_locationSource = QStringLiteral("fallback");
+        m_userAddress = QStringLiteral("公网定位不在北京，已使用演示坐标（天安门）");
+        if (m_locateBtn) {
+            m_locateBtn->setEnabled(true);
+            m_locateBtn->setText(QStringLiteral("定位"));
+        }
+        refreshStations();
+        showLargeMessage(this, QMessageBox::Warning, QStringLiteral("定位提示"),
+                         QStringLiteral("检测到公网出口不在北京，已自动切回演示坐标。\n"
+                                        "也可手动输入「朝阳区」「国贸」等后点定位。"));
+        return;
+    }
+
     m_userLat = lat;
     m_userLng = lng;
     m_userAddress = label;
@@ -411,6 +557,8 @@ void MainWindow::onRealLocationUpdated(double lat, double lng, const QString &la
         m_locateBtn->setEnabled(true);
         m_locateBtn->setText(QStringLiteral("定位"));
     }
+    if (m_addressEdit && !label.isEmpty())
+        m_addressEdit->setText(label);
     refreshStations();
 }
 
@@ -420,23 +568,25 @@ void MainWindow::onRealLocationFailed(const QString &reason)
         m_locateBtn->setEnabled(true);
         m_locateBtn->setText(QStringLiteral("定位"));
     }
-    // 失败时保留上次坐标，并提示可手动输入
     m_locationLabel->setText(QStringLiteral("%1（可手动输入地址后回车）").arg(reason));
-    if (m_locationSource == QLatin1String("pending")) {
+    if (m_locationSource == QLatin1String("pending")
+        || m_locationSource == QLatin1String("fallback")) {
         applyUserLocation(QStringLiteral("天安门"));
         m_locationSource = QStringLiteral("fallback");
         refreshStations();
     }
+    showLargeMessage(this, QMessageBox::Warning, QStringLiteral("定位失败"),
+                     reason + QStringLiteral("\n\n可在输入框填写「海淀区」「望京」等后再次定位。"));
 }
 
 void MainWindow::onLocate()
 {
-    const QString address = m_addressEdit->text().trimmed();
+    const QString address = m_addressEdit ? m_addressEdit->text().trimmed() : QString();
     if (!address.isEmpty()) {
-        // 有手动地址时按地址/地标解析；否则检测真实当前位置
         applyUserLocation(address);
         m_locationSource = QStringLiteral("manual");
         refreshStations();
+        statusBar()->showMessage(QStringLiteral("已按手动地址定位"), 2500);
         return;
     }
     requestRealLocation();
@@ -493,26 +643,60 @@ void MainWindow::refreshStations()
                               .arg(piles)
                               .arg(m_favoriteIds.size()));
     m_loadMoreBtn->setVisible(m_visibleCount < m_cachedStations.size());
-    refreshPilesForCharge();
+    if (m_detailStation.id > 0)
+        syncChargeStationSelection(m_detailStation.id);
+    else if (!m_cachedStations.isEmpty())
+        syncChargeStationSelection(m_cachedStations.first().id);
+    else
+        refreshPilesForCharge();
 }
 
 void MainWindow::appendStationItem(const Station &s)
 {
-    const QString star = isFavorite(s.id) ? QStringLiteral("★ ") : QString();
-    const QString text = QStringLiteral("%1%2\n%3 · %4\n距离 %5 km · 空闲 %6/%7 · %8")
-                             .arg(star, s.name, s.regionCode, s.address)
+    const bool fav = isFavorite(s.id);
+    const QString text = QStringLiteral("%1\n%2\n%3 · %4\n距离 %5 km · 空闲 %6/%7 · %8")
+                             .arg(s.name, ratingSummary(s.avgRating, s.reviewCount))
+                             .arg(s.regionCode, s.address)
                              .arg(s.distanceKm, 0, 'f', 2)
                              .arg(s.idlePiles)
                              .arg(s.totalPiles)
                              .arg(statusTextStation(s.status));
     auto *item = new QListWidgetItem(text, m_stationList);
-    item->setSizeHint(QSize(qMax(m_stationList->viewport()->width(), 240),
-                            cardItemHeight(m_stationList, 3)));
+    item->setSizeHint(QSize(0, cardItemHeight(m_stationList, 4)));
     item->setData(Qt::UserRole, s.id);
     item->setData(Qt::UserRole + 1, s.latitude);
     item->setData(Qt::UserRole + 2, s.longitude);
     item->setData(Qt::UserRole + 3, s.name);
     item->setData(Qt::UserRole + 4, s.address);
+    item->setData(Qt::UserRole + 5, s.avgRating);
+    item->setData(Qt::UserRole + 6, s.reviewCount);
+    item->setData(Qt::UserRole + 7, s.distanceKm);
+    item->setData(Qt::UserRole + 8, s.idlePiles);
+    item->setData(Qt::UserRole + 9, s.totalPiles);
+    item->setData(Qt::UserRole + 10, s.status);
+    item->setData(Qt::UserRole + 11, s.regionCode);
+    item->setData(Qt::UserRole + 12, s.openHours);
+    if (fav) {
+        item->setBackground(QBrush(QColor(QStringLiteral("#FFF4D6"))));
+        item->setForeground(QBrush(QColor(QStringLiteral("#8A4B00"))));
+    } else {
+        item->setBackground(QBrush(QColor(Qt::white)));
+        item->setForeground(QBrush(QColor(QStringLiteral("#15201E"))));
+    }
+}
+
+bool MainWindow::eventFilter(QObject *watched, QEvent *event)
+{
+    if (watched == ui->stationsPage && event->type() == QEvent::Resize)
+        syncStationDetailGeometry();
+    return QMainWindow::eventFilter(watched, event);
+}
+
+void MainWindow::syncStationDetailGeometry()
+{
+    if (!m_stationDetailPage || !ui->stationsPage)
+        return;
+    m_stationDetailPage->setGeometry(ui->stationsPage->rect());
 }
 
 void MainWindow::loadMoreStations()
@@ -534,7 +718,8 @@ void MainWindow::onNavigate()
 {
     auto *item = m_stationList->currentItem();
     if (!item) {
-        QMessageBox::information(this, QStringLiteral("提示"), QStringLiteral("请先选择一个充电站"));
+        showLargeMessage(this, QMessageBox::Information, QStringLiteral("提示"),
+                         QStringLiteral("请先选择一个充电站"));
         return;
     }
     const double lat = item->data(Qt::UserRole + 1).toDouble();
@@ -560,6 +745,163 @@ void MainWindow::onNavigate()
     query.addQueryItem(QStringLiteral("referer"), QStringLiteral("ChargePileLab"));
     url.setQuery(query);
     QDesktopServices::openUrl(url);
+}
+
+Station MainWindow::stationFromListItem(QListWidgetItem *item) const
+{
+    Station s;
+    if (!item)
+        return s;
+    s.id = item->data(Qt::UserRole).toInt();
+    s.latitude = item->data(Qt::UserRole + 1).toDouble();
+    s.longitude = item->data(Qt::UserRole + 2).toDouble();
+    s.name = item->data(Qt::UserRole + 3).toString();
+    s.address = item->data(Qt::UserRole + 4).toString();
+    s.avgRating = item->data(Qt::UserRole + 5).toDouble();
+    s.reviewCount = item->data(Qt::UserRole + 6).toInt();
+    s.distanceKm = item->data(Qt::UserRole + 7).toDouble();
+    s.idlePiles = item->data(Qt::UserRole + 8).toInt();
+    s.totalPiles = item->data(Qt::UserRole + 9).toInt();
+    s.status = item->data(Qt::UserRole + 10).toString();
+    s.regionCode = item->data(Qt::UserRole + 11).toString();
+    s.openHours = item->data(Qt::UserRole + 12).toString();
+    for (const Station &cached : m_cachedStations) {
+        if (cached.id == s.id)
+            return cached;
+    }
+    return s;
+}
+
+void MainWindow::syncChargeStationSelection(int stationId)
+{
+    if (!m_stationCombo || stationId <= 0)
+        return;
+    const int idx = m_stationCombo->findData(stationId);
+    if (idx < 0)
+        return;
+    m_stationCombo->blockSignals(true);
+    m_stationCombo->setCurrentIndex(idx);
+    m_stationCombo->blockSignals(false);
+    refreshPilesForCharge();
+}
+
+void MainWindow::onStationItemClicked(QListWidgetItem *item)
+{
+    const Station s = stationFromListItem(item);
+    if (s.id <= 0)
+        return;
+    syncChargeStationSelection(s.id);
+    showStationDetail(s);
+}
+
+void MainWindow::showStationDetail(const Station &station)
+{
+    m_detailStation = station;
+    if (m_detailTitle)
+        m_detailTitle->setText(station.name);
+    if (m_detailStars) {
+        m_detailStars->setText(ratingSummary(station.avgRating, station.reviewCount));
+        m_detailStars->setStyleSheet(QStringLiteral(
+            "color:#F5A623;font-size:22px;font-weight:600;"));
+    }
+    if (m_detailAddress)
+        m_detailAddress->setText(QStringLiteral("%1 · %2").arg(station.regionCode, station.address));
+    if (m_detailMeta) {
+        m_detailMeta->setText(
+            QStringLiteral("距离 %1 km · 空闲 %2/%3 · %4 · 营业 %5")
+                .arg(station.distanceKm, 0, 'f', 2)
+                .arg(station.idlePiles)
+                .arg(station.totalPiles)
+                .arg(statusTextStation(station.status))
+                .arg(station.openHours.isEmpty() ? QStringLiteral("—") : station.openHours));
+    }
+    if (m_detailFavBtn)
+        m_detailFavBtn->setText(isFavorite(station.id) ? QStringLiteral("取消收藏")
+                                                       : QStringLiteral("收藏"));
+
+    if (m_detailReviewList) {
+        m_detailReviewList->clear();
+        const auto reviews = ServerApiClient::instance().listStationReviews(station.id, 40);
+        if (reviews.isEmpty()) {
+            auto *empty = new QListWidgetItem(QStringLiteral("暂无评价，充电完成后可以留下第一条点评。"),
+                                              m_detailReviewList);
+            empty->setFlags(empty->flags() & ~Qt::ItemIsSelectable);
+        } else {
+            for (const StationReview &r : reviews) {
+                const QString who = r.nickname.isEmpty()
+                                        ? QStringLiteral("匿名用户")
+                                        : r.nickname;
+                const QString text = QStringLiteral("%1  %2\n%3\n%4")
+                                        .arg(starsText(r.rating), who, r.comment,
+                                             r.createdAt);
+                auto *it = new QListWidgetItem(text, m_detailReviewList);
+                it->setSizeHint(QSize(200, cardItemHeight(m_detailReviewList, 3)));
+            }
+        }
+    }
+
+    syncStationDetailGeometry();
+    m_stationDetailPage->raise();
+    m_stationDetailPage->show();
+    m_stationDetailPage->setFocus();
+}
+
+void MainWindow::onStationDetailBack()
+{
+    if (!m_stationDetailPage)
+        return;
+    m_stationDetailPage->hide();
+    m_stationDetailPage->setGeometry(0, 0, 0, 0);
+}
+
+void MainWindow::onStationDetailFavorite()
+{
+    if (m_detailStation.id <= 0)
+        return;
+    setFavorite(m_detailStation.id, !isFavorite(m_detailStation.id));
+    if (m_detailFavBtn)
+        m_detailFavBtn->setText(isFavorite(m_detailStation.id) ? QStringLiteral("取消收藏")
+                                                               : QStringLiteral("收藏"));
+    statusBar()->showMessage(isFavorite(m_detailStation.id) ? QStringLiteral("已加入收藏")
+                                                            : QStringLiteral("已取消收藏"),
+                             2500);
+    const Station keep = m_detailStation;
+    refreshStations();
+    showStationDetail(keep);
+}
+
+void MainWindow::onStationDetailNavigate()
+{
+    if (m_detailStation.id <= 0)
+        return;
+    m_navInfo->setText(QStringLiteral("导航目标：%1\n%2\n坐标：（%3, %4）")
+                           .arg(m_detailStation.name, m_detailStation.address)
+                           .arg(m_detailStation.latitude, 0, 'f', 6)
+                           .arg(m_detailStation.longitude, 0, 'f', 6));
+    QUrl url(QStringLiteral("https://apis.map.qq.com/uri/v1/routeplan"));
+    QUrlQuery query;
+    query.addQueryItem(QStringLiteral("type"), QStringLiteral("drive"));
+    query.addQueryItem(QStringLiteral("from"), m_userAddress);
+    query.addQueryItem(QStringLiteral("fromcoord"),
+                       QStringLiteral("%1,%2").arg(m_userLat, 0, 'f', 6).arg(m_userLng, 0, 'f', 6));
+    query.addQueryItem(QStringLiteral("to"), m_detailStation.name);
+    query.addQueryItem(QStringLiteral("tocoord"),
+                       QStringLiteral("%1,%2")
+                           .arg(m_detailStation.latitude, 0, 'f', 6)
+                           .arg(m_detailStation.longitude, 0, 'f', 6));
+    query.addQueryItem(QStringLiteral("policy"), QStringLiteral("0"));
+    query.addQueryItem(QStringLiteral("referer"), QStringLiteral("ChargePileLab"));
+    url.setQuery(query);
+    QDesktopServices::openUrl(url);
+}
+
+void MainWindow::onStationDetailGoCharge()
+{
+    if (m_detailStation.id <= 0)
+        return;
+    syncChargeStationSelection(m_detailStation.id);
+    onBottomNav(1);
+    onChargeSubNav(0);
 }
 
 int MainWindow::selectedStationId() const
@@ -602,9 +944,10 @@ void MainWindow::refreshPilesForCharge()
     for (const Pile &p : piles) {
         if (m_pileFavOnlyCheck && m_pileFavOnlyCheck->isChecked() && !p.favorite && !isPileFavorite(p.id))
             continue;
-        const QString star = (p.favorite || isPileFavorite(p.id)) ? QStringLiteral("★ ") : QString();
+        const bool fav = p.favorite || isPileFavorite(p.id);
         const QString text = QStringLiteral("%1%2\n%3\n%4 kW · ¥%5/kWh · %6")
-                                 .arg(star, p.pileCode, pileCategoryText(p))
+                                 .arg(fav ? QStringLiteral("★ ") : QString(), p.pileCode)
+                                 .arg(pileCategoryText(p))
                                  .arg(p.powerKw, 0, 'f', 1)
                                  .arg(p.pricePerKwh, 0, 'f', 2)
                                  .arg(statusTextPile(p.status));
@@ -615,6 +958,11 @@ void MainWindow::refreshPilesForCharge()
         item->setData(Qt::UserRole + 1, p.pricePerKwh);
         item->setData(Qt::UserRole + 2, p.powerKw);
         item->setData(Qt::UserRole + 3, p.status);
+        item->setData(Qt::UserRole + 4, p.stationId);
+        if (fav) {
+            item->setBackground(QBrush(QColor(QStringLiteral("#FFF4D6"))));
+            item->setForeground(QBrush(QColor(QStringLiteral("#8A4B00"))));
+        }
         const bool ownReservation = p.status == QLatin1String("reserved")
                                     && p.id == m_reservation.pileId;
         if (p.status != QLatin1String("idle") && !ownReservation)
@@ -628,33 +976,35 @@ void MainWindow::onReservePile()
 {
     const int pileId = selectedPileId();
     if (pileId <= 0) {
-        QMessageBox::information(this, QStringLiteral("提示"), QStringLiteral("请先选择一个空闲充电桩"));
+        showLargeMessage(this, QMessageBox::Information, QStringLiteral("提示"),
+                         QStringLiteral("请先选择一个空闲充电桩"));
         return;
     }
     ChargingReservation reservation;
     if (!ServerApiClient::instance().createReservation(pileId, reservation)) {
-        QMessageBox::warning(this, QStringLiteral("预约失败"),
-                             ServerApiClient::instance().lastError());
+        showLargeMessage(this, QMessageBox::Warning, QStringLiteral("预约失败"),
+                         ServerApiClient::instance().lastError());
         return;
     }
     m_reservation = reservation;
     refreshPilesForCharge();
     updateReservationCountdown();
     onChargeSubNav(1);
-    QMessageBox::information(this, QStringLiteral("预约成功"),
-                             QStringLiteral("电桩已为您保留至 %1\n可在「我的预约」查看详情。")
-                                 .arg(reservation.expiresAt));
+    showLargeMessage(this, QMessageBox::Information, QStringLiteral("预约成功"),
+                     QStringLiteral("电桩已为您保留至 %1\n可在「我的预约」查看详情。")
+                         .arg(reservation.expiresAt));
 }
 
 void MainWindow::onCancelReservation()
 {
     if (m_reservation.id <= 0) {
-        QMessageBox::information(this, QStringLiteral("提示"), QStringLiteral("当前没有有效预约"));
+        showLargeMessage(this, QMessageBox::Information, QStringLiteral("提示"),
+                         QStringLiteral("当前没有有效预约"));
         return;
     }
     if (!ServerApiClient::instance().cancelReservation(m_reservation.id)) {
-        QMessageBox::warning(this, QStringLiteral("取消失败"),
-                             ServerApiClient::instance().lastError());
+        showLargeMessage(this, QMessageBox::Warning, QStringLiteral("取消失败"),
+                         ServerApiClient::instance().lastError());
         return;
     }
     m_reservation = ChargingReservation{};
@@ -704,29 +1054,42 @@ void MainWindow::onStartCharge()
 {
     const int pileId = selectedPileId();
     if (pileId <= 0) {
-        QMessageBox::information(this, QStringLiteral("提示"), QStringLiteral("请选择一个空闲充电桩"));
+        showLargeMessage(this, QMessageBox::Information, QStringLiteral("提示"),
+                         QStringLiteral("请选择一个空闲充电桩"));
+        return;
+    }
+
+    ServerApiClient::instance().getUserById(m_user.id, m_user);
+    if (m_user.balance < 10.0) {
+        showLargeMessage(this, QMessageBox::Warning, QStringLiteral("余额不足"),
+                         QStringLiteral("当前余额 ¥%1，至少需要保留 10 元才能开始充电，请先充值。")
+                             .arg(m_user.balance, 0, 'f', 2));
         return;
     }
 
     ChargingOrder order;
     if (!ServerApiClient::instance().startCharging(m_user.id, pileId, order)) {
-        QMessageBox::warning(this, QStringLiteral("无法开始充电"),
-                             ServerApiClient::instance().lastError());
+        showLargeMessage(this, QMessageBox::Warning, QStringLiteral("无法开始充电"),
+                         ServerApiClient::instance().lastError());
         return;
     }
 
     auto *item = m_pileList->currentItem();
     m_currentPrice = item ? item->data(Qt::UserRole + 1).toDouble() : 1.2;
     m_currentPowerKw = item ? item->data(Qt::UserRole + 2).toDouble() : 7.0;
+    m_lastFinishedStationId = item ? item->data(Qt::UserRole + 4).toInt() : 0;
     m_ongoing = order;
     m_reservation = ChargingReservation{};
     m_simulatedEnergy = 0;
     m_progressTick = 0;
+    m_balanceWarned = false;
     m_chargeTimer->start();
     refreshPilesForCharge();
     refreshOngoingBanner();
-    QMessageBox::information(this, QStringLiteral("已开始充电"),
-                             QStringLiteral("订单号：%1").arg(order.orderNo));
+    showLargeMessage(this, QMessageBox::Information, QStringLiteral("已开始充电"),
+                     QStringLiteral("订单号：%1\n当前余额 ¥%2，请留意费用。")
+                         .arg(order.orderNo)
+                         .arg(m_user.balance, 0, 'f', 2));
 }
 
 void MainWindow::onChargeTick()
@@ -739,16 +1102,17 @@ void MainWindow::onChargeTick()
         if (!ServerApiClient::instance().updateChargingProgress(
                 m_user.id, m_ongoing.id, m_simulatedEnergy)) {
             m_chargeTimer->stop();
-            QMessageBox::warning(this, QStringLiteral("服务连接异常"),
-                                 ServerApiClient::instance().lastError());
+            showLargeMessage(this, QMessageBox::Warning, QStringLiteral("服务连接异常"),
+                             ServerApiClient::instance().lastError());
             return;
         }
     }
     const double fee = m_simulatedEnergy * m_currentPrice;
-    m_chargeInfo->setText(QStringLiteral("充电中：%1 / %2\n订单 %3\n已充电 %4 kWh，预估 ¥%5")
+    m_chargeInfo->setText(QStringLiteral("充电中：%1 / %2\n订单 %3\n已充电 %4 kWh，预估 ¥%5\n账户余额 ¥%6")
                               .arg(m_ongoing.stationName, m_ongoing.pileCode, m_ongoing.orderNo)
                               .arg(m_simulatedEnergy, 0, 'f', 3)
-                              .arg(fee, 0, 'f', 2));
+                              .arg(fee, 0, 'f', 2)
+                              .arg(m_user.balance, 0, 'f', 2));
     m_chargeProgress->setValue(qMin(100, int(m_simulatedEnergy * 3)));
     if (m_chargeBanner && m_chargeBanner->isVisible()) {
         m_chargeBanner->setText(QStringLiteral("正在充电：%1 / %2 · 已充 %3 kWh · 预估 ¥%4")
@@ -756,37 +1120,111 @@ void MainWindow::onChargeTick()
                                     .arg(m_simulatedEnergy, 0, 'f', 2)
                                     .arg(fee, 0, 'f', 2));
     }
+
+    // 余额预警：费用接近余额时提示；达到余额自动结束
+    if (!m_balanceWarned && fee >= qMax(0.0, m_user.balance - 5.0) && fee < m_user.balance) {
+        m_balanceWarned = true;
+        showLargeMessage(this, QMessageBox::Warning, QStringLiteral("余额预警"),
+                         QStringLiteral("预估费用已接近账户余额（余额 ¥%1 / 预估 ¥%2）。\n"
+                                        "请尽快结束充电或充值，避免扣款失败。")
+                             .arg(m_user.balance, 0, 'f', 2)
+                             .arg(fee, 0, 'f', 2));
+    }
+    if (fee >= m_user.balance && m_user.balance > 0) {
+        m_chargeTimer->stop();
+        showLargeMessage(this, QMessageBox::Warning, QStringLiteral("余额不足"),
+                         QStringLiteral("预估费用已达到当前余额，系统将自动结束充电。"));
+        onStopCharge();
+    }
 }
 
 void MainWindow::onStopCharge()
 {
     if (m_ongoing.id <= 0) {
-        QMessageBox::information(this, QStringLiteral("提示"), QStringLiteral("当前没有进行中的充电"));
+        showLargeMessage(this, QMessageBox::Information, QStringLiteral("提示"),
+                         QStringLiteral("当前没有进行中的充电"));
         return;
+    }
+
+    const QString stationName = m_ongoing.stationName;
+    const int orderId = m_ongoing.id;
+    int stationId = m_lastFinishedStationId;
+    if (stationId <= 0) {
+        Pile pile;
+        if (ServerApiClient::instance().getPile(m_ongoing.pileId, pile))
+            stationId = pile.stationId;
     }
 
     const double energy = qMax(0.5, m_simulatedEnergy);
     ChargingOrder finished;
     if (!ServerApiClient::instance().stopCharging(m_ongoing.id, energy, finished)) {
-        QMessageBox::warning(this, QStringLiteral("结束失败"),
-                             ServerApiClient::instance().lastError());
+        showLargeMessage(this, QMessageBox::Warning, QStringLiteral("结束失败"),
+                         ServerApiClient::instance().lastError());
         return;
     }
 
     m_chargeTimer->stop();
     m_ongoing = ChargingOrder{};
+    m_balanceWarned = false;
     ServerApiClient::instance().getUserById(m_user.id, m_user);
     refreshPilesForCharge();
     refreshOngoingBanner();
     refreshProfile();
     refreshOrders();
 
-    QMessageBox::information(this, QStringLiteral("充电完成"),
-                             QStringLiteral("订单 %1 已结算\n电量 %2 kWh\n费用 ¥%3\n余额 ¥%4")
-                                 .arg(finished.orderNo)
-                                 .arg(finished.energyKwh, 0, 'f', 2)
-                                 .arg(finished.amount, 0, 'f', 2)
-                                 .arg(m_user.balance, 0, 'f', 2));
+    showLargeMessage(this, QMessageBox::Information, QStringLiteral("充电完成"),
+                     QStringLiteral("订单 %1 已结算\n电量 %2 kWh\n费用 ¥%3\n余额 ¥%4")
+                         .arg(finished.orderNo)
+                         .arg(finished.energyKwh, 0, 'f', 2)
+                         .arg(finished.amount, 0, 'f', 2)
+                         .arg(m_user.balance, 0, 'f', 2));
+
+    if (stationId > 0)
+        promptStationReview(stationId, orderId, stationName);
+}
+
+void MainWindow::promptStationReview(int stationId, int orderId, const QString &stationName)
+{
+    QDialog dlg(this);
+    dlg.setWindowTitle(QStringLiteral("评价充电站"));
+    dlg.setMinimumSize(420, 360);
+    dlg.setStyleSheet(styleSheet());
+    auto *layout = new QVBoxLayout(&dlg);
+    auto *title = new QLabel(QStringLiteral("为「%1」评星并留下评价").arg(stationName), &dlg);
+    title->setObjectName(QStringLiteral("pageTitle"));
+    title->setWordWrap(true);
+    auto *rating = new QSpinBox(&dlg);
+    rating->setRange(1, 5);
+    rating->setValue(5);
+    rating->setPrefix(QStringLiteral("星级 "));
+    rating->setSuffix(QStringLiteral(" 星"));
+    rating->setMinimumHeight(40);
+    auto *comment = new QTextEdit(&dlg);
+    comment->setPlaceholderText(QStringLiteral("可选：写出你的充电体验…"));
+    comment->setMinimumHeight(120);
+    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
+    buttons->button(QDialogButtonBox::Ok)->setText(QStringLiteral("提交评价"));
+    buttons->button(QDialogButtonBox::Cancel)->setText(QStringLiteral("跳过"));
+    layout->addWidget(title);
+    layout->addWidget(rating);
+    layout->addWidget(comment, 1);
+    layout->addWidget(buttons);
+    connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+    if (dlg.exec() != QDialog::Accepted)
+        return;
+
+    StationReview review;
+    if (!ServerApiClient::instance().submitStationReview(
+            stationId, orderId, rating->value(), comment->toPlainText().trimmed(), review)) {
+        showLargeMessage(this, QMessageBox::Warning, QStringLiteral("评价失败"),
+                         ServerApiClient::instance().lastError());
+        return;
+    }
+    showLargeMessage(this, QMessageBox::Information, QStringLiteral("感谢评价"),
+                     QStringLiteral("已提交 %1 星评价，其他用户可看到该站平均星级。")
+                         .arg(rating->value()));
+    refreshStations();
 }
 
 void MainWindow::refreshProfile()
@@ -819,11 +1257,12 @@ void MainWindow::onSaveProfile()
     m_user.carModel = m_carEdit->text().trimmed();
     m_user.plateNumber = m_plateEdit->text().trimmed();
     if (!ServerApiClient::instance().updateUser(m_user)) {
-        QMessageBox::warning(this, QStringLiteral("保存失败"),
-                             ServerApiClient::instance().lastError());
+        showLargeMessage(this, QMessageBox::Warning, QStringLiteral("保存失败"),
+                         ServerApiClient::instance().lastError());
         return;
     }
-    QMessageBox::information(this, QStringLiteral("成功"), QStringLiteral("个人信息已更新"));
+    showLargeMessage(this, QMessageBox::Information, QStringLiteral("成功"),
+                     QStringLiteral("个人信息已更新"));
 }
 
 void MainWindow::onChooseAvatar()
@@ -835,7 +1274,8 @@ void MainWindow::onChooseAvatar()
         return;
     const QPixmap avatar(path);
     if (avatar.isNull()) {
-        QMessageBox::warning(this, QStringLiteral("头像无效"), QStringLiteral("无法读取所选图片"));
+        showLargeMessage(this, QMessageBox::Warning, QStringLiteral("头像无效"),
+                         QStringLiteral("无法读取所选图片"));
         return;
     }
     m_user.avatarPath = path;
@@ -848,18 +1288,19 @@ void MainWindow::onRecharge()
     bool ok = false;
     const double amount = m_rechargeEdit->text().trimmed().toDouble(&ok);
     if (!ok || amount <= 0) {
-        QMessageBox::warning(this, QStringLiteral("提示"), QStringLiteral("请输入有效的充值金额"));
+        showLargeMessage(this, QMessageBox::Warning, QStringLiteral("提示"),
+                         QStringLiteral("请输入有效的充值金额"));
         return;
     }
     if (!ServerApiClient::instance().rechargeUser(m_user.id, amount)) {
-        QMessageBox::warning(this, QStringLiteral("充值失败"),
-                             ServerApiClient::instance().lastError());
+        showLargeMessage(this, QMessageBox::Warning, QStringLiteral("充值失败"),
+                         ServerApiClient::instance().lastError());
         return;
     }
     m_rechargeEdit->clear();
     refreshProfile();
-    QMessageBox::information(this, QStringLiteral("充值成功"),
-                             QStringLiteral("已充值 ¥%1").arg(amount, 0, 'f', 2));
+    showLargeMessage(this, QMessageBox::Information, QStringLiteral("充值成功"),
+                     QStringLiteral("已充值 ¥%1").arg(amount, 0, 'f', 2));
 }
 
 void MainWindow::refreshOrders()
@@ -911,8 +1352,8 @@ void MainWindow::setFavorite(int stationId, bool)
 {
     bool nowFav = false;
     if (!ServerApiClient::instance().toggleFavorite(QStringLiteral("station"), stationId, nowFav)) {
-        QMessageBox::warning(this, QStringLiteral("收藏失败"),
-                             ServerApiClient::instance().lastError());
+        showLargeMessage(this, QMessageBox::Warning, QStringLiteral("收藏失败"),
+                         ServerApiClient::instance().lastError());
         return;
     }
     if (nowFav)
@@ -931,10 +1372,12 @@ void MainWindow::onToggleFavorite()
 {
     const int id = selectedListStationId();
     if (id <= 0) {
-        QMessageBox::information(this, QStringLiteral("提示"), QStringLiteral("请先选中一个充电站"));
+        showLargeMessage(this, QMessageBox::Information, QStringLiteral("提示"),
+                         QStringLiteral("请先选中一个充电站"));
         return;
     }
     setFavorite(id, !isFavorite(id));
+    syncChargeStationSelection(id);
     statusBar()->showMessage(isFavorite(id) ? QStringLiteral("已加入收藏")
                                             : QStringLiteral("已取消收藏"), 2500);
     refreshStations();
@@ -944,13 +1387,14 @@ void MainWindow::onTogglePileFavorite()
 {
     const int pileId = selectedPileId();
     if (pileId <= 0) {
-        QMessageBox::information(this, QStringLiteral("提示"), QStringLiteral("请先选中一个充电桩"));
+        showLargeMessage(this, QMessageBox::Information, QStringLiteral("提示"),
+                         QStringLiteral("请先选中一个充电桩"));
         return;
     }
     bool nowFav = false;
     if (!ServerApiClient::instance().toggleFavorite(QStringLiteral("pile"), pileId, nowFav)) {
-        QMessageBox::warning(this, QStringLiteral("收藏失败"),
-                             ServerApiClient::instance().lastError());
+        showLargeMessage(this, QMessageBox::Warning, QStringLiteral("收藏失败"),
+                         ServerApiClient::instance().lastError());
         return;
     }
     if (nowFav)
@@ -1066,9 +1510,9 @@ void MainWindow::restoreSession()
 
     if (!recovered.isEmpty()) {
         statusBar()->showMessage(QStringLiteral("已恢复会话"), 4000);
-        QMessageBox::information(this, QStringLiteral("会话恢复"),
-                                 QStringLiteral("检测到未完成业务，已为您恢复：\n\n- ")
-                                     + recovered.join(QStringLiteral("\n- ")));
+        showLargeMessage(this, QMessageBox::Information, QStringLiteral("会话恢复"),
+                         QStringLiteral("检测到未完成业务，已为您恢复：\n\n- ")
+                             + recovered.join(QStringLiteral("\n- ")));
     } else {
         statusBar()->showMessage(QStringLiteral("已登录"), 2500);
     }

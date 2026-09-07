@@ -2,10 +2,8 @@
 
 #include <QDBusConnection>
 #include <QDBusInterface>
-#include <QDBusMessage>
-#include <QDBusObjectPath>
 #include <QDBusReply>
-#include <QDBusVariant>
+#include <QDBusObjectPath>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QNetworkAccessManager>
@@ -28,6 +26,18 @@ void LocationProvider::requestCurrentLocation()
         return;
     m_busy = true;
     m_triedIp = false;
+
+    // 整体超时，避免卡在「定位中」
+    QTimer::singleShot(8000, this, [this]() {
+        if (!m_busy)
+            return;
+        if (!m_triedIp) {
+            tryIpLocate();
+            return;
+        }
+        finishFail(QStringLiteral("定位超时，请检查网络或改用手动地址"));
+    });
+
     tryGeoClue();
 }
 
@@ -45,18 +55,10 @@ void LocationProvider::finishFail(const QString &reason)
 
 void LocationProvider::tryGeoClue()
 {
-    const QDBusConnection bus = QDBusConnection::systemBus();
-    if (!bus.isConnected()) {
-        tryIpLocate();
-        return;
-    }
-
-    // 不用默认 25 秒 D-Bus 超时，教室环境多数没有可用定位服务。
     QDBusInterface manager(QStringLiteral("org.freedesktop.GeoClue2"),
                            QStringLiteral("/org/freedesktop/GeoClue2/Manager"),
                            QStringLiteral("org.freedesktop.GeoClue2.Manager"),
-                           bus);
-    manager.setTimeout(400);
+                           QDBusConnection::systemBus());
     if (!manager.isValid()) {
         tryIpLocate();
         return;
@@ -72,8 +74,7 @@ void LocationProvider::tryGeoClue()
     QDBusInterface client(QStringLiteral("org.freedesktop.GeoClue2"),
                           path,
                           QStringLiteral("org.freedesktop.GeoClue2.Client"),
-                          bus);
-    client.setTimeout(400);
+                          QDBusConnection::systemBus());
     if (!client.isValid()) {
         tryIpLocate();
         return;
@@ -85,13 +86,17 @@ void LocationProvider::tryGeoClue()
 
     auto *timer = new QTimer(this);
     timer->setInterval(400);
-    connect(timer, &QTimer::timeout, this, [this, clientPath = path, timer, tries = 0]() mutable {
+    connect(timer, &QTimer::timeout, this, [this, path, timer, tries = 0]() mutable {
+        if (!m_busy) {
+            timer->stop();
+            timer->deleteLater();
+            return;
+        }
         ++tries;
         QDBusInterface client(QStringLiteral("org.freedesktop.GeoClue2"),
-                              clientPath,
+                              path,
                               QStringLiteral("org.freedesktop.GeoClue2.Client"),
                               QDBusConnection::systemBus());
-        client.setTimeout(300);
         const QVariant locPathVar = client.property("Location");
         const QDBusObjectPath locPath = qvariant_cast<QDBusObjectPath>(locPathVar);
         if (locPath.path().size() > 1 && locPath.path() != QLatin1String("/")) {
@@ -99,7 +104,6 @@ void LocationProvider::tryGeoClue()
                                locPath.path(),
                                QStringLiteral("org.freedesktop.GeoClue2.Location"),
                                QDBusConnection::systemBus());
-            loc.setTimeout(300);
             const double lat = loc.property("Latitude").toDouble();
             const double lng = loc.property("Longitude").toDouble();
             timer->stop();
@@ -112,7 +116,7 @@ void LocationProvider::tryGeoClue()
                 return;
             }
         }
-        if (tries >= 5) {
+        if (tries >= 8) {
             timer->stop();
             timer->deleteLater();
             client.call(QStringLiteral("Stop"));
@@ -132,7 +136,7 @@ void LocationProvider::tryIpLocate()
     QNetworkRequest req(QUrl(QStringLiteral(
         "http://ip-api.com/json/?fields=status,message,lat,lon,city,regionName,country")));
     req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("ChargePileUser/1.0"));
-    req.setTransferTimeout(2500);
+    req.setTransferTimeout(5000);
     m_nam->get(req);
 }
 

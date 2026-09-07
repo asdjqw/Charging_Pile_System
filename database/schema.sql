@@ -277,6 +277,23 @@ CREATE TABLE IF NOT EXISTS user_favorites (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+-- 充电站评价（充电结束后可评星+写评论）
+CREATE TABLE IF NOT EXISTS station_reviews (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    station_id    INTEGER NOT NULL,
+    user_id       INTEGER NOT NULL,
+    order_id      INTEGER,
+    rating        INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5),
+    comment       TEXT    NOT NULL DEFAULT '',
+    created_at    TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
+    FOREIGN KEY (station_id) REFERENCES stations(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (order_id) REFERENCES charging_orders(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_reviews_station ON station_reviews(station_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_reviews_user ON station_reviews(user_id, created_at);
+
 CREATE TABLE IF NOT EXISTS invite_codes (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     code          TEXT    NOT NULL UNIQUE,

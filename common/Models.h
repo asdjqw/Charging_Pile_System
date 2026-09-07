@@ -50,6 +50,8 @@ struct Station {
     int totalPiles = 0;
     double onlineRate = 0.0;
     double distanceKm = 0.0;
+    double avgRating = 0.0;
+    int reviewCount = 0;
 };
 
 struct Pile {
@@ -71,6 +73,20 @@ struct Pile {
     int totalChargeSeconds = 0;
     double remainingKwh = 100.0;
     bool favorite = false;
+    double avgRating = 0.0;      // 所属站点平均星级
+    int reviewCount = 0;
+};
+
+struct StationReview {
+    int id = 0;
+    int stationId = 0;
+    int userId = 0;
+    int orderId = 0;
+    int rating = 5;
+    QString comment;
+    QString createdAt;
+    QString nickname;
+    QString stationName;
 };
 
 struct ChargingReservation {

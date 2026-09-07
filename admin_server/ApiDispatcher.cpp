@@ -291,6 +291,26 @@ QJsonObject ApiDispatcher::dispatch(const QJsonObject &request)
                        nowFavorite ? QStringLiteral("已加入收藏") : QStringLiteral("已取消收藏"));
     }
 
+    if (action == QLatin1String("reviews.submit")) {
+        StationReview review;
+        if (!db.submitStationReview(userId,
+                                    data.value("stationId").toInt(),
+                                    data.value("orderId").toInt(),
+                                    data.value("rating").toInt(5),
+                                    data.value("comment").toString(),
+                                    review))
+            return failure(request, QStringLiteral("REVIEW_FAILED"), db.lastError());
+        return success(request, JsonCodec::toJson(review), QStringLiteral("评价已提交"));
+    }
+
+    if (action == QLatin1String("reviews.list")) {
+        QJsonArray items;
+        for (const StationReview &review : db.listStationReviews(data.value("stationId").toInt(),
+                                                                 data.value("limit").toInt(30)))
+            items.append(JsonCodec::toJson(review));
+        return success(request, QJsonObject{{"items", items}});
+    }
+
     if (action == QLatin1String("wallet.recharge")) {
         if (!db.rechargeUser(userId, data.value("amount").toDouble()))
             return failure(request, QStringLiteral("RECHARGE_FAILED"), db.lastError());

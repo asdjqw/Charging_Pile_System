@@ -42,6 +42,8 @@ void readPileRow(const QSqlQuery &query, Pile &p)
     p.totalChargeSeconds = query.value(14).toInt();
     p.remainingKwh = query.value(15).toDouble();
     p.stationAddress = query.value(16).toString();
+    p.avgRating = query.value(17).toDouble();
+    p.reviewCount = query.value(18).toInt();
 }
 
 const QString pileSelect = QStringLiteral(
@@ -50,7 +52,9 @@ const QString pileSelect = QStringLiteral(
     "COALESCE(p.phase,'single'), COALESCE(p.voltage_v,220), COALESCE(p.category_label,''), "
     "p.power_kw, p.price_per_kwh, p.status, s.name, "
     "COALESCE(p.total_charge_count,0), COALESCE(p.total_charge_seconds,0), "
-    "COALESCE(p.remaining_kwh,100), s.address "
+    "COALESCE(p.remaining_kwh,100), s.address, "
+    "COALESCE((SELECT AVG(r.rating*1.0) FROM station_reviews r WHERE r.station_id=s.id),0), "
+    "COALESCE((SELECT COUNT(*) FROM station_reviews r WHERE r.station_id=s.id),0) "
     "FROM piles p JOIN stations s ON s.id = p.station_id");
 
 bool pileInUse(const QString &status)
@@ -225,6 +229,8 @@ bool DatabaseManager::ensureSchemaAndSeed()
             return false;
         qInfo().noquote() << QStringLiteral("CSV 导入完成。");
     }
+    if (!ensureDemoContent())
+        return false;
     return migratePasswordHashes();
 }
 
@@ -858,7 +864,9 @@ QVector<Station> DatabaseManager::listStations(double userLat, double userLng,
         "SELECT s.id, s.name, s.address, s.region_code, s.latitude, s.longitude, s.open_hours, s.status, "
         "COUNT(p.id) AS total_piles, "
         "SUM(CASE WHEN p.status='idle' THEN 1 ELSE 0 END) AS idle_piles, "
-        "SUM(CASE WHEN p.status!='offline' THEN 1 ELSE 0 END) AS online_piles "
+        "SUM(CASE WHEN p.status!='offline' THEN 1 ELSE 0 END) AS online_piles, "
+        "COALESCE((SELECT AVG(r.rating*1.0) FROM station_reviews r WHERE r.station_id=s.id),0) AS avg_rating, "
+        "COALESCE((SELECT COUNT(*) FROM station_reviews r WHERE r.station_id=s.id),0) AS review_count "
         "FROM stations s LEFT JOIN piles p ON p.station_id = s.id WHERE 1=1 ");
     QVariantList binds;
     if (!keyword.trimmed().isEmpty()) {
@@ -901,6 +909,8 @@ QVector<Station> DatabaseManager::listStations(double userLat, double userLng,
         s.totalPiles = q.value(8).toInt();
         s.idlePiles = q.value(9).toInt();
         s.onlineRate = s.totalPiles > 0 ? q.value(10).toDouble() * 100.0 / s.totalPiles : 0.0;
+        s.avgRating = q.value(11).toDouble();
+        s.reviewCount = q.value(12).toInt();
         s.distanceKm = haversineKm(userLat, userLng, s.latitude, s.longitude);
         list.push_back(s);
     }
@@ -2297,6 +2307,242 @@ bool DatabaseManager::toggleFavorite(int userId, const QString &targetType, int 
         return false;
     }
     nowFavorite = true;
+    return true;
+}
+
+bool DatabaseManager::submitStationReview(int userId, int stationId, int orderId, int rating,
+                                          const QString &comment, StationReview &outReview)
+{
+    if (stationId <= 0) {
+        m_lastError = QStringLiteral("无效的充电站");
+        return false;
+    }
+    if (rating < 1 || rating > 5) {
+        m_lastError = QStringLiteral("星级需在 1～5 之间");
+        return false;
+    }
+    Station station;
+    if (!getStation(stationId, station))
+        return false;
+    User user;
+    if (!getUserById(userId, user))
+        return false;
+
+    QSqlQuery q(m_db);
+    q.prepare(QStringLiteral(
+        "INSERT INTO station_reviews(station_id, user_id, order_id, rating, comment) "
+        "VALUES(?,?,?,?,?)"));
+    q.addBindValue(stationId);
+    q.addBindValue(userId);
+    q.addBindValue(orderId > 0 ? QVariant(orderId) : QVariant());
+    q.addBindValue(rating);
+    q.addBindValue(comment.trimmed());
+    if (!q.exec()) {
+        m_lastError = q.lastError().text();
+        return false;
+    }
+    outReview.id = q.lastInsertId().toInt();
+    outReview.stationId = stationId;
+    outReview.userId = userId;
+    outReview.orderId = orderId;
+    outReview.rating = rating;
+    outReview.comment = comment.trimmed();
+    outReview.nickname = user.nickname;
+    outReview.stationName = station.name;
+    outReview.createdAt = QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss"));
+    return true;
+}
+
+QVector<StationReview> DatabaseManager::listStationReviews(int stationId, int limit)
+{
+    QVector<StationReview> list;
+    QSqlQuery q(m_db);
+    q.prepare(QStringLiteral(
+        "SELECT r.id, r.station_id, r.user_id, COALESCE(r.order_id,0), r.rating, r.comment, "
+        "r.created_at, COALESCE(u.nickname,''), COALESCE(s.name,'') "
+        "FROM station_reviews r "
+        "LEFT JOIN users u ON u.id=r.user_id "
+        "LEFT JOIN stations s ON s.id=r.station_id "
+        "WHERE (?<=0 OR r.station_id=?) "
+        "ORDER BY r.id DESC LIMIT ?"));
+    q.addBindValue(stationId);
+    q.addBindValue(stationId);
+    q.addBindValue(qBound(1, limit, 100));
+    if (!q.exec()) {
+        m_lastError = q.lastError().text();
+        return list;
+    }
+    while (q.next()) {
+        StationReview r;
+        r.id = q.value(0).toInt();
+        r.stationId = q.value(1).toInt();
+        r.userId = q.value(2).toInt();
+        r.orderId = q.value(3).toInt();
+        r.rating = q.value(4).toInt();
+        r.comment = q.value(5).toString();
+        r.createdAt = q.value(6).toString();
+        r.nickname = q.value(7).toString();
+        r.stationName = q.value(8).toString();
+        list.push_back(r);
+    }
+    return list;
+}
+
+bool DatabaseManager::ensureDemoContent()
+{
+    QSqlQuery countQ(m_db);
+    int finishedOrders = 0;
+    int reviewCount = 0;
+    int reviewedStations = 0;
+    if (countQ.exec(QStringLiteral("SELECT COUNT(*) FROM charging_orders WHERE status='finished'"))
+        && countQ.next())
+        finishedOrders = countQ.value(0).toInt();
+    if (countQ.exec(QStringLiteral("SELECT COUNT(*) FROM station_reviews")) && countQ.next())
+        reviewCount = countQ.value(0).toInt();
+    if (countQ.exec(QStringLiteral("SELECT COUNT(DISTINCT station_id) FROM station_reviews"))
+        && countQ.next())
+        reviewedStations = countQ.value(0).toInt();
+    // 需要覆盖足够多「附近站」才跳过，避免评价只落在 id 很小的站上
+    if (finishedOrders >= 60 && reviewCount >= 200 && reviewedStations >= 60)
+        return true;
+
+    // 优先取天安门附近站（与用户端默认定位一致），演示列表第一页就能看到星级
+    const double demoLat = 39.9042;
+    const double demoLng = 116.4074;
+    QVector<int> nearStationIds;
+    QVector<int> pileIds;
+    QVector<int> pileStationIds;
+    QSqlQuery q(m_db);
+    q.prepare(QStringLiteral(
+        "SELECT id FROM stations ORDER BY "
+        "((latitude-?)*(latitude-?)) + (((longitude-?)*0.77)*((longitude-?)*0.77)) ASC "
+        "LIMIT 80"));
+    q.addBindValue(demoLat);
+    q.addBindValue(demoLat);
+    q.addBindValue(demoLng);
+    q.addBindValue(demoLng);
+    if (q.exec()) {
+        while (q.next())
+            nearStationIds.push_back(q.value(0).toInt());
+    }
+    if (q.exec(QStringLiteral(
+            "SELECT p.id, p.station_id FROM piles p "
+            "JOIN stations s ON s.id=p.station_id "
+            "ORDER BY ((s.latitude-39.9042)*(s.latitude-39.9042)) + "
+            "(((s.longitude-116.4074)*0.77)*((s.longitude-116.4074)*0.77)) ASC "
+            "LIMIT 120"))) {
+        while (q.next()) {
+            pileIds.push_back(q.value(0).toInt());
+            pileStationIds.push_back(q.value(1).toInt());
+        }
+    }
+    if (nearStationIds.isEmpty() || pileIds.isEmpty())
+        return true;
+
+    const QStringList comments = {
+        QStringLiteral("充电很快，环境干净，推荐！"),
+        QStringLiteral("位置好找，停车方便。"),
+        QStringLiteral("价格实惠，指引清楚。"),
+        QStringLiteral("晚高峰略忙，总体满意。"),
+        QStringLiteral("功率稳定，希望多加几根快充。"),
+        QStringLiteral("服务态度不错，下次还来。"),
+        QStringLiteral("导航定位准确，出桩顺利。"),
+        QStringLiteral("雨天场地有点滑，其他都好。"),
+        QStringLiteral("有遮阳棚，夏天体验体验好。"),
+        QStringLiteral("计费透明，APP 体验流畅。"),
+        QStringLiteral("周边餐饮方便，充电等待不无聊。"),
+        QStringLiteral("桩体较新，接口好用。"),
+        QStringLiteral("车位充足，进出方便。"),
+        QStringLiteral("夜间照明不错，安全感强。"),
+        QStringLiteral("客服响应及时，问题解决快。")
+    };
+
+    if (finishedOrders < 60) {
+        const int need = 60 - finishedOrders;
+        for (int i = 0; i < need; ++i) {
+            const int pileIdx = i % pileIds.size();
+            const int userId = 1 + (i % 3);
+            const double energy = 8.5 + (i % 7) * 1.7;
+            const double price = 1.1 + (i % 5) * 0.08;
+            const double amount = energy * price;
+            const QDateTime end = QDateTime::currentDateTime().addDays(-(i + 1)).addSecs(-(i * 900));
+            const QDateTime start = end.addSecs(-int(energy / 30.0 * 3600));
+            QSqlQuery insert(m_db);
+            insert.prepare(QStringLiteral(
+                "INSERT INTO charging_orders(order_no, user_id, pile_id, start_time, end_time, "
+                "energy_kwh, price_per_kwh, amount, status, payment_status, paid_at) "
+                "VALUES(?,?,?,?,?,?,?,?, 'finished','paid',?)"));
+            insert.addBindValue(QStringLiteral("DEMO%1").arg(20000 + finishedOrders + i));
+            insert.addBindValue(userId);
+            insert.addBindValue(pileIds[pileIdx]);
+            insert.addBindValue(start.toString(QStringLiteral("yyyy-MM-dd HH:mm:ss")));
+            insert.addBindValue(end.toString(QStringLiteral("yyyy-MM-dd HH:mm:ss")));
+            insert.addBindValue(energy);
+            insert.addBindValue(price);
+            insert.addBindValue(amount);
+            insert.addBindValue(end.toString(QStringLiteral("yyyy-MM-dd HH:mm:ss")));
+            if (!insert.exec())
+                continue;
+            QSqlQuery up(m_db);
+            up.prepare(QStringLiteral(
+                "UPDATE piles SET total_charge_count=total_charge_count+1, "
+                "total_charge_seconds=total_charge_seconds+? WHERE id=?"));
+            up.addBindValue(int(energy / 30.0 * 3600));
+            up.addBindValue(pileIds[pileIdx]);
+            up.exec();
+        }
+    }
+
+    if (reviewCount < 200 || reviewedStations < 60) {
+        int seq = reviewCount;
+        for (int si = 0; si < nearStationIds.size(); ++si) {
+            const int stationId = nearStationIds[si];
+            QSqlQuery exist(m_db);
+            exist.prepare(QStringLiteral(
+                "SELECT COUNT(*) FROM station_reviews WHERE station_id=?"));
+            exist.addBindValue(stationId);
+            int already = 0;
+            if (exist.exec() && exist.next())
+                already = exist.value(0).toInt();
+            const int want = 3 + (si % 4); // 每站 3~6 条
+            for (int j = already; j < want; ++j) {
+                const int userId = 1 + ((si + j) % 3);
+                const int rating = 2 + ((si * 3 + j * 2) % 4); // 2~5
+                const QDateTime when = QDateTime::currentDateTime().addDays(-(si + j + 1));
+                QSqlQuery insert(m_db);
+                insert.prepare(QStringLiteral(
+                    "INSERT INTO station_reviews(station_id, user_id, rating, comment, created_at) "
+                    "VALUES(?,?,?,?,?)"));
+                insert.addBindValue(stationId);
+                insert.addBindValue(userId);
+                insert.addBindValue(rating);
+                insert.addBindValue(comments[(si + j) % comments.size()]);
+                insert.addBindValue(when.toString(QStringLiteral("yyyy-MM-dd HH:mm:ss")));
+                if (insert.exec())
+                    ++seq;
+            }
+        }
+        Q_UNUSED(seq);
+    }
+
+    // 给演示账号收藏几座「附近」站，方便一眼看到黄底高亮
+    QSqlQuery fav(m_db);
+    for (int i = 0; i < qMin(8, nearStationIds.size()); ++i) {
+        fav.prepare(QStringLiteral(
+            "INSERT OR IGNORE INTO user_favorites(user_id, target_type, target_id) VALUES(?,?,?)"));
+        fav.addBindValue(1);
+        fav.addBindValue(QStringLiteral("station"));
+        fav.addBindValue(nearStationIds[i]);
+        fav.exec();
+    }
+    for (int i = 0; i < qMin(8, pileIds.size()); ++i) {
+        fav.prepare(QStringLiteral(
+            "INSERT OR IGNORE INTO user_favorites(user_id, target_type, target_id) VALUES(?,?,?)"));
+        fav.addBindValue(1);
+        fav.addBindValue(QStringLiteral("pile"));
+        fav.addBindValue(pileIds[i]);
+        fav.exec();
+    }
     return true;
 }
 

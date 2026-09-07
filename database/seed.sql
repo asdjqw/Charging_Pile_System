@@ -18,3 +18,10 @@ INSERT OR IGNORE INTO recharge_records (id, user_id, amount, created_at) VALUES
 INSERT OR IGNORE INTO invite_codes (id, code, role, created_by) VALUES
 (1, 'CHARGE-ADMIN-2026', 'operator', 1),
 (2, 'CHARGE-AUDIT-2026', 'auditor', 1);
+
+-- 演示收藏
+INSERT OR IGNORE INTO user_favorites (user_id, target_type, target_id) VALUES
+(1, 'station', 1),
+(1, 'station', 2),
+(1, 'pile', 1),
+(2, 'station', 1);
