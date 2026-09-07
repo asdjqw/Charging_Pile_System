@@ -535,6 +535,8 @@ void MainWindow::buildStationDetailPage()
     connect(m_detailFavBtn, &QPushButton::clicked, this, &MainWindow::onStationDetailFavorite);
     connect(m_detailNavBtn, &QPushButton::clicked, this, &MainWindow::onStationDetailNavigate);
     connect(m_detailChargeBtn, &QPushButton::clicked, this, &MainWindow::onStationDetailGoCharge);
+    connect(m_detailReviewList, &QListWidget::itemClicked,
+            this, &MainWindow::onReviewItemClicked);
 }
 
 void MainWindow::updateNavActive(int index)
@@ -936,6 +938,11 @@ void MainWindow::showStationDetail(const Station &station)
                                         .arg(starsText(r.rating), who, r.comment,
                                              r.createdAt);
                 auto *it = new QListWidgetItem(text, m_detailReviewList);
+                it->setData(Qt::UserRole + 1, r.rating);
+                it->setData(Qt::UserRole + 2, who);
+                it->setData(Qt::UserRole + 3, r.comment);
+                it->setData(Qt::UserRole + 4, r.createdAt);
+                it->setToolTip(QStringLiteral("点击查看完整评价"));
                 it->setSizeHint(QSize(200, cardItemHeight(m_detailReviewList, 3)));
             }
         }
@@ -945,6 +952,41 @@ void MainWindow::showStationDetail(const Station &station)
     m_stationDetailPage->raise();
     m_stationDetailPage->show();
     m_stationDetailPage->setFocus();
+}
+
+void MainWindow::onReviewItemClicked(QListWidgetItem *item)
+{
+    if (!item || !item->data(Qt::UserRole + 3).isValid())
+        return;
+
+    QDialog dialog(this);
+    dialog.setWindowTitle(QStringLiteral("评价详情"));
+    dialog.setMinimumSize(440, 320);
+    dialog.setStyleSheet(styleSheet());
+    auto *layout = new QVBoxLayout(&dialog);
+    layout->setContentsMargins(22, 18, 22, 16);
+    layout->setSpacing(10);
+
+    auto *title = new QLabel(QStringLiteral("%1  %2")
+                                 .arg(starsText(item->data(Qt::UserRole + 1).toInt()),
+                                      item->data(Qt::UserRole + 2).toString()),
+                             &dialog);
+    title->setObjectName(QStringLiteral("pageTitle"));
+    auto *time = new QLabel(item->data(Qt::UserRole + 4).toString(), &dialog);
+    time->setObjectName(QStringLiteral("muted"));
+    auto *content = new QTextEdit(&dialog);
+    content->setReadOnly(true);
+    content->setPlainText(item->data(Qt::UserRole + 3).toString());
+    content->setMinimumHeight(150);
+    content->setObjectName(QStringLiteral("reviewContent"));
+    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, &dialog);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+
+    layout->addWidget(title);
+    layout->addWidget(time);
+    layout->addWidget(content, 1);
+    layout->addWidget(buttons);
+    dialog.exec();
 }
 
 void MainWindow::onStationDetailBack()
@@ -1684,4 +1726,3 @@ void MainWindow::onToggleDarkMode(bool dark)
     statusBar()->showMessage(dark ? QStringLiteral("已切换深色模式")
                                   : QStringLiteral("已切换浅色模式"), 2000);
 }
-

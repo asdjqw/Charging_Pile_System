@@ -121,6 +121,7 @@ private:
     bool execSqlFile(const QString &filePath);
     bool ensureSchemaAndSeed();
     bool ensurePileColumns();
+    bool ensurePresentationData(const QString &seedPath);
     bool ensureDemoContent();
     bool ensureDefaultPermissions();
     bool migratePasswordHashes();

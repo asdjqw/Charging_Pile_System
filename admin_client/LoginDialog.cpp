@@ -4,6 +4,7 @@
 #include "ui_LoginDialog.h"
 
 #include <QLineEdit>
+#include <QKeyEvent>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QSettings>
@@ -14,7 +15,11 @@ LoginDialog::LoginDialog(QWidget *parent)
     , ui(new Ui::LoginDialog)
 {
     ui->setupUi(this);
-    setFixedSize(400, 420);
+    // 登录页可按窗口大小自适应，也支持窗口管理器最大化与 F11 全屏切换。
+    setMinimumSize(400, 420);
+    setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
+    resize(400, 420);
+    setWindowFlag(Qt::WindowMaximizeButtonHint, true);
     QSettings settings;
     const bool dark = settings.value(QStringLiteral("ui/darkMode"), false).toBool();
     setStyleSheet(dark ? StyleHelper::adminClientDarkStyle()
@@ -45,6 +50,19 @@ LoginDialog::LoginDialog(QWidget *parent)
 LoginDialog::~LoginDialog()
 {
     delete ui;
+}
+
+void LoginDialog::keyPressEvent(QKeyEvent *event)
+{
+    if (event->key() == Qt::Key_F11) {
+        if (isFullScreen())
+            showNormal();
+        else
+            showFullScreen();
+        event->accept();
+        return;
+    }
+    QDialog::keyPressEvent(event);
 }
 
 void LoginDialog::showLoginPage()

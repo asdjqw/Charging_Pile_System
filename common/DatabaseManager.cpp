@@ -202,10 +202,12 @@ bool DatabaseManager::ensureSchemaAndSeed()
 
     QString schemaPath;
     QString seedPath;
+    QString presentationSeedPath;
     for (const QString &dir : candidates) {
         if (QFileInfo::exists(dir + "/schema.sql")) {
             schemaPath = dir + "/schema.sql";
             seedPath = dir + "/seed.sql";
+            presentationSeedPath = dir + "/presentation_seed.sql";
             break;
         }
     }
@@ -246,6 +248,8 @@ bool DatabaseManager::ensureSchemaAndSeed()
             return false;
         qInfo().noquote() << QStringLiteral("CSV 导入完成。");
     }
+    if (QFileInfo::exists(presentationSeedPath) && !ensurePresentationData(presentationSeedPath))
+        return false;
     if (!ensureDemoContent())
         return false;
     return migratePasswordHashes();
@@ -2466,6 +2470,27 @@ bool DatabaseManager::deleteStationReview(int reviewId, int adminId)
                     QStringLiteral("review"), reviewId,
                     QStringLiteral("{\"stationId\":%1}").arg(stationId));
     return true;
+}
+
+bool DatabaseManager::ensurePresentationData(const QString &seedPath)
+{
+    // 订单与首条展示评价同时存在，才认定展示数据已完整导入。
+    // 兼容旧订单标识，升级后只补充新增评论，不重复追加订单。
+    QSqlQuery marker(m_db);
+    if (!marker.exec(QStringLiteral(
+            "SELECT EXISTS(SELECT 1 FROM charging_orders "
+            "               WHERE order_no IN ('1919-810-0001', 'PRESENTATION-2026-0001')) "
+            "   AND EXISTS(SELECT 1 FROM station_reviews "
+            "              WHERE comment='导航准确，快充功率稳定，午间来基本不用排队。') "
+            "   AND NOT EXISTS(SELECT 1 FROM users "
+            "                  WHERE username LIKE 'presentation_user_%' "
+            "                    AND nickname LIKE '%（展示）%')"))) {
+        m_lastError = marker.lastError().text();
+        return false;
+    }
+    if (marker.next() && marker.value(0).toBool())
+        return true;
+    return execSqlFile(seedPath);
 }
 
 bool DatabaseManager::ensureDemoContent()

@@ -39,7 +39,8 @@ int main(int argc, char *argv[])
             logout = true;
             QApplication::exit(1);
         });
-        w.show();
+        // 管理主工作区默认最大化打开。
+        w.showMaximized();
         const int code = app.exec();
         AdminApiClient::instance().logout();
         if (!logout)

@@ -70,6 +70,7 @@ private slots:
     void onStationDetailFavorite();
     void onStationDetailNavigate();
     void onStationDetailGoCharge();
+    void onReviewItemClicked(QListWidgetItem *item);
 
 private:
     void buildUi();

@@ -5,6 +5,7 @@
 #include <QDialog>
 
 class QLineEdit;
+class QKeyEvent;
 class QStackedWidget;
 
 namespace Ui { class LoginDialog; }
@@ -16,6 +17,9 @@ public:
     explicit LoginDialog(QWidget *parent = nullptr);
     ~LoginDialog() override;
     Admin loggedInAdmin() const { return m_admin; }
+
+protected:
+    void keyPressEvent(QKeyEvent *event) override;
 
 private slots:
     void onLogin();
