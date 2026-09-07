@@ -31,6 +31,9 @@ public:
 
     bool listFavorites(QVector<int> &stationIds, QVector<int> &pileIds);
     bool toggleFavorite(const QString &targetType, int targetId, bool &nowFavorite);
+    bool submitStationReview(int stationId, int orderId, int rating, const QString &comment,
+                             StationReview &outReview);
+    QVector<StationReview> listStationReviews(int stationId, int limit = 30);
 
     QVector<Station> listStations(double userLat, double userLng, const QString &keyword,
                                   const QString &district, int limit);

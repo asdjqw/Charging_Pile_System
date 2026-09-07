@@ -73,6 +73,10 @@ public:
     bool listFavorites(int userId, const QString &targetType, QVector<int> &outIds);
     bool toggleFavorite(int userId, const QString &targetType, int targetId, bool &nowFavorite);
 
+    bool submitStationReview(int userId, int stationId, int orderId, int rating,
+                             const QString &comment, StationReview &outReview);
+    QVector<StationReview> listStationReviews(int stationId, int limit = 30);
+
     bool createInviteCode(int adminId, const QString &role, QString &outCode);
     QVector<InviteCode> listInviteCodes();
     bool hasPermission(const QString &role, const QString &permission) const;
@@ -116,6 +120,7 @@ private:
     bool execSqlFile(const QString &filePath);
     bool ensureSchemaAndSeed();
     bool ensurePileColumns();
+    bool ensureDemoContent();
     bool ensureDefaultPermissions();
     bool migratePasswordHashes();
     bool upgradePasswordIfNeeded(const QString &table, int id, const QString &plain,

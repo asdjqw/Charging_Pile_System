@@ -197,6 +197,32 @@ bool ServerApiClient::toggleFavorite(const QString &targetType, int targetId, bo
     return true;
 }
 
+bool ServerApiClient::submitStationReview(int stationId, int orderId, int rating,
+                                          const QString &comment, StationReview &outReview)
+{
+    const QJsonObject response = call(QStringLiteral("reviews.submit"),
+                                      {{"stationId", stationId},
+                                       {"orderId", orderId},
+                                       {"rating", rating},
+                                       {"comment", comment}});
+    if (!accept(response))
+        return false;
+    outReview = JsonCodec::reviewFromJson(response.value("data").toObject());
+    return outReview.id > 0;
+}
+
+QVector<StationReview> ServerApiClient::listStationReviews(int stationId, int limit)
+{
+    QVector<StationReview> values;
+    const QJsonObject response = call(QStringLiteral("reviews.list"),
+                                      {{"stationId", stationId}, {"limit", limit}});
+    if (!accept(response))
+        return values;
+    for (const QJsonValue &value : response.value("data").toObject().value("items").toArray())
+        values.push_back(JsonCodec::reviewFromJson(value.toObject()));
+    return values;
+}
+
 bool ServerApiClient::getUserById(int, User &outUser)
 {
     const QJsonObject response = call(QStringLiteral("user.get"));

@@ -10,6 +10,7 @@ class QCheckBox;
 class QLabel;
 class QLineEdit;
 class QListWidget;
+class QListWidgetItem;
 class QComboBox;
 class QProgressBar;
 class QTableWidget;
@@ -18,6 +19,7 @@ class QPushButton;
 class QStackedWidget;
 class QWidget;
 class QCloseEvent;
+class QEvent;
 class LocationProvider;
 
 namespace Ui { class MainWindow; }
@@ -62,11 +64,20 @@ private slots:
     void restoreSession();
     void loadInitialData();
     void onLogout();
+    void promptStationReview(int stationId, int orderId, const QString &stationName);
+    void onStationItemClicked(QListWidgetItem *item);
+    void onStationDetailBack();
+    void onStationDetailFavorite();
+    void onStationDetailNavigate();
+    void onStationDetailGoCharge();
 
 private:
     void buildUi();
     void bindUiWidgets();
     void applyStyleObjectNames();
+    void buildStationDetailPage();
+    void showStationDetail(const Station &station);
+    void syncChargeStationSelection(int stationId);
     void refreshOngoingBanner();
     void updateReservationCountdown();
     void updateChargeSubNavActive(int index);
@@ -80,6 +91,9 @@ private:
     void applyTheme(bool dark);
     void updateNavActive(int index);
     void appendStationItem(const Station &s);
+    Station stationFromListItem(QListWidgetItem *item) const;
+    void syncStationDetailGeometry();
+    bool eventFilter(QObject *watched, QEvent *event) override;
     int selectedStationId() const;
     int selectedPileId() const;
     int selectedListStationId() const;
@@ -119,6 +133,17 @@ private:
     QPushButton *m_favBtn = nullptr;
     QCheckBox *m_favOnlyCheck = nullptr;
     QLabel *m_navInfo = nullptr;
+    QWidget *m_stationDetailPage = nullptr;
+    QPushButton *m_detailBackBtn = nullptr;
+    QLabel *m_detailTitle = nullptr;
+    QLabel *m_detailAddress = nullptr;
+    QLabel *m_detailStars = nullptr;
+    QLabel *m_detailMeta = nullptr;
+    QPushButton *m_detailFavBtn = nullptr;
+    QPushButton *m_detailNavBtn = nullptr;
+    QPushButton *m_detailChargeBtn = nullptr;
+    QListWidget *m_detailReviewList = nullptr;
+    Station m_detailStation;
 
     // 充电 / 预约子页
     QPushButton *m_subNavReserve = nullptr;
@@ -142,6 +167,8 @@ private:
     int m_progressTick = 0;
     double m_currentPrice = 1.2;
     double m_currentPowerKw = 7.0;
+    bool m_balanceWarned = false;
+    int m_lastFinishedStationId = 0;
 
     // 用户信息
     QLineEdit *m_phoneEdit = nullptr;

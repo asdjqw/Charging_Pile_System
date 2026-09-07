@@ -120,7 +120,7 @@ QJsonObject ApiDispatcher::dispatch(const QJsonObject &request)
         user.nickname = data.value("nickname").toString();
         user.carModel = data.value("carModel").toString();
         user.plateNumber = data.value("plateNumber").toString();
-        user.balance = data.value("balance").toDouble(50.0);
+        user.balance = data.value("balance").toDouble(0.0);
         if (!db.registerUser(user)) {
             const QString err = db.lastError();
             const QString code = err.contains(QStringLiteral("已注册"))
@@ -289,6 +289,26 @@ QJsonObject ApiDispatcher::dispatch(const QJsonObject &request)
             return failure(request, QStringLiteral("FAVORITE_FAILED"), db.lastError());
         return success(request, QJsonObject{{"favorite", nowFavorite}},
                        nowFavorite ? QStringLiteral("已加入收藏") : QStringLiteral("已取消收藏"));
+    }
+
+    if (action == QLatin1String("reviews.submit")) {
+        StationReview review;
+        if (!db.submitStationReview(userId,
+                                    data.value("stationId").toInt(),
+                                    data.value("orderId").toInt(),
+                                    data.value("rating").toInt(5),
+                                    data.value("comment").toString(),
+                                    review))
+            return failure(request, QStringLiteral("REVIEW_FAILED"), db.lastError());
+        return success(request, JsonCodec::toJson(review), QStringLiteral("评价已提交"));
+    }
+
+    if (action == QLatin1String("reviews.list")) {
+        QJsonArray items;
+        for (const StationReview &review : db.listStationReviews(data.value("stationId").toInt(),
+                                                                 data.value("limit").toInt(30)))
+            items.append(JsonCodec::toJson(review));
+        return success(request, QJsonObject{{"items", items}});
     }
 
     if (action == QLatin1String("wallet.recharge")) {

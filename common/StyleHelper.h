@@ -61,12 +61,24 @@ inline QString userClientStyle()
             show-decoration-selected: 0;
         }
         QListWidget::item {
-            background: white; border: 1px solid #D8E0DE; border-radius: 8px;
+            border: 1px solid #D8E0DE; border-radius: 8px;
             margin: 5px 2px; padding: 10px 12px; color: #15201E;
         }
         QListWidget::item:selected {
             border: 1px solid #0D7565; background: #E7F2EF; border-radius: 8px;
         }
+        /* 站点列表：不写死 background，收藏黄底靠 setBackground */
+        QListWidget#stationList::item {
+            border: 1px solid #D8E0DE;
+            border-radius: 8px;
+            margin: 5px 2px;
+            padding: 10px 12px;
+        }
+        QListWidget#stationList::item:selected {
+            border: 1px solid #0D7565;
+            background: #E7F2EF;
+        }
+        QLabel#starLabel { color: #F5A623; font-size: 15px; font-weight: 600; }
         QTableWidget {
             background: white; border: 1px solid #D8E0DE; gridline-color: #E8EEEC;
             alternate-background-color: #F7F9F8; color: #15201E; border-radius: 8px;
@@ -88,7 +100,21 @@ inline QString userClientStyle()
         }
         QScrollBar::handle:vertical { background: #C5D0CD; border-radius: 4px; min-height: 24px; }
         QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
-        QMessageBox { background: #F3F6F5; }
+        QMessageBox {
+            background: #F3F6F5;
+            min-width: 380px;
+        }
+        QMessageBox QLabel {
+            min-width: 320px;
+            min-height: 72px;
+            font-size: 15px;
+        }
+        QMessageBox QPushButton {
+            min-width: 96px;
+            min-height: 40px;
+            font-size: 14px;
+            padding: 8px 16px;
+        }
         QStatusBar {
             background: #FFFFFF; color: #3D4A47; border: none; border-top: 1px solid #D8E0DE;
         }
@@ -152,12 +178,23 @@ inline QString userClientDarkStyle()
             show-decoration-selected: 0;
         }
         QListWidget::item {
-            background: #1A2422; border: 1px solid #2A3835; border-radius: 8px;
+            border: 1px solid #2A3835; border-radius: 8px;
             margin: 5px 2px; padding: 10px 12px; color: #E8EEEC;
         }
         QListWidget::item:selected {
             border: 1px solid #3DDBB5; background: #20302D; border-radius: 8px;
         }
+        QListWidget#stationList::item {
+            border: 1px solid #2A3835;
+            border-radius: 8px;
+            margin: 5px 2px;
+            padding: 10px 12px;
+        }
+        QListWidget#stationList::item:selected {
+            border: 1px solid #3DDBB5;
+            background: #20302D;
+        }
+        QLabel#starLabel { color: #F5A623; font-size: 15px; font-weight: 600; }
         QTableWidget {
             background: #1A2422; border: 1px solid #2A3835; gridline-color: #2A3835;
             alternate-background-color: #15201E; color: #E8EEEC; border-radius: 8px;
@@ -179,7 +216,9 @@ inline QString userClientDarkStyle()
         }
         QScrollBar::handle:vertical { background: #3D4A47; border-radius: 4px; min-height: 24px; }
         QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
-        QMessageBox { background: #1A2422; }
+        QMessageBox { background: #1A2422; min-width: 380px; }
+        QMessageBox QLabel { min-width: 320px; min-height: 72px; font-size: 15px; color: #E8EEEC; }
+        QMessageBox QPushButton { min-width: 96px; min-height: 40px; font-size: 14px; padding: 8px 16px; }
         QStatusBar {
             background: #1A2422; color: #C5D0CD; border: none; border-top: 1px solid #2A3835;
         }

@@ -21,7 +21,8 @@ QJsonObject toJson(const Station &v)
             {"address", v.address}, {"regionCode", v.regionCode},
             {"latitude", v.latitude}, {"longitude", v.longitude}, {"openHours", v.openHours},
             {"status", v.status}, {"idlePiles", v.idlePiles}, {"totalPiles", v.totalPiles},
-            {"onlineRate", v.onlineRate}, {"distanceKm", v.distanceKm}};
+            {"onlineRate", v.onlineRate}, {"distanceKm", v.distanceKm},
+            {"avgRating", v.avgRating}, {"reviewCount", v.reviewCount}};
 }
 
 QJsonObject toJson(const Pile &v)
@@ -35,7 +36,8 @@ QJsonObject toJson(const Pile &v)
             {"stationAddress", v.stationAddress},
             {"totalChargeCount", v.totalChargeCount},
             {"totalChargeSeconds", v.totalChargeSeconds},
-            {"remainingKwh", v.remainingKwh}, {"favorite", v.favorite}};
+            {"remainingKwh", v.remainingKwh}, {"favorite", v.favorite},
+            {"avgRating", v.avgRating}, {"reviewCount", v.reviewCount}};
 }
 
 QJsonObject toJson(const ChargingReservation &v)
@@ -98,6 +100,8 @@ Station stationFromJson(const QJsonObject &o)
     v.totalPiles = o.value("totalPiles").toInt();
     v.onlineRate = o.value("onlineRate").toDouble();
     v.distanceKm = o.value("distanceKm").toDouble();
+    v.avgRating = o.value("avgRating").toDouble();
+    v.reviewCount = o.value("reviewCount").toInt();
     return v;
 }
 
@@ -122,6 +126,8 @@ Pile pileFromJson(const QJsonObject &o)
     v.totalChargeSeconds = o.value("totalChargeSeconds").toInt();
     v.remainingKwh = o.value("remainingKwh").toDouble(100.0);
     v.favorite = o.value("favorite").toBool();
+    v.avgRating = o.value("avgRating").toDouble();
+    v.reviewCount = o.value("reviewCount").toInt();
     return v;
 }
 
@@ -178,6 +184,29 @@ ChargingOrder orderFromJson(const QJsonObject &o)
     v.status = o.value("status").toString();
     v.username = o.value("username").toString();
     v.pileCode = o.value("pileCode").toString();
+    v.stationName = o.value("stationName").toString();
+    return v;
+}
+
+QJsonObject toJson(const StationReview &v)
+{
+    return {{"id", v.id}, {"stationId", v.stationId}, {"userId", v.userId},
+            {"orderId", v.orderId}, {"rating", v.rating}, {"comment", v.comment},
+            {"createdAt", v.createdAt}, {"nickname", v.nickname},
+            {"stationName", v.stationName}};
+}
+
+StationReview reviewFromJson(const QJsonObject &o)
+{
+    StationReview v;
+    v.id = o.value("id").toInt();
+    v.stationId = o.value("stationId").toInt();
+    v.userId = o.value("userId").toInt();
+    v.orderId = o.value("orderId").toInt();
+    v.rating = o.value("rating").toInt(5);
+    v.comment = o.value("comment").toString();
+    v.createdAt = o.value("createdAt").toString();
+    v.nickname = o.value("nickname").toString();
     v.stationName = o.value("stationName").toString();
     return v;
 }
