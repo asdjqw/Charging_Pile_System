@@ -208,7 +208,7 @@ bool ServerApiClient::submitStationReview(int stationId, int orderId, int rating
     if (!accept(response))
         return false;
     outReview = JsonCodec::reviewFromJson(response.value("data").toObject());
-    return outReview.id > 0;
+    return true;
 }
 
 QVector<StationReview> ServerApiClient::listStationReviews(int stationId, int limit)

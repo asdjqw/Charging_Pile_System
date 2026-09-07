@@ -29,15 +29,18 @@
 #include <QMap>
 #include <QMessageBox>
 #include <QMouseEvent>
+#include <QPainter>
+#include <QPainterPath>
+#include <QPen>
 #include <QProgressBar>
 #include <QPixmap>
 #include <QPushButton>
+#include <QStyledItemDelegate>
 #include <QScrollArea>
 #include <QSet>
 #include <QSettings>
 #include <QSize>
 #include <QSizePolicy>
-#include <QSpinBox>
 #include <QStackedWidget>
 #include <QStatusBar>
 #include <QStyle>
@@ -47,6 +50,7 @@
 #include <QUrl>
 #include <QUrlQuery>
 #include <QVBoxLayout>
+#include <QVector>
 
 namespace {
 
@@ -83,14 +87,68 @@ QPair<double, double> realDistrictCoords(const QString &region)
     return {39.9042, 116.4074};
 }
 
-void prepareCardList(QListWidget *list)
+constexpr int kFavoriteRole = Qt::UserRole + 20;
+
+class FavoriteCardDelegate : public QStyledItemDelegate
 {
-    list->setSpacing(6);
+public:
+    explicit FavoriteCardDelegate(QObject *parent = nullptr)
+        : QStyledItemDelegate(parent)
+    {
+    }
+
+    void paint(QPainter *painter, const QStyleOptionViewItem &option,
+               const QModelIndex &index) const override
+    {
+        const bool dark = option.widget && option.widget->property("darkMode").toBool();
+        const bool fav = index.data(kFavoriteRole).toBool();
+        const bool selected = option.state & QStyle::State_Selected;
+        const bool enabled = option.state & QStyle::State_Enabled;
+
+        QRect r = option.rect.adjusted(2, 3, -2, -3);
+        QPainterPath path;
+        path.addRoundedRect(r, 8, 8);
+
+        QColor bg = dark ? QColor(QStringLiteral("#1A2422")) : QColor(Qt::white);
+        QColor border = dark ? QColor(QStringLiteral("#2A3835")) : QColor(QStringLiteral("#D8E0DE"));
+        QColor fg = dark ? QColor(QStringLiteral("#E8EEEC")) : QColor(QStringLiteral("#15201E"));
+        if (fav) {
+            bg = StyleHelper::favoriteBackground(dark);
+            fg = StyleHelper::favoriteForeground(dark);
+        }
+        if (selected) {
+            border = dark ? QColor(QStringLiteral("#3DDBB5")) : QColor(QStringLiteral("#0D7565"));
+            if (!fav)
+                bg = dark ? QColor(QStringLiteral("#20302D")) : QColor(QStringLiteral("#E7F2EF"));
+        }
+        if (!enabled)
+            fg.setAlpha(140);
+
+        painter->save();
+        painter->setRenderHint(QPainter::Antialiasing, true);
+        painter->fillPath(path, bg);
+        painter->setPen(QPen(border, selected ? 1.6 : 1.0));
+        painter->drawPath(path);
+        painter->setPen(fg);
+        QFont font = option.font;
+        painter->setFont(font);
+        painter->drawText(r.adjusted(12, 8, -12, -8),
+                          Qt::AlignLeft | Qt::AlignVCenter | Qt::TextWordWrap,
+                          index.data(Qt::DisplayRole).toString());
+        painter->restore();
+    }
+};
+
+void prepareCardList(QListWidget *list, bool favoriteHighlight = false)
+{
+    list->setSpacing(favoriteHighlight ? 2 : 6);
     list->setWordWrap(true);
     list->setUniformItemSizes(false);
     list->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     list->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
     list->setFrameShape(QFrame::NoFrame);
+    if (favoriteHighlight)
+        list->setItemDelegate(new FavoriteCardDelegate(list));
 }
 
 int cardItemHeight(const QListWidget *list, int lines)
@@ -120,14 +178,61 @@ QString ratingSummary(double avg, int count)
 void showLargeMessage(QWidget *parent, QMessageBox::Icon icon, const QString &title,
                       const QString &text)
 {
-    QMessageBox box(parent);
-    box.setIcon(icon);
-    box.setWindowTitle(title);
-    box.setText(text);
-    box.setStyleSheet(QStringLiteral(
-        "QLabel{min-width:360px; min-height:96px; font-size:15px;}"
-        "QPushButton{min-width:96px; min-height:40px; font-size:14px; padding:8px 16px;}"));
-    box.exec();
+    QDialog dlg(parent);
+    dlg.setWindowTitle(title);
+    dlg.setModal(true);
+    if (parent)
+        dlg.setStyleSheet(parent->styleSheet());
+
+    auto *layout = new QVBoxLayout(&dlg);
+    layout->setContentsMargins(20, 18, 20, 16);
+    layout->setSpacing(16);
+
+    auto *row = new QWidget(&dlg);
+    auto *rowLayout = new QHBoxLayout(row);
+    rowLayout->setContentsMargins(0, 0, 0, 0);
+    rowLayout->setSpacing(12);
+
+    auto *iconLabel = new QLabel(row);
+    const QStyle::StandardPixmap sp =
+        icon == QMessageBox::Warning ? QStyle::SP_MessageBoxWarning
+        : icon == QMessageBox::Critical ? QStyle::SP_MessageBoxCritical
+                                        : QStyle::SP_MessageBoxInformation;
+    iconLabel->setPixmap(dlg.style()->standardIcon(sp).pixmap(32, 32));
+    iconLabel->setFixedSize(32, 32);
+    iconLabel->setAlignment(Qt::AlignCenter);
+
+    auto *textLabel = new QLabel(text, row);
+    textLabel->setWordWrap(true);
+    textLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    textLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    textLabel->setMinimumWidth(260);
+    textLabel->setMaximumWidth(400);
+
+    rowLayout->addWidget(iconLabel, 0, Qt::AlignTop);
+    rowLayout->addWidget(textLabel, 1);
+    layout->addWidget(row);
+
+    auto *ok = new QPushButton(QStringLiteral("确定"), &dlg);
+    ok->setDefault(true);
+    ok->setMinimumWidth(88);
+    auto *btnRow = new QHBoxLayout;
+    btnRow->addStretch();
+    btnRow->addWidget(ok);
+    layout->addLayout(btnRow);
+    QObject::connect(ok, &QPushButton::clicked, &dlg, &QDialog::accept);
+
+    dlg.adjustSize();
+    dlg.exec();
+}
+
+void applyStarVisual(QPushButton *btn, bool lit)
+{
+    btn->setText(lit ? QStringLiteral("★") : QStringLiteral("☆"));
+    btn->setProperty("lit", lit ? QStringLiteral("true") : QStringLiteral("false"));
+    btn->style()->unpolish(btn);
+    btn->style()->polish(btn);
+    btn->update();
 }
 
 } // namespace
@@ -291,9 +396,11 @@ void MainWindow::buildUi()
     m_connectorFilter->addItem(QStringLiteral("CHAdeMO"), QStringLiteral("CHAdeMO"));
     m_connectorFilter->addItem(QStringLiteral("特斯拉NACS"), QStringLiteral("TeslaNACS"));
 
-    prepareCardList(m_stationList);
-    prepareCardList(m_pileList);
+    prepareCardList(m_stationList, true);
+    prepareCardList(m_pileList, true);
     m_stationList->setObjectName(QStringLiteral("stationList"));
+    if (m_pileList)
+        m_pileList->setObjectName(QStringLiteral("pileList"));
     m_stationList->setCursor(Qt::PointingHandCursor);
     if (m_countLabel)
         m_countLabel->setWordWrap(true);
@@ -676,13 +783,7 @@ void MainWindow::appendStationItem(const Station &s)
     item->setData(Qt::UserRole + 10, s.status);
     item->setData(Qt::UserRole + 11, s.regionCode);
     item->setData(Qt::UserRole + 12, s.openHours);
-    if (fav) {
-        item->setBackground(QBrush(QColor(QStringLiteral("#FFF4D6"))));
-        item->setForeground(QBrush(QColor(QStringLiteral("#8A4B00"))));
-    } else {
-        item->setBackground(QBrush(QColor(Qt::white)));
-        item->setForeground(QBrush(QColor(QStringLiteral("#15201E"))));
-    }
+    item->setData(kFavoriteRole, fav);
 }
 
 bool MainWindow::eventFilter(QObject *watched, QEvent *event)
@@ -959,10 +1060,7 @@ void MainWindow::refreshPilesForCharge()
         item->setData(Qt::UserRole + 2, p.powerKw);
         item->setData(Qt::UserRole + 3, p.status);
         item->setData(Qt::UserRole + 4, p.stationId);
-        if (fav) {
-            item->setBackground(QBrush(QColor(QStringLiteral("#FFF4D6"))));
-            item->setForeground(QBrush(QColor(QStringLiteral("#8A4B00"))));
-        }
+        item->setData(kFavoriteRole, fav);
         const bool ownReservation = p.status == QLatin1String("reserved")
                                     && p.id == m_reservation.pileId;
         if (p.status != QLatin1String("idle") && !ownReservation)
@@ -1163,6 +1261,12 @@ void MainWindow::onStopCharge()
         return;
     }
 
+    if (stationId <= 0 && finished.pileId > 0) {
+        Pile pile;
+        if (ServerApiClient::instance().getPile(finished.pileId, pile))
+            stationId = pile.stationId;
+    }
+
     m_chargeTimer->stop();
     m_ongoing = ChargingOrder{};
     m_balanceWarned = false;
@@ -1179,26 +1283,54 @@ void MainWindow::onStopCharge()
                          .arg(finished.amount, 0, 'f', 2)
                          .arg(m_user.balance, 0, 'f', 2));
 
-    if (stationId > 0)
-        promptStationReview(stationId, orderId, stationName);
+    promptStationReview(stationId, orderId,
+                        stationName.isEmpty() ? QStringLiteral("本次充电电站") : stationName);
 }
 
 void MainWindow::promptStationReview(int stationId, int orderId, const QString &stationName)
 {
     QDialog dlg(this);
     dlg.setWindowTitle(QStringLiteral("评价充电站"));
-    dlg.setMinimumSize(420, 360);
+    dlg.setMinimumWidth(400);
     dlg.setStyleSheet(styleSheet());
     auto *layout = new QVBoxLayout(&dlg);
+    layout->setContentsMargins(20, 18, 20, 16);
+    layout->setSpacing(12);
     auto *title = new QLabel(QStringLiteral("为「%1」评星并留下评价").arg(stationName), &dlg);
     title->setObjectName(QStringLiteral("pageTitle"));
     title->setWordWrap(true);
-    auto *rating = new QSpinBox(&dlg);
-    rating->setRange(1, 5);
-    rating->setValue(5);
-    rating->setPrefix(QStringLiteral("星级 "));
-    rating->setSuffix(QStringLiteral(" 星"));
-    rating->setMinimumHeight(40);
+    auto *starHint = new QLabel(QStringLiteral("点击星星选择 5 星"), &dlg);
+    starHint->setObjectName(QStringLiteral("muted"));
+
+    auto *starsWrap = new QWidget(&dlg);
+    auto *starsLayout = new QHBoxLayout(starsWrap);
+    starsLayout->setContentsMargins(0, 4, 0, 4);
+    starsLayout->setSpacing(6);
+    QVector<QPushButton *> starBtns;
+    int currentRating = 5;
+    auto refreshStars = [&]() {
+        starHint->setText(QStringLiteral("已选择 %1 星，点击星星可修改").arg(currentRating));
+        for (int i = 0; i < starBtns.size(); ++i)
+            applyStarVisual(starBtns.at(i), i < currentRating);
+    };
+    for (int i = 1; i <= 5; ++i) {
+        auto *btn = new QPushButton(starsWrap);
+        btn->setObjectName(QStringLiteral("starBtn"));
+        btn->setCursor(Qt::PointingHandCursor);
+        btn->setFlat(true);
+        btn->setFocusPolicy(Qt::NoFocus);
+        btn->setFixedSize(40, 40);
+        const int star = i;
+        QObject::connect(btn, &QPushButton::clicked, &dlg, [&currentRating, star, refreshStars]() {
+            currentRating = star;
+            refreshStars();
+        });
+        starBtns.push_back(btn);
+        starsLayout->addWidget(btn);
+    }
+    starsLayout->addStretch();
+    refreshStars();
+
     auto *comment = new QTextEdit(&dlg);
     comment->setPlaceholderText(QStringLiteral("可选：写出你的充电体验…"));
     comment->setMinimumHeight(120);
@@ -1206,7 +1338,8 @@ void MainWindow::promptStationReview(int stationId, int orderId, const QString &
     buttons->button(QDialogButtonBox::Ok)->setText(QStringLiteral("提交评价"));
     buttons->button(QDialogButtonBox::Cancel)->setText(QStringLiteral("跳过"));
     layout->addWidget(title);
-    layout->addWidget(rating);
+    layout->addWidget(starHint);
+    layout->addWidget(starsWrap);
     layout->addWidget(comment, 1);
     layout->addWidget(buttons);
     connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
@@ -1216,14 +1349,14 @@ void MainWindow::promptStationReview(int stationId, int orderId, const QString &
 
     StationReview review;
     if (!ServerApiClient::instance().submitStationReview(
-            stationId, orderId, rating->value(), comment->toPlainText().trimmed(), review)) {
+            stationId, orderId, currentRating, comment->toPlainText().trimmed(), review)) {
         showLargeMessage(this, QMessageBox::Warning, QStringLiteral("评价失败"),
                          ServerApiClient::instance().lastError());
         return;
     }
     showLargeMessage(this, QMessageBox::Information, QStringLiteral("感谢评价"),
                      QStringLiteral("已提交 %1 星评价，其他用户可看到该站平均星级。")
-                         .arg(rating->value()));
+                         .arg(currentRating));
     refreshStations();
 }
 
@@ -1530,6 +1663,15 @@ void MainWindow::applyTheme(bool dark)
                                    : QStringLiteral("深色模式：关"));
         m_darkModeBtn->blockSignals(false);
     }
+    const auto markList = [dark](QListWidget *list) {
+        if (!list)
+            return;
+        list->setProperty("darkMode", dark);
+        list->viewport()->update();
+    };
+    markList(m_stationList);
+    markList(m_pileList);
+    markList(m_detailReviewList);
     if (m_tabStack)
         updateNavActive(m_tabStack->currentIndex());
 }

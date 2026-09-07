@@ -4,7 +4,10 @@
 #include <algorithm>
 
 #include <QCoreApplication>
+#include <QDate>
 #include <QDateTime>
+#include <QTime>
+#include <QMap>
 #include <QDebug>
 #include <QDir>
 #include <QFile>
@@ -216,6 +219,20 @@ bool DatabaseManager::ensureSchemaAndSeed()
         return false;
     if (!execSqlFile(schemaPath))
         return false;
+    // 旧库如果没跑到带评价表的 schema，这里再补一次，避免提交评价时报不存在表。
+    QSqlQuery reviewTable(m_db);
+    if (!reviewTable.exec(QStringLiteral(
+            "CREATE TABLE IF NOT EXISTS station_reviews ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "station_id INTEGER NOT NULL,"
+            "user_id INTEGER NOT NULL,"
+            "order_id INTEGER,"
+            "rating INTEGER NOT NULL,"
+            "comment TEXT NOT NULL DEFAULT '',"
+            "created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')))"))) {
+        m_lastError = reviewTable.lastError().text();
+        return false;
+    }
     if (!ensureDefaultPermissions())
         return false;
     if (needInit && QFileInfo::exists(seedPath) && !execSqlFile(seedPath))
@@ -287,40 +304,38 @@ QStringList DatabaseManager::allPermissionKeys()
         QStringLiteral("users.read"), QStringLiteral("users.write"),
         QStringLiteral("orders.read"), QStringLiteral("orders.write"),
         QStringLiteral("reservations.read"), QStringLiteral("reservations.write"),
+        QStringLiteral("reviews.read"), QStringLiteral("reviews.write"),
         QStringLiteral("invites.write"), QStringLiteral("permissions.write")
     };
 }
 
 bool DatabaseManager::ensureDefaultPermissions()
 {
-    QSqlQuery count(m_db);
-    if (count.exec(QStringLiteral("SELECT COUNT(*) FROM role_permissions")) && count.next()
-        && count.value(0).toInt() == 0) {
-        const QStringList keys = allPermissionKeys();
-        auto grant = [this](const QString &role, const QString &perm, bool allowed) {
-            QSqlQuery q(m_db);
-            q.prepare(QStringLiteral(
-                "INSERT OR IGNORE INTO role_permissions(role, permission, allowed) VALUES(?,?,?)"));
-            q.addBindValue(role);
-            q.addBindValue(perm);
-            q.addBindValue(allowed ? 1 : 0);
-            return q.exec();
-        };
-        for (const QString &key : keys) {
-            if (!grant(QStringLiteral("admin"), key, true))
-                return false;
-            const bool operatorWrite = key.startsWith(QLatin1String("piles."))
-                || key.startsWith(QLatin1String("stations."))
-                || key.startsWith(QLatin1String("reservations."))
-                || key == QLatin1String("dashboard.read")
-                || key == QLatin1String("users.read")
-                || key == QLatin1String("orders.read");
-            if (!grant(QStringLiteral("operator"), key, operatorWrite))
-                return false;
-            const bool auditorRead = key.endsWith(QLatin1String(".read"));
-            if (!grant(QStringLiteral("auditor"), key, auditorRead))
-                return false;
-        }
+    const QStringList keys = allPermissionKeys();
+    auto grant = [this](const QString &role, const QString &perm, bool allowed) {
+        QSqlQuery q(m_db);
+        q.prepare(QStringLiteral(
+            "INSERT OR IGNORE INTO role_permissions(role, permission, allowed) VALUES(?,?,?)"));
+        q.addBindValue(role);
+        q.addBindValue(perm);
+        q.addBindValue(allowed ? 1 : 0);
+        return q.exec();
+    };
+    for (const QString &key : keys) {
+        if (!grant(QStringLiteral("admin"), key, true))
+            return false;
+        const bool operatorWrite = key.startsWith(QLatin1String("piles."))
+            || key.startsWith(QLatin1String("stations."))
+            || key.startsWith(QLatin1String("reservations."))
+            || key.startsWith(QLatin1String("reviews."))
+            || key == QLatin1String("dashboard.read")
+            || key == QLatin1String("users.read")
+            || key == QLatin1String("orders.read");
+        if (!grant(QStringLiteral("operator"), key, operatorWrite))
+            return false;
+        const bool auditorRead = key.endsWith(QLatin1String(".read"));
+        if (!grant(QStringLiteral("auditor"), key, auditorRead))
+            return false;
     }
 
     QSqlQuery invite(m_db);
@@ -921,7 +936,11 @@ QVector<Station> DatabaseManager::listStations(double userLat, double userLng,
 bool DatabaseManager::getStation(int id, Station &out)
 {
     QSqlQuery q(m_db);
-    q.prepare(QStringLiteral("SELECT id, name, address, latitude, longitude, open_hours, status FROM stations WHERE id=?"));
+    q.prepare(QStringLiteral(
+        "SELECT id, name, address, latitude, longitude, open_hours, status, "
+        "COALESCE((SELECT AVG(r.rating*1.0) FROM station_reviews r WHERE r.station_id=stations.id),0), "
+        "COALESCE((SELECT COUNT(*) FROM station_reviews r WHERE r.station_id=stations.id),0) "
+        "FROM stations WHERE id=?"));
     q.addBindValue(id);
     if (!q.exec() || !q.next()) {
         m_lastError = QStringLiteral("充电站不存在");
@@ -934,6 +953,8 @@ bool DatabaseManager::getStation(int id, Station &out)
     out.longitude = q.value(4).toDouble();
     out.openHours = q.value(5).toString();
     out.status = q.value(6).toString();
+    out.avgRating = q.value(7).toDouble();
+    out.reviewCount = q.value(8).toInt();
     return true;
 }
 
@@ -1904,7 +1925,8 @@ DatabaseManager::SalesStats DatabaseManager::salesStats() const
 
 QVector<QPair<QString, double>> DatabaseManager::dailySales(int days) const
 {
-    QVector<QPair<QString, double>> result;
+    days = qBound(1, days, 90);
+    QMap<QString, double> byDate;
     QSqlQuery q(m_db);
     q.prepare(QStringLiteral(
         "SELECT date(end_time) AS d, COALESCE(SUM(amount),0) "
@@ -1912,9 +1934,16 @@ QVector<QPair<QString, double>> DatabaseManager::dailySales(int days) const
         "WHERE status='finished' AND date(end_time) >= date('now','localtime', ?) "
         "GROUP BY d ORDER BY d"));
     q.addBindValue(QStringLiteral("-%1 day").arg(days - 1));
-    q.exec();
-    while (q.next())
-        result.push_back({q.value(0).toString(), q.value(1).toDouble()});
+    if (q.exec()) {
+        while (q.next())
+            byDate.insert(q.value(0).toString(), q.value(1).toDouble());
+    }
+    QVector<QPair<QString, double>> result;
+    const QDate today = QDate::currentDate();
+    for (int i = days - 1; i >= 0; --i) {
+        const QString key = today.addDays(-i).toString(QStringLiteral("yyyy-MM-dd"));
+        result.push_back({key, byDate.value(key, 0.0)});
+    }
     return result;
 }
 
@@ -2313,42 +2342,67 @@ bool DatabaseManager::toggleFavorite(int userId, const QString &targetType, int 
 bool DatabaseManager::submitStationReview(int userId, int stationId, int orderId, int rating,
                                           const QString &comment, StationReview &outReview)
 {
+    if (rating < 1 || rating > 5)
+        rating = 5;
+
+    if (stationId <= 0 && orderId > 0) {
+        QSqlQuery find(m_db);
+        find.prepare(QStringLiteral(
+            "SELECT p.station_id FROM charging_orders o "
+            "JOIN piles p ON p.id=o.pile_id WHERE o.id=?"));
+        find.addBindValue(orderId);
+        if (find.exec() && find.next())
+            stationId = find.value(0).toInt();
+    }
     if (stationId <= 0) {
         m_lastError = QStringLiteral("无效的充电站");
         return false;
     }
-    if (rating < 1 || rating > 5) {
-        m_lastError = QStringLiteral("星级需在 1～5 之间");
+
+    QSqlQuery nameQ(m_db);
+    nameQ.prepare(QStringLiteral("SELECT name FROM stations WHERE id=?"));
+    nameQ.addBindValue(stationId);
+    if (!nameQ.exec() || !nameQ.next()) {
+        m_lastError = QStringLiteral("充电站不存在");
         return false;
     }
-    Station station;
-    if (!getStation(stationId, station))
-        return false;
+    const QString stationName = nameQ.value(0).toString();
+
     User user;
     if (!getUserById(userId, user))
         return false;
 
-    QSqlQuery q(m_db);
-    q.prepare(QStringLiteral(
-        "INSERT INTO station_reviews(station_id, user_id, order_id, rating, comment) "
-        "VALUES(?,?,?,?,?)"));
-    q.addBindValue(stationId);
-    q.addBindValue(userId);
-    q.addBindValue(orderId > 0 ? QVariant(orderId) : QVariant());
-    q.addBindValue(rating);
-    q.addBindValue(comment.trimmed());
-    if (!q.exec()) {
-        m_lastError = q.lastError().text();
+    auto insertReview = [&](const QVariant &orderValue) {
+        QSqlQuery q(m_db);
+        q.prepare(QStringLiteral(
+            "INSERT INTO station_reviews(station_id, user_id, order_id, rating, comment) "
+            "VALUES(?,?,?,?,?)"));
+        q.addBindValue(stationId);
+        q.addBindValue(userId);
+        q.addBindValue(orderValue);
+        q.addBindValue(rating);
+        q.addBindValue(comment.trimmed());
+        if (!q.exec()) {
+            m_lastError = q.lastError().text();
+            return 0;
+        }
+        return q.lastInsertId().toInt();
+    };
+
+    int newId = insertReview(orderId > 0 ? QVariant(orderId) : QVariant());
+    if (newId <= 0 && orderId > 0)
+        newId = insertReview(QVariant());
+    if (newId <= 0)
         return false;
-    }
-    outReview.id = q.lastInsertId().toInt();
+
+    outReview.id = newId;
     outReview.stationId = stationId;
     outReview.userId = userId;
     outReview.orderId = orderId;
     outReview.rating = rating;
     outReview.comment = comment.trimmed();
     outReview.nickname = user.nickname;
-    outReview.stationName = station.name;
+    outReview.stationName = stationName;
     outReview.createdAt = QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss"));
     return true;
 }
@@ -2367,7 +2421,7 @@ QVector<StationReview> DatabaseManager::listStationReviews(int stationId, int li
         "ORDER BY r.id DESC LIMIT ?"));
     q.addBindValue(stationId);
     q.addBindValue(stationId);
-    q.addBindValue(qBound(1, limit, 100));
+    q.addBindValue(qBound(1, limit, 500));
     if (!q.exec()) {
         m_lastError = q.lastError().text();
         return list;
@@ -2388,6 +2442,32 @@ QVector<StationReview> DatabaseManager::listStationReviews(int stationId, int li
     return list;
 }
 
+bool DatabaseManager::deleteStationReview(int reviewId, int adminId)
+{
+    if (reviewId <= 0) {
+        m_lastError = QStringLiteral("无效的评论");
+        return false;
+    }
+    QSqlQuery q(m_db);
+    q.prepare(QStringLiteral("SELECT station_id FROM station_reviews WHERE id=?"));
+    q.addBindValue(reviewId);
+    if (!q.exec() || !q.next()) {
+        m_lastError = QStringLiteral("评论不存在");
+        return false;
+    }
+    const int stationId = q.value(0).toInt();
+    q.prepare(QStringLiteral("DELETE FROM station_reviews WHERE id=?"));
+    q.addBindValue(reviewId);
+    if (!q.exec()) {
+        m_lastError = q.lastError().text();
+        return false;
+    }
+    writeAdminAudit(adminId, QStringLiteral("admin.review.delete"),
+                    QStringLiteral("review"), reviewId,
+                    QStringLiteral("{\"stationId\":%1}").arg(stationId));
+    return true;
+}
+
 bool DatabaseManager::ensureDemoContent()
 {
     QSqlQuery countQ(m_db);
@@ -2402,9 +2482,6 @@ bool DatabaseManager::ensureDemoContent()
     if (countQ.exec(QStringLiteral("SELECT COUNT(DISTINCT station_id) FROM station_reviews"))
         && countQ.next())
         reviewedStations = countQ.value(0).toInt();
-    // 需要覆盖足够多「附近站」才跳过，避免评价只落在 id 很小的站上
-    if (finishedOrders >= 60 && reviewCount >= 200 && reviewedStations >= 60)
-        return true;
 
     // 优先取天安门附近站（与用户端默认定位一致），演示列表第一页就能看到星级
     const double demoLat = 39.9042;
@@ -2437,6 +2514,58 @@ bool DatabaseManager::ensureDemoContent()
         }
     }
     if (nearStationIds.isEmpty() || pileIds.isEmpty())
+        return true;
+
+    // 保证近 30 天每天都有营收样本，财务折线/饼图 7 日与 30 日都能拉开差异
+    for (int day = 0; day < 30; ++day) {
+        const QDate date = QDate::currentDate().addDays(-day);
+        const QString dateStr = date.toString(QStringLiteral("yyyy-MM-dd"));
+        QSqlQuery exist(m_db);
+        exist.prepare(QStringLiteral(
+            "SELECT COUNT(*) FROM charging_orders WHERE status='finished' AND date(end_time)=?"));
+        exist.addBindValue(dateStr);
+        int have = 0;
+        if (exist.exec() && exist.next())
+            have = exist.value(0).toInt();
+        const bool weekend = date.dayOfWeek() >= 6;
+        const int want = (weekend ? 4 : 2) + (day % 3);
+        for (int n = have; n < want; ++n) {
+            const int pileIdx = (day * 3 + n) % pileIds.size();
+            const int userId = 1 + ((day + n) % 3);
+            const double energy = 6.5 + ((day * 5 + n * 3) % 18);
+            const double price = 1.15 + ((day + n) % 6) * 0.12;
+            const double boost = weekend ? 1.35 : (1.0 + (29 - day) * 0.012);
+            const double amount = energy * price * boost;
+            QDateTime end(date, QTime(8 + (n * 3) % 12, (n * 17) % 60));
+            const QDateTime start = end.addSecs(-int(energy / 30.0 * 3600));
+            QSqlQuery insert(m_db);
+            insert.prepare(QStringLiteral(
+                "INSERT OR IGNORE INTO charging_orders(order_no, user_id, pile_id, start_time, end_time, "
+                "energy_kwh, price_per_kwh, amount, status, payment_status, paid_at) "
+                "VALUES(?,?,?,?,?,?,?,?, 'finished','paid',?)"));
+            insert.addBindValue(QStringLiteral("S30-%1-%2").arg(date.toString(QStringLiteral("yyyyMMdd"))).arg(n + 1));
+            insert.addBindValue(userId);
+            insert.addBindValue(pileIds[pileIdx]);
+            insert.addBindValue(start.toString(QStringLiteral("yyyy-MM-dd HH:mm:ss")));
+            insert.addBindValue(end.toString(QStringLiteral("yyyy-MM-dd HH:mm:ss")));
+            insert.addBindValue(energy);
+            insert.addBindValue(price);
+            insert.addBindValue(amount);
+            insert.addBindValue(end.toString(QStringLiteral("yyyy-MM-dd HH:mm:ss")));
+            if (!insert.exec())
+                continue;
+            QSqlQuery up(m_db);
+            up.prepare(QStringLiteral(
+                "UPDATE piles SET total_charge_count=total_charge_count+1, "
+                "total_charge_seconds=total_charge_seconds+? WHERE id=?"));
+            up.addBindValue(int(energy / 30.0 * 3600));
+            up.addBindValue(pileIds[pileIdx]);
+            up.exec();
+        }
+    }
+
+    // 需要覆盖足够多「附近站」才跳过评论填充
+    if (finishedOrders >= 60 && reviewCount >= 200 && reviewedStations >= 60)
         return true;
 
     const QStringList comments = {

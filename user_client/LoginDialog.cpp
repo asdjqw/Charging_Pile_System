@@ -18,17 +18,28 @@ LoginDialog::LoginDialog(QWidget *parent)
 {
     ui->setupUi(this);
     setFixedSize(520, 920);
-    QSettings settings;
-    const bool dark = settings.value(QStringLiteral("ui/darkMode"), false).toBool();
-    setStyleSheet(dark ? StyleHelper::userClientDarkStyle()
-                       : StyleHelper::userClientStyle());
 
-    ui->titleLabel->setObjectName(QStringLiteral("pageTitle"));
+    ui->hero->setObjectName(QStringLiteral("loginHero"));
+    ui->hero->setAttribute(Qt::WA_StyledBackground, true);
+    ui->titleLabel->setObjectName(QStringLiteral("heroTitle"));
+    ui->heroSub->setObjectName(QStringLiteral("heroSub"));
+    ui->loginCard->setObjectName(QStringLiteral("loginCard"));
+    ui->formWrap->setObjectName(QStringLiteral("centralRoot"));
+    ui->formWrap->setAttribute(Qt::WA_StyledBackground, true);
+    ui->loginWelcome->setObjectName(QStringLiteral("pageTitle"));
+    ui->regWelcome->setObjectName(QStringLiteral("pageTitle"));
     ui->loginHint->setObjectName(QStringLiteral("muted"));
     ui->toRegisterBtn->setObjectName(QStringLiteral("secondaryBtn"));
     ui->demoHint->setObjectName(QStringLiteral("muted"));
     ui->regHint->setObjectName(QStringLiteral("muted"));
     ui->toLoginBtn->setObjectName(QStringLiteral("secondaryBtn"));
+    ui->footerHint->setObjectName(QStringLiteral("muted"));
+    ui->loginBtn->setDefault(true);
+
+    QSettings settings;
+    const bool dark = settings.value(QStringLiteral("ui/darkMode"), false).toBool();
+    setStyleSheet(dark ? StyleHelper::userClientDarkStyle()
+                       : StyleHelper::userClientStyle());
 
     m_stack = ui->stack;
     m_phoneEdit = ui->phoneEdit;

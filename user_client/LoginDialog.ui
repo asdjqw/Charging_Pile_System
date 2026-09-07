@@ -2,8 +2,13 @@
 <ui version="4.0">
  <class>LoginDialog</class>
  <widget class="QDialog" name="LoginDialog">
-  <property name="windowTitle">
-   <string>用户登录</string>
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>520</width>
+    <height>920</height>
+   </rect>
   </property>
   <property name="minimumSize">
    <size>
@@ -17,7 +22,13 @@
     <height>920</height>
    </size>
   </property>
-  <layout class="QVBoxLayout" name="outerLayout">
+  <property name="windowTitle">
+   <string>用户登录</string>
+  </property>
+  <layout class="QVBoxLayout" name="outerLayout" stretch="0,1">
+   <property name="spacing">
+    <number>0</number>
+   </property>
    <property name="leftMargin">
     <number>0</number>
    </property>
@@ -31,331 +42,385 @@
     <number>0</number>
    </property>
    <item>
-    <widget class="QScrollArea" name="scroll">
-     <property name="widgetResizable">
-      <bool>true</bool>
+    <widget class="QWidget" name="hero">
+     <property name="minimumSize">
+      <size>
+       <width>0</width>
+       <height>160</height>
+      </size>
      </property>
-     <property name="frameShape">
-      <enum>QFrame::NoFrame</enum>
+     <layout class="QVBoxLayout" name="heroLayout">
+     <property name="spacing">
+      <number>10</number>
      </property>
-     <property name="horizontalScrollBarPolicy">
-      <enum>Qt::ScrollBarAlwaysOff</enum>
+     <property name="leftMargin">
+      <number>28</number>
      </property>
-     <widget class="QWidget" name="rootWidget">
-      <layout class="QVBoxLayout" name="rootLayout">
-       <property name="leftMargin">
-        <number>28</number>
+     <property name="topMargin">
+      <number>36</number>
+     </property>
+     <property name="rightMargin">
+      <number>28</number>
+     </property>
+     <property name="bottomMargin">
+      <number>28</number>
+     </property>
+     <item>
+      <widget class="QLabel" name="titleLabel">
+       <property name="text">
+        <string>充电用户端</string>
        </property>
-       <property name="topMargin">
-        <number>28</number>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="heroSub">
+       <property name="text">
+        <string>附近电站 · 预约充电 · 一站直达</string>
        </property>
-       <property name="rightMargin">
-        <number>28</number>
+       <property name="wordWrap">
+        <bool>true</bool>
        </property>
-       <property name="bottomMargin">
-        <number>28</number>
-       </property>
-       <property name="spacing">
-        <number>10</number>
-       </property>
-       <item>
-        <widget class="QLabel" name="titleLabel">
-         <property name="text">
-          <string>充电用户端</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <spacer name="titleSpacing">
-         <property name="orientation">
-          <enum>Qt::Vertical</enum>
-         </property>
-         <property name="sizeType">
-          <enum>QSizePolicy::Fixed</enum>
-         </property>
-         <property name="sizeHint" stdset="0">
-          <size>
-           <width>20</width>
-           <height>8</height>
-          </size>
-         </property>
-        </spacer>
-       </item>
-       <item>
-        <widget class="QStackedWidget" name="stack">
-         <property name="currentIndex">
-          <number>0</number>
-         </property>
-         <widget class="QWidget" name="loginPage">
-          <layout class="QVBoxLayout" name="loginLayout">
-           <property name="leftMargin">
-            <number>0</number>
-           </property>
-           <property name="topMargin">
-            <number>0</number>
-           </property>
-           <property name="rightMargin">
-            <number>0</number>
-           </property>
-           <property name="bottomMargin">
-            <number>0</number>
-           </property>
-           <property name="spacing">
-            <number>10</number>
-           </property>
-           <item>
-            <widget class="QLabel" name="loginHint">
-             <property name="text">
-              <string>使用已注册的手机号和密码登录。没有账号请先注册。</string>
-             </property>
-             <property name="wordWrap">
-              <bool>true</bool>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QLabel" name="phoneLabel">
-             <property name="text">
-              <string>手机号</string>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QLineEdit" name="phoneEdit">
-             <property name="placeholderText">
-              <string>11 位手机号</string>
-             </property>
-             <property name="maxLength">
-              <number>11</number>
-             </property>
-             <property name="minimumSize">
-              <size>
-               <width>0</width>
-               <height>40</height>
-              </size>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QLabel" name="passwordLabel">
-             <property name="text">
-              <string>密码</string>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QLineEdit" name="passwordEdit">
-             <property name="echoMode">
-              <enum>QLineEdit::Password</enum>
-             </property>
-             <property name="placeholderText">
-              <string>密码</string>
-             </property>
-             <property name="minimumSize">
-              <size>
-               <width>0</width>
-               <height>40</height>
-              </size>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QPushButton" name="loginBtn">
-             <property name="text">
-              <string>登录</string>
-             </property>
-             <property name="minimumSize">
-              <size>
-               <width>0</width>
-               <height>44</height>
-              </size>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QPushButton" name="toRegisterBtn">
-             <property name="text">
-              <string>没有账号？去注册</string>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QLabel" name="demoHint">
-             <property name="text">
-              <string>演示：13800001111 / 123456</string>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <spacer name="loginStretch">
-             <property name="orientation">
-              <enum>Qt::Vertical</enum>
-             </property>
-             <property name="sizeHint" stdset="0">
-              <size>
-               <width>20</width>
-               <height>40</height>
-              </size>
-             </property>
-            </spacer>
-           </item>
-          </layout>
+      </widget>
+     </item>
+    </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QWidget" name="formWrap">
+     <layout class="QVBoxLayout" name="formWrapLayout">
+     <property name="leftMargin">
+      <number>20</number>
+     </property>
+     <property name="topMargin">
+      <number>20</number>
+     </property>
+     <property name="rightMargin">
+      <number>20</number>
+     </property>
+     <property name="bottomMargin">
+      <number>24</number>
+     </property>
+     <item>
+      <widget class="QFrame" name="loginCard">
+       <layout class="QVBoxLayout" name="cardLayout">
+        <property name="spacing">
+         <number>10</number>
+        </property>
+        <property name="leftMargin">
+         <number>20</number>
+        </property>
+        <property name="topMargin">
+         <number>18</number>
+        </property>
+        <property name="rightMargin">
+         <number>20</number>
+        </property>
+        <property name="bottomMargin">
+         <number>18</number>
+        </property>
+        <item>
+         <widget class="QStackedWidget" name="stack">
+          <property name="currentIndex">
+           <number>0</number>
+          </property>
+          <widget class="QWidget" name="loginPage">
+           <layout class="QVBoxLayout" name="loginLayout">
+            <property name="spacing">
+             <number>8</number>
+            </property>
+            <property name="leftMargin">
+             <number>0</number>
+            </property>
+            <property name="topMargin">
+             <number>0</number>
+            </property>
+            <property name="rightMargin">
+             <number>0</number>
+            </property>
+            <property name="bottomMargin">
+             <number>0</number>
+            </property>
+            <item>
+             <widget class="QLabel" name="loginWelcome">
+              <property name="text">
+               <string>欢迎回来</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="loginHint">
+              <property name="text">
+               <string>使用已注册的手机号登录</string>
+              </property>
+              <property name="wordWrap">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="phoneLabel">
+              <property name="text">
+               <string>手机号</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLineEdit" name="phoneEdit">
+              <property name="minimumSize">
+               <size>
+                <width>0</width>
+                <height>44</height>
+               </size>
+              </property>
+              <property name="maxLength">
+               <number>11</number>
+              </property>
+              <property name="placeholderText">
+               <string>11 位手机号</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="passwordLabel">
+              <property name="text">
+               <string>密码</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLineEdit" name="passwordEdit">
+              <property name="minimumSize">
+               <size>
+                <width>0</width>
+                <height>44</height>
+               </size>
+              </property>
+              <property name="echoMode">
+               <enum>QLineEdit::Password</enum>
+              </property>
+              <property name="placeholderText">
+               <string>请输入密码</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="loginBtn">
+              <property name="minimumSize">
+               <size>
+                <width>0</width>
+                <height>46</height>
+               </size>
+              </property>
+              <property name="text">
+               <string>登录</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="toRegisterBtn">
+              <property name="minimumSize">
+               <size>
+                <width>0</width>
+                <height>40</height>
+               </size>
+              </property>
+              <property name="text">
+               <string>没有账号？去注册</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="demoHint">
+              <property name="text">
+               <string>演示账号  13800001111 / 123456</string>
+              </property>
+              <property name="alignment">
+               <set>Qt::AlignCenter</set>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+          <widget class="QWidget" name="registerPage">
+           <layout class="QVBoxLayout" name="regLayout">
+            <property name="spacing">
+             <number>8</number>
+            </property>
+            <property name="leftMargin">
+             <number>0</number>
+            </property>
+            <property name="topMargin">
+             <number>0</number>
+            </property>
+            <property name="rightMargin">
+             <number>0</number>
+            </property>
+            <property name="bottomMargin">
+             <number>0</number>
+            </property>
+            <item>
+             <widget class="QLabel" name="regWelcome">
+              <property name="text">
+               <string>创建账号</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="regHint">
+              <property name="text">
+               <string>填写手机号和密码创建账号</string>
+              </property>
+              <property name="wordWrap">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="regPhoneLabel">
+              <property name="text">
+               <string>手机号</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLineEdit" name="regPhoneEdit">
+              <property name="minimumSize">
+               <size>
+                <width>0</width>
+                <height>40</height>
+               </size>
+              </property>
+              <property name="maxLength">
+               <number>11</number>
+              </property>
+              <property name="placeholderText">
+               <string>11 位手机号</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="regNicknameLabel">
+              <property name="text">
+               <string>昵称</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLineEdit" name="regNicknameEdit">
+              <property name="minimumSize">
+               <size>
+                <width>0</width>
+                <height>40</height>
+               </size>
+              </property>
+              <property name="placeholderText">
+               <string>可选</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="regPasswordLabel">
+              <property name="text">
+               <string>密码</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLineEdit" name="regPasswordEdit">
+              <property name="minimumSize">
+               <size>
+                <width>0</width>
+                <height>40</height>
+               </size>
+              </property>
+              <property name="echoMode">
+               <enum>QLineEdit::Password</enum>
+              </property>
+              <property name="placeholderText">
+               <string>至少 6 位</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="regConfirmLabel">
+              <property name="text">
+               <string>确认密码</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLineEdit" name="regConfirmEdit">
+              <property name="minimumSize">
+               <size>
+                <width>0</width>
+                <height>40</height>
+               </size>
+              </property>
+              <property name="echoMode">
+               <enum>QLineEdit::Password</enum>
+              </property>
+              <property name="placeholderText">
+               <string>再次输入密码</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="regBtn">
+              <property name="minimumSize">
+               <size>
+                <width>0</width>
+                <height>46</height>
+               </size>
+              </property>
+              <property name="text">
+               <string>注册并登录</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="toLoginBtn">
+              <property name="minimumSize">
+               <size>
+                <width>0</width>
+                <height>40</height>
+               </size>
+              </property>
+              <property name="text">
+               <string>已有账号？去登录</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </widget>
          </widget>
-         <widget class="QWidget" name="registerPage">
-          <layout class="QVBoxLayout" name="regLayout">
-           <property name="leftMargin">
-            <number>0</number>
-           </property>
-           <property name="topMargin">
-            <number>0</number>
-           </property>
-           <property name="rightMargin">
-            <number>0</number>
-           </property>
-           <property name="bottomMargin">
-            <number>0</number>
-           </property>
-           <property name="spacing">
-            <number>10</number>
-           </property>
-           <item>
-            <widget class="QLabel" name="regHint">
-             <property name="text">
-              <string>填写手机号和密码创建账号。</string>
-             </property>
-             <property name="wordWrap">
-              <bool>true</bool>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QLabel" name="regPhoneLabel">
-             <property name="text">
-              <string>手机号</string>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QLineEdit" name="regPhoneEdit">
-             <property name="placeholderText">
-              <string>11 位手机号</string>
-             </property>
-             <property name="maxLength">
-              <number>11</number>
-             </property>
-             <property name="minimumSize">
-              <size>
-               <width>0</width>
-               <height>40</height>
-              </size>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QLabel" name="regNicknameLabel">
-             <property name="text">
-              <string>昵称</string>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QLineEdit" name="regNicknameEdit">
-             <property name="placeholderText">
-              <string>昵称，可留空</string>
-             </property>
-             <property name="minimumSize">
-              <size>
-               <width>0</width>
-               <height>40</height>
-              </size>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QLabel" name="regPasswordLabel">
-             <property name="text">
-              <string>密码</string>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QLineEdit" name="regPasswordEdit">
-             <property name="echoMode">
-              <enum>QLineEdit::Password</enum>
-             </property>
-             <property name="placeholderText">
-              <string>至少 6 位</string>
-             </property>
-             <property name="minimumSize">
-              <size>
-               <width>0</width>
-               <height>40</height>
-              </size>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QLabel" name="regConfirmLabel">
-             <property name="text">
-              <string>确认密码</string>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QLineEdit" name="regConfirmEdit">
-             <property name="echoMode">
-              <enum>QLineEdit::Password</enum>
-             </property>
-             <property name="placeholderText">
-              <string>再次输入密码</string>
-             </property>
-             <property name="minimumSize">
-              <size>
-               <width>0</width>
-               <height>40</height>
-              </size>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QPushButton" name="regBtn">
-             <property name="text">
-              <string>注册并登录</string>
-             </property>
-             <property name="minimumSize">
-              <size>
-               <width>0</width>
-               <height>44</height>
-              </size>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QPushButton" name="toLoginBtn">
-             <property name="text">
-              <string>已有账号？去登录</string>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <spacer name="regStretch">
-             <property name="orientation">
-              <enum>Qt::Vertical</enum>
-             </property>
-             <property name="sizeHint" stdset="0">
-              <size>
-               <width>20</width>
-               <height>40</height>
-              </size>
-             </property>
-            </spacer>
-           </item>
-          </layout>
-         </widget>
-        </widget>
-       </item>
-      </layout>
-     </widget>
+        </item>
+       </layout>
+      </widget>
+     </item>
+     <item>
+      <spacer name="formStretch">
+       <property name="orientation">
+        <enum>Qt::Vertical</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>20</width>
+         <height>12</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QLabel" name="footerHint">
+       <property name="text">
+        <string>课程演示系统 · 本地实验环境</string>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignCenter</set>
+       </property>
+      </widget>
+     </item>
+    </layout>
     </widget>
    </item>
   </layout>

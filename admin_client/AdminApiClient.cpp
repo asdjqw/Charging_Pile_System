@@ -349,3 +349,20 @@ bool AdminApiClient::setPermission(const QString &role, const QString &permissio
     return accept(call(QStringLiteral("admin.permissions.set"),
                        {{"role", role}, {"permission", permission}, {"allowed", allowed}}));
 }
+
+QVector<StationReview> AdminApiClient::listReviews(int stationId)
+{
+    QVector<StationReview> values;
+    const QJsonObject response = call(QStringLiteral("admin.reviews.list"),
+                                      {{"stationId", stationId}, {"limit", 300}});
+    if (!accept(response))
+        return values;
+    for (const QJsonValue &value : response.value("data").toObject().value("items").toArray())
+        values.push_back(JsonCodec::reviewFromJson(value.toObject()));
+    return values;
+}
+
+bool AdminApiClient::deleteReview(int reviewId)
+{
+    return accept(call(QStringLiteral("admin.reviews.delete"), {{"reviewId", reviewId}}));
+}

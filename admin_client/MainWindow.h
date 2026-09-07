@@ -36,6 +36,7 @@ private slots:
     void refreshPiles();
     void refreshStations();
     void refreshUsers();
+    void refreshReviews();
     void refreshReservations();
     void refreshPermissions();
     void onRestartPile();
@@ -46,6 +47,7 @@ private slots:
     void onEditStation();
     void onDeleteStation();
     void onStationRowClicked(int row, int column);
+    void onDeleteReview();
     void onToggleUserStatus();
     void onViewUserOrders();
     void onCancelReservation();
@@ -102,6 +104,10 @@ private:
     QTableWidget *m_stationTable = nullptr;
     QLabel *m_stationDetailTitle = nullptr;
     QTableWidget *m_stationPileTable = nullptr;
+
+    QComboBox *m_reviewStationFilter = nullptr;
+    QLineEdit *m_reviewKeyword = nullptr;
+    QTableWidget *m_reviewTable = nullptr;
 
     QLineEdit *m_userKeyword = nullptr;
     QTableWidget *m_userTable = nullptr;

@@ -6,7 +6,9 @@
 
 #include <algorithm>
 #include <QDateTime>
+#include <QDebug>
 #include <QJsonArray>
+#include <QJsonValue>
 #include <QSet>
 #include <QTimer>
 #include <QUuid>
@@ -36,6 +38,19 @@ QJsonArray ordersJson(const QVector<ChargingOrder> &values, int limit = -1)
     for (int i = 0; i < count; ++i)
         array.append(JsonCodec::toJson(values.at(i)));
     return array;
+}
+
+int jsonInt(const QJsonObject &object, const QString &key, int fallback = 0)
+{
+    const QJsonValue value = object.value(key);
+    if (value.isDouble())
+        return int(value.toDouble());
+    if (value.isString()) {
+        bool ok = false;
+        const int parsed = value.toString().trimmed().toInt(&ok);
+        return ok ? parsed : fallback;
+    }
+    return fallback;
 }
 
 } // namespace
@@ -81,7 +96,10 @@ int ApiDispatcher::authorizedUser(const QJsonObject &request)
 QJsonObject ApiDispatcher::dispatch(const QJsonObject &request)
 {
     auto &db = DatabaseManager::instance();
-    const QString action = request.value("action").toString();
+    QString action = request.value("action").toString().trimmed();
+    if (action.isEmpty())
+        action = request.value("data").toObject().value("action").toString().trimmed();
+    action = action.toLower();
     const QJsonObject data = request.value("data").toObject();
 
     if (action == QLatin1String("server.health")) {
@@ -185,6 +203,28 @@ QJsonObject ApiDispatcher::dispatch(const QJsonObject &request)
     const int userId = authorizedUser(request);
     if (userId <= 0)
         return failure(request, QStringLiteral("UNAUTHORIZED"), QStringLiteral("登录已失效，请重新登录"));
+
+    if (action.contains(QLatin1String("review")) || action.contains(QLatin1String("rating"))) {
+        const bool reviewList = action.endsWith(QLatin1String(".list"))
+            || action.endsWith(QLatin1String(".get"))
+            || action == QLatin1String("station.reviews");
+        if (reviewList) {
+            QJsonArray items;
+            for (const StationReview &review : db.listStationReviews(jsonInt(data, QStringLiteral("stationId"), -1),
+                                                                     jsonInt(data, QStringLiteral("limit"), 30)))
+                items.append(JsonCodec::toJson(review));
+            return success(request, QJsonObject{{"items", items}});
+        }
+        StationReview review;
+        if (!db.submitStationReview(userId,
+                                    jsonInt(data, QStringLiteral("stationId")),
+                                    jsonInt(data, QStringLiteral("orderId")),
+                                    jsonInt(data, QStringLiteral("rating"), 5),
+                                    data.value("comment").toString(),
+                                    review))
+            return failure(request, QStringLiteral("REVIEW_FAILED"), db.lastError());
+        return success(request, JsonCodec::toJson(review), QStringLiteral("评价已提交"));
+    }
 
     if (action == QLatin1String("stations.list")) {
         auto values = db.listStations(data.value("latitude").toDouble(39.9042),
@@ -291,26 +331,6 @@ QJsonObject ApiDispatcher::dispatch(const QJsonObject &request)
                        nowFavorite ? QStringLiteral("已加入收藏") : QStringLiteral("已取消收藏"));
     }
 
-    if (action == QLatin1String("reviews.submit")) {
-        StationReview review;
-        if (!db.submitStationReview(userId,
-                                    data.value("stationId").toInt(),
-                                    data.value("orderId").toInt(),
-                                    data.value("rating").toInt(5),
-                                    data.value("comment").toString(),
-                                    review))
-            return failure(request, QStringLiteral("REVIEW_FAILED"), db.lastError());
-        return success(request, JsonCodec::toJson(review), QStringLiteral("评价已提交"));
-    }
-
-    if (action == QLatin1String("reviews.list")) {
-        QJsonArray items;
-        for (const StationReview &review : db.listStationReviews(data.value("stationId").toInt(),
-                                                                 data.value("limit").toInt(30)))
-            items.append(JsonCodec::toJson(review));
-        return success(request, QJsonObject{{"items", items}});
-    }
-
     if (action == QLatin1String("wallet.recharge")) {
         if (!db.rechargeUser(userId, data.value("amount").toDouble()))
             return failure(request, QStringLiteral("RECHARGE_FAILED"), db.lastError());
@@ -375,6 +395,7 @@ QJsonObject ApiDispatcher::dispatch(const QJsonObject &request)
     if (action == QLatin1String("orders.list"))
         return success(request, QJsonObject{{"items", ordersJson(db.listOrders(userId, data.value("status").toString()))}});
 
+    qWarning().noquote() << QStringLiteral("未知请求 action=") << action;
     return failure(request, QStringLiteral("UNKNOWN_ACTION"),
                    QStringLiteral("未知请求: %1").arg(action));
 }
@@ -438,7 +459,7 @@ QJsonObject ApiDispatcher::dashboardPayload(int days) const
 QJsonObject ApiDispatcher::dispatchAdmin(const QJsonObject &request, int adminId)
 {
     auto &db = DatabaseManager::instance();
-    const QString action = request.value("action").toString();
+    const QString action = request.value("action").toString().trimmed();
     const QJsonObject data = request.value("data").toObject();
 
     if (action == QLatin1String("admin.logout")) {
@@ -683,6 +704,26 @@ QJsonObject ApiDispatcher::dispatchAdmin(const QJsonObject &request, int adminId
                                   data.value("allowed").toBool(), adminId))
             return failure(request, QStringLiteral("PERMISSION_FAILED"), db.lastError());
         return success(request, QJsonObject(), QStringLiteral("权限已更新"));
+    }
+
+    if (action == QLatin1String("admin.reviews.list")) {
+        if (const auto denied = denyIfNoPermission(request, adminId, QStringLiteral("reviews.read"));
+            !denied.isEmpty())
+            return denied;
+        QJsonArray items;
+        for (const StationReview &review : db.listStationReviews(data.value("stationId").toInt(-1),
+                                                                 qBound(1, data.value("limit").toInt(200), 500)))
+            items.append(JsonCodec::toJson(review));
+        return success(request, QJsonObject{{"items", items}});
+    }
+
+    if (action == QLatin1String("admin.reviews.delete")) {
+        if (const auto denied = denyIfNoPermission(request, adminId, QStringLiteral("reviews.write"));
+            !denied.isEmpty())
+            return denied;
+        if (!db.deleteStationReview(data.value("reviewId").toInt(), adminId))
+            return failure(request, QStringLiteral("REVIEW_DELETE_FAILED"), db.lastError());
+        return success(request, QJsonObject(), QStringLiteral("评论已删除"));
     }
 
     return failure(request, QStringLiteral("UNKNOWN_ACTION"),

@@ -56,6 +56,9 @@ public:
     QVector<QPair<QString, bool>> listPermissions(const QString &role);
     bool setPermission(const QString &role, const QString &permission, bool allowed);
 
+    QVector<StationReview> listReviews(int stationId = -1);
+    bool deleteReview(int reviewId);
+
 private:
     explicit AdminApiClient(QObject *parent = nullptr);
     bool ensureConnected();

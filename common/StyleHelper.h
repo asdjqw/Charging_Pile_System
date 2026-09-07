@@ -1,8 +1,21 @@
 #pragma once
 
+#include <QColor>
 #include <QString>
 
 namespace StyleHelper {
+
+// 收藏高亮颜色。QListWidget 一旦写了 item 的 background，setBackground() 会被样式表盖掉，
+// 真正生效的是 FavoriteCardDelegate 读这里的颜色。改黄底只改下面两处即可。
+inline QColor favoriteBackground(bool dark)
+{
+    return dark ? QColor(QStringLiteral("#5C4A1A")) : QColor(QStringLiteral("#FFF4D6"));
+}
+
+inline QColor favoriteForeground(bool dark)
+{
+    return dark ? QColor(QStringLiteral("#F5D76E")) : QColor(QStringLiteral("#8A4B00"));
+}
 
 inline QString userClientStyle()
 {
@@ -65,20 +78,38 @@ inline QString userClientStyle()
             margin: 5px 2px; padding: 10px 12px; color: #15201E;
         }
         QListWidget::item:selected {
-            border: 1px solid #0D7565; background: #E7F2EF; border-radius: 8px;
+            border: 1px solid #0D7565; border-radius: 8px;
         }
-        /* 站点列表：不写死 background，收藏黄底靠 setBackground */
-        QListWidget#stationList::item {
-            border: 1px solid #D8E0DE;
-            border-radius: 8px;
-            margin: 5px 2px;
-            padding: 10px 12px;
+        /* 收藏黄底由 FavoriteCardDelegate 绘制，这里不能写 background */
+        QListWidget#stationList::item, QListWidget#pileList::item {
+            border: none;
+            margin: 0px;
+            padding: 0px;
         }
-        QListWidget#stationList::item:selected {
-            border: 1px solid #0D7565;
-            background: #E7F2EF;
+        QListWidget#stationList::item:selected, QListWidget#pileList::item:selected {
+            border: none;
         }
         QLabel#starLabel { color: #F5A623; font-size: 15px; font-weight: 600; }
+        QWidget#loginHero {
+            background-color: #0D7565;
+            border: none;
+        }
+        QLabel#heroTitle { color: #FFFFFF; font-size: 22px; font-weight: 600; }
+        QLabel#heroSub { color: #D7E8E4; font-size: 13px; }
+        QLabel#brandMark {
+            background-color: rgba(255,255,255,0.16); color: #FFFFFF;
+            font-size: 22px; font-weight: 700; border-radius: 28px;
+            border: 1px solid rgba(255,255,255,0.22);
+        }
+        QFrame#loginCard {
+            background: white; border: 1px solid #D8E0DE; border-radius: 12px;
+        }
+        QPushButton#starBtn {
+            background: transparent; border: none; color: #C5D0CD;
+            font-size: 28px; padding: 0; min-width: 40px; min-height: 40px;
+        }
+        QPushButton#starBtn:hover { color: #F5A623; background: transparent; border: none; }
+        QPushButton#starBtn[lit="true"] { color: #F5A623; background: transparent; border: none; }
         QTableWidget {
             background: white; border: 1px solid #D8E0DE; gridline-color: #E8EEEC;
             alternate-background-color: #F7F9F8; color: #15201E; border-radius: 8px;
@@ -102,12 +133,10 @@ inline QString userClientStyle()
         QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
         QMessageBox {
             background: #F3F6F5;
-            min-width: 380px;
         }
         QMessageBox QLabel {
-            min-width: 320px;
-            min-height: 72px;
-            font-size: 15px;
+            min-width: 240px;
+            font-size: 14px;
         }
         QMessageBox QPushButton {
             min-width: 96px;
@@ -182,19 +211,37 @@ inline QString userClientDarkStyle()
             margin: 5px 2px; padding: 10px 12px; color: #E8EEEC;
         }
         QListWidget::item:selected {
-            border: 1px solid #3DDBB5; background: #20302D; border-radius: 8px;
+            border: 1px solid #3DDBB5; border-radius: 8px;
         }
-        QListWidget#stationList::item {
-            border: 1px solid #2A3835;
-            border-radius: 8px;
-            margin: 5px 2px;
-            padding: 10px 12px;
+        QListWidget#stationList::item, QListWidget#pileList::item {
+            border: none;
+            margin: 0px;
+            padding: 0px;
         }
-        QListWidget#stationList::item:selected {
-            border: 1px solid #3DDBB5;
-            background: #20302D;
+        QListWidget#stationList::item:selected, QListWidget#pileList::item:selected {
+            border: none;
         }
         QLabel#starLabel { color: #F5A623; font-size: 15px; font-weight: 600; }
+        QWidget#loginHero {
+            background-color: #0A5F52;
+            border: none;
+        }
+        QLabel#heroTitle { color: #F3F6F5; font-size: 22px; font-weight: 600; }
+        QLabel#heroSub { color: #9AA8A4; font-size: 13px; }
+        QLabel#brandMark {
+            background-color: rgba(255,255,255,0.08); color: #3DDBB5;
+            font-size: 22px; font-weight: 700; border-radius: 28px;
+            border: 1px solid rgba(61,219,181,0.28);
+        }
+        QFrame#loginCard {
+            background: #1A2422; border: 1px solid #2A3835; border-radius: 12px;
+        }
+        QPushButton#starBtn {
+            background: transparent; border: none; color: #3D4A47;
+            font-size: 28px; padding: 0; min-width: 40px; min-height: 40px;
+        }
+        QPushButton#starBtn:hover { color: #F5A623; background: transparent; border: none; }
+        QPushButton#starBtn[lit="true"] { color: #F5A623; background: transparent; border: none; }
         QTableWidget {
             background: #1A2422; border: 1px solid #2A3835; gridline-color: #2A3835;
             alternate-background-color: #15201E; color: #E8EEEC; border-radius: 8px;
@@ -216,8 +263,8 @@ inline QString userClientDarkStyle()
         }
         QScrollBar::handle:vertical { background: #3D4A47; border-radius: 4px; min-height: 24px; }
         QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
-        QMessageBox { background: #1A2422; min-width: 380px; }
-        QMessageBox QLabel { min-width: 320px; min-height: 72px; font-size: 15px; color: #E8EEEC; }
+        QMessageBox { background: #1A2422; }
+        QMessageBox QLabel { min-width: 240px; font-size: 14px; color: #E8EEEC; }
         QMessageBox QPushButton { min-width: 96px; min-height: 40px; font-size: 14px; padding: 8px 16px; }
         QStatusBar {
             background: #1A2422; color: #C5D0CD; border: none; border-top: 1px solid #2A3835;

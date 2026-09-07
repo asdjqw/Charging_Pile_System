@@ -76,6 +76,7 @@ public:
     bool submitStationReview(int userId, int stationId, int orderId, int rating,
                              const QString &comment, StationReview &outReview);
     QVector<StationReview> listStationReviews(int stationId, int limit = 30);
+    bool deleteStationReview(int reviewId, int adminId);
 
     bool createInviteCode(int adminId, const QString &role, QString &outCode);
     QVector<InviteCode> listInviteCodes();

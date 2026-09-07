@@ -32,6 +32,7 @@
 #include <QTableWidget>
 #include <QTimer>
 #include <QVBoxLayout>
+#include <QVector>
 
 #include <QtCharts/QCategoryAxis>
 #include <QtCharts/QChart>
@@ -73,6 +74,26 @@ void setupTable(QTableWidget *table, const QStringList &headers)
     table->verticalHeader()->setVisible(false);
     table->verticalHeader()->setDefaultSectionSize(28);
     table->setShowGrid(false);
+}
+
+QString starsLabel(double avg, int count)
+{
+    if (count <= 0)
+        return QStringLiteral("暂无评分");
+    const int filled = qBound(0, int(qRound(avg)), 5);
+    QString stars;
+    for (int i = 1; i <= 5; ++i)
+        stars += (i <= filled) ? QStringLiteral("★") : QStringLiteral("☆");
+    return QStringLiteral("%1 %2（%3评）").arg(stars).arg(avg, 0, 'f', 1).arg(count);
+}
+
+QString starsOnly(int rating)
+{
+    const int filled = qBound(0, rating, 5);
+    QString stars;
+    for (int i = 1; i <= 5; ++i)
+        stars += (i <= filled) ? QStringLiteral("★") : QStringLiteral("☆");
+    return QStringLiteral("%1  %2星").arg(stars).arg(rating);
 }
 
 } // namespace
@@ -128,6 +149,9 @@ void MainWindow::bindUiWidgets()
     m_stationTable = ui->stationTable;
     m_stationDetailTitle = ui->stationDetailTitle;
     m_stationPileTable = ui->stationPileTable;
+    m_reviewStationFilter = ui->reviewStationFilter;
+    m_reviewKeyword = ui->reviewKeyword;
+    m_reviewTable = ui->reviewTable;
     m_userKeyword = ui->userKeyword;
     m_userTable = ui->userTable;
     m_reservationTable = ui->reservationTable;
@@ -167,6 +191,9 @@ void MainWindow::applyStyleObjectNames()
     ui->editStationBtn->setObjectName(QStringLiteral("secondaryBtn"));
     ui->delStationBtn->setObjectName(QStringLiteral("dangerBtn"));
     ui->stationDetailTitle->setObjectName(QStringLiteral("muted"));
+    ui->reviewsTitle->setObjectName(QStringLiteral("pageTitle"));
+    ui->reviewDeleteBtn->setObjectName(QStringLiteral("dangerBtn"));
+    ui->reviewRefreshBtn->setObjectName(QStringLiteral("secondaryBtn"));
     ui->userTitle->setObjectName(QStringLiteral("pageTitle"));
     ui->userStatusBtn->setObjectName(QStringLiteral("secondaryBtn"));
     ui->reservationTitle->setObjectName(QStringLiteral("pageTitle"));
@@ -230,7 +257,8 @@ void MainWindow::buildUi()
     });
     setupTable(m_stationTable, {
         QStringLiteral("充电站ID"), QStringLiteral("站名"), QStringLiteral("详细地址"),
-        QStringLiteral("经纬度"), QStringLiteral("总电桩数"), QStringLiteral("当前在线率")
+        QStringLiteral("经纬度"), QStringLiteral("总电桩数"), QStringLiteral("当前在线率"),
+        QStringLiteral("平均星级"), QStringLiteral("评价数")
     });
     setupTable(m_stationPileTable, {
         QStringLiteral("电桩编号"), QStringLiteral("类型"), QStringLiteral("功率(kW)"),
@@ -239,6 +267,10 @@ void MainWindow::buildUi()
     setupTable(m_userTable, {
         QStringLiteral("用户ID"), QStringLiteral("手机号"), QStringLiteral("昵称"),
         QStringLiteral("钱包余额"), QStringLiteral("注册时间"), QStringLiteral("状态")
+    });
+    setupTable(m_reviewTable, {
+        QStringLiteral("时间"), QStringLiteral("电站"), QStringLiteral("用户"),
+        QStringLiteral("星级"), QStringLiteral("评论")
     });
     setupTable(m_reservationTable, {
         QStringLiteral("预约号"), QStringLiteral("用户"), QStringLiteral("手机号"),
@@ -278,6 +310,12 @@ void MainWindow::buildUi()
     connect(ui->editStationBtn, &QPushButton::clicked, this, &MainWindow::onEditStation);
     connect(ui->delStationBtn, &QPushButton::clicked, this, &MainWindow::onDeleteStation);
     connect(m_stationTable, &QTableWidget::cellClicked, this, &MainWindow::onStationRowClicked);
+    connect(ui->reviewSearchBtn, &QPushButton::clicked, this, &MainWindow::refreshReviews);
+    connect(ui->reviewRefreshBtn, &QPushButton::clicked, this, &MainWindow::refreshReviews);
+    connect(m_reviewKeyword, &QLineEdit::returnPressed, this, &MainWindow::refreshReviews);
+    connect(m_reviewStationFilter, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &MainWindow::refreshReviews);
+    connect(ui->reviewDeleteBtn, &QPushButton::clicked, this, &MainWindow::onDeleteReview);
     connect(ui->userSearchBtn, &QPushButton::clicked, this, &MainWindow::refreshUsers);
     connect(m_userKeyword, &QLineEdit::returnPressed, this, &MainWindow::refreshUsers);
     connect(ui->userStatusBtn, &QPushButton::clicked, this, &MainWindow::onToggleUserStatus);
@@ -307,9 +345,10 @@ void MainWindow::onNavChanged(int row)
     case 1: refreshPileStatus(); break;
     case 2: refreshPiles(); break;
     case 3: refreshStations(); break;
-    case 4: refreshUsers(); break;
-    case 5: refreshReservations(); break;
-    case 6: refreshPermissions(); break;
+    case 4: refreshReviews(); break;
+    case 5: refreshUsers(); break;
+    case 6: refreshReservations(); break;
+    case 7: refreshPermissions(); break;
     default: break;
     }
 }
@@ -337,8 +376,9 @@ void MainWindow::applySalesChart(const QJsonObject &payload)
         const double amount = row.value("amount").toDouble();
         series->append(i, amount);
         maxY = qMax(maxY, amount);
-        if (daily.size() <= 8 || i == 0 || i == daily.size() / 2 || i == daily.size() - 1)
-            axisX->append(row.value("date").toString().mid(5), i);
+        const QString label = row.value("date").toString().mid(5);
+        if (daily.size() <= 8 || i == 0 || i == daily.size() - 1 || i % 5 == 0)
+            axisX->append(label, i);
     }
     if (daily.isEmpty()) {
         series->append(0, 0);
@@ -373,26 +413,52 @@ void MainWindow::applyStatusChart(const QJsonObject &stats)
 {
     const int idle = stats.value("idlePiles").toInt();
     const int inUse = stats.value("inUsePiles").toInt();
+    const int reserved = stats.value("reservedPiles").toInt();
     const int fault = stats.value("faultPiles").toInt();
+    const int offline = stats.value("offlinePiles").toInt();
+    const int restarting = stats.value("restartingPiles").toInt();
+    const int total = qMax(1, idle + inUse + reserved + fault + offline + restarting);
     auto *series = new QPieSeries();
+    series->setHoleSize(0.46);
+    series->setPieSize(0.78);
     auto addSlice = [&](const QString &label, int value, const QString &color) {
         if (value <= 0)
             return;
         QPieSlice *slice = series->append(label, value);
         slice->setColor(QColor(color));
         slice->setLabelVisible(true);
+        slice->setLabel(QStringLiteral("%1 %2%")
+                            .arg(label)
+                            .arg(value * 100.0 / total, 0, 'f', 0));
+        slice->setLabelColor(m_darkMode ? QColor(QStringLiteral("#E8EEEC"))
+                                        : QColor(QStringLiteral("#15201E")));
+        slice->setBorderColor(m_darkMode ? QColor(QStringLiteral("#1A2422")) : Qt::white);
+        slice->setBorderWidth(2);
     };
     addSlice(QStringLiteral("闲置"), idle, QStringLiteral("#2563A8"));
     addSlice(QStringLiteral("在用"), inUse, QStringLiteral("#188568"));
+    addSlice(QStringLiteral("预约"), reserved, QStringLiteral("#D97706"));
     addSlice(QStringLiteral("故障"), fault, QStringLiteral("#C34444"));
+    addSlice(QStringLiteral("离线"), offline, QStringLiteral("#64716E"));
+    addSlice(QStringLiteral("维修"), restarting, QStringLiteral("#7C3AED"));
     if (series->slices().isEmpty())
         series->append(QStringLiteral("暂无数据"), 1)->setColor(QColor(QStringLiteral("#D8E0DE")));
+    else {
+        QPieSlice *maxSlice = series->slices().first();
+        for (QPieSlice *slice : series->slices()) {
+            if (slice->value() > maxSlice->value())
+                maxSlice = slice;
+        }
+        maxSlice->setExploded(true);
+    }
 
     auto *chart = new QChart();
     chart->addSeries(series);
-    chart->setTitle(QString());
+    chart->setTitle(QStringLiteral("电桩状态分布"));
+    chart->setTitleBrush(QBrush(m_darkMode ? QColor(QStringLiteral("#C5D0CD"))
+                                           : QColor(QStringLiteral("#15201E"))));
     chart->setBackgroundBrush(QBrush(m_darkMode ? QColor(QStringLiteral("#1A2422")) : Qt::white));
-    chart->setAnimationOptions(QChart::NoAnimation);
+    chart->setAnimationOptions(QChart::SeriesAnimations);
     chart->legend()->setAlignment(Qt::AlignBottom);
     chart->legend()->setLabelColor(m_darkMode ? QColor(QStringLiteral("#C5D0CD"))
                                               : QColor(QStringLiteral("#15201E")));
@@ -411,6 +477,11 @@ void MainWindow::refreshDashboard()
     m_kpiTodayAmount->setText(QString::number(stats.value("todayAmount").toDouble(), 'f', 2));
     m_kpiMonthAmount->setText(QString::number(stats.value("monthAmount").toDouble(), 'f', 2));
     m_kpiTotalAmount->setText(QString::number(stats.value("totalAmount").toDouble(), 'f', 2));
+    if (ui->salesChartTitle) {
+        const int days = m_salesDays ? m_salesDays->currentData().toInt() : 7;
+        ui->salesChartTitle->setText(days <= 7 ? QStringLiteral("营收趋势 · 近 7 日")
+                                               : QStringLiteral("营收趋势 · 近 30 日"));
+    }
     applySalesChart(payload);
 
     const QJsonArray orders = payload.value("recentOrders").toArray();
@@ -591,7 +662,75 @@ void MainWindow::refreshStations()
                                                    .arg(s.latitude, 0, 'f', 4)));
         m_stationTable->setItem(i, 4, textItem(QString::number(s.totalPiles)));
         m_stationTable->setItem(i, 5, textItem(QStringLiteral("%1%").arg(s.onlineRate, 0, 'f', 1)));
+        m_stationTable->setItem(i, 6, textItem(starsLabel(s.avgRating, s.reviewCount)));
+        m_stationTable->setItem(i, 7, textItem(QString::number(s.reviewCount)));
     }
+}
+
+void MainWindow::refreshReviews()
+{
+    if (!m_reviewTable || !m_reviewStationFilter)
+        return;
+    const int keepId = m_reviewStationFilter->currentData().toInt();
+    const auto stations = AdminApiClient::instance().listStations();
+    m_reviewStationFilter->blockSignals(true);
+    m_reviewStationFilter->clear();
+    m_reviewStationFilter->addItem(QStringLiteral("全部电站"), -1);
+    for (const Station &s : stations) {
+        m_reviewStationFilter->addItem(
+            QStringLiteral("%1  %2").arg(s.name, starsLabel(s.avgRating, s.reviewCount)), s.id);
+    }
+    const int idx = m_reviewStationFilter->findData(keepId);
+    m_reviewStationFilter->setCurrentIndex(idx >= 0 ? idx : 0);
+    m_reviewStationFilter->blockSignals(false);
+
+    const int stationId = m_reviewStationFilter->currentData().toInt();
+    const QString key = m_reviewKeyword ? m_reviewKeyword->text().trimmed() : QString();
+    const auto rows = AdminApiClient::instance().listReviews(stationId);
+    QVector<StationReview> shown;
+    for (const StationReview &r : rows) {
+        if (!key.isEmpty()
+            && !r.nickname.contains(key, Qt::CaseInsensitive)
+            && !r.comment.contains(key, Qt::CaseInsensitive)
+            && !r.stationName.contains(key, Qt::CaseInsensitive))
+            continue;
+        shown.push_back(r);
+    }
+    m_reviewTable->setRowCount(shown.size());
+    for (int i = 0; i < shown.size(); ++i) {
+        const StationReview &r = shown[i];
+        m_reviewTable->setItem(i, 0, textItem(r.createdAt, r.id));
+        m_reviewTable->setItem(i, 1, textItem(r.stationName));
+        m_reviewTable->setItem(i, 2, textItem(r.nickname.isEmpty()
+                                                  ? QStringLiteral("用户#%1").arg(r.userId)
+                                                  : r.nickname));
+        m_reviewTable->setItem(i, 3, textItem(starsOnly(r.rating)));
+        m_reviewTable->setItem(i, 4, textItem(r.comment.isEmpty()
+                                                  ? QStringLiteral("（未填写文字）")
+                                                  : r.comment));
+    }
+}
+
+void MainWindow::onDeleteReview()
+{
+    if (!m_reviewTable)
+        return;
+    const int row = m_reviewTable->currentRow();
+    if (row < 0) {
+        QMessageBox::information(this, QStringLiteral("提示"), QStringLiteral("请先选中一条评论"));
+        return;
+    }
+    const int reviewId = m_reviewTable->item(row, 0)->data(Qt::UserRole).toInt();
+    if (QMessageBox::question(this, QStringLiteral("删除评论"),
+                              QStringLiteral("确认删除该用户评论？此操作不可恢复。"))
+        != QMessageBox::Yes)
+        return;
+    if (!AdminApiClient::instance().deleteReview(reviewId)) {
+        showApiError(QStringLiteral("删除评论失败"));
+        return;
+    }
+    refreshReviews();
+    refreshStations();
 }
 
 void MainWindow::refreshUsers()
@@ -667,9 +806,12 @@ void MainWindow::onStationRowClicked(int row, int)
     const int stationId = m_stationTable->item(row, 0)->data(Qt::UserRole).toInt();
     Station station;
     const auto piles = AdminApiClient::instance().listStationPiles(stationId, &station);
-    m_stationDetailTitle->setText(QStringLiteral("站内明细：%1（%2 个电桩）")
+    m_stationDetailTitle->setText(QStringLiteral("站内明细：%1（%2 个电桩 · %3）")
                                       .arg(m_stationTable->item(row, 1)->text())
-                                      .arg(piles.size()));
+                                      .arg(piles.size())
+                                      .arg(m_stationTable->item(row, 6)
+                                               ? m_stationTable->item(row, 6)->text()
+                                               : QStringLiteral("暂无评分")));
     m_stationPileTable->setRowCount(piles.size());
     for (int i = 0; i < piles.size(); ++i) {
         const Pile &p = piles[i];
