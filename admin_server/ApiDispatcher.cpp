@@ -116,7 +116,7 @@ QJsonObject ApiDispatcher::dispatch(const QJsonObject &request)
         return success(request, QJsonObject{{"token", token}, {"user", JsonCodec::toJson(user)}});
     }
 
-    if (action == QLatin1String("user.phoneLogin")) {
+    if (action == QLatin1String("user.phonelogin")) {
         User user;
         const QString password = data.value("password").toString();
         if (password.isEmpty())
@@ -612,7 +612,7 @@ QJsonObject ApiDispatcher::dispatchAdmin(const QJsonObject &request, int adminId
         return success(request, QJsonObject{{"items", items}});
     }
 
-    if (action == QLatin1String("admin.users.setStatus")) {
+    if (action == QLatin1String("admin.users.setstatus")) {
         if (const auto denied = denyIfNoPermission(request, adminId, QStringLiteral("users.write"));
             !denied.isEmpty())
             return denied;
