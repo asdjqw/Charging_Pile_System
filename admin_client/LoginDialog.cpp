@@ -101,13 +101,24 @@ void LoginDialog::onLogin()
 
 void LoginDialog::onRegister()
 {
-    Admin admin;
-    if (!AdminApiClient::instance().registerAdmin(m_regUsernameEdit->text().trimmed(),
-                                                  m_regPasswordEdit->text(),
-                                                  m_regNameEdit->text().trimmed(),
-                                                  m_inviteEdit->text().trimmed(),
-                                                  admin)) {
+    const QString username = m_regUsernameEdit->text().trimmed();
+    const QString password = m_regPasswordEdit->text();
+    if (password.size() < 6) {
+        QMessageBox::warning(this, QStringLiteral("提示"), QStringLiteral("密码至少 6 位"));
+        return;
+    }
+
+    if (!AdminApiClient::instance().registerAdmin(username, password,
+                                                 m_regNameEdit->text().trimmed(),
+                                                 m_inviteEdit->text().trimmed())) {
         QMessageBox::warning(this, QStringLiteral("注册失败"),
+                             AdminApiClient::instance().lastError());
+        return;
+    }
+
+    Admin admin;
+    if (!AdminApiClient::instance().loginAdmin(username, password, admin)) {
+        QMessageBox::warning(this, QStringLiteral("登录失败"),
                              AdminApiClient::instance().lastError());
         return;
     }

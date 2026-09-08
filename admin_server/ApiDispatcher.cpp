@@ -161,10 +161,7 @@ QJsonObject ApiDispatcher::dispatch(const QJsonObject &request)
                                      : QStringLiteral("REGISTER_FAILED");
             return failure(request, code, err);
         }
-        const QString token = QUuid::createUuid().toString(QUuid::WithoutBraces);
-        m_adminSessions.insert(token, {admin.id, QDateTime::currentDateTimeUtc().addSecs(12 * 60 * 60)});
-        return success(request, QJsonObject{{"token", token}, {"admin", JsonCodec::toJson(admin)}},
-                       QStringLiteral("注册成功"));
+        return success(request, QJsonObject(), QStringLiteral("注册成功"));
     }
 
     if (action == QLatin1String("dashboard.summary")) {

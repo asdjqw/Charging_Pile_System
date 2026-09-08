@@ -136,18 +136,12 @@ bool AdminApiClient::loginAdmin(const QString &username, const QString &password
 }
 
 bool AdminApiClient::registerAdmin(const QString &username, const QString &password,
-                                   const QString &realName, const QString &inviteCode,
-                                   Admin &outAdmin)
+                                   const QString &realName, const QString &inviteCode)
 {
     const QJsonObject response = call(QStringLiteral("admin.register"),
                                       {{"username", username}, {"password", password},
                                        {"realName", realName}, {"inviteCode", inviteCode}}, false);
-    if (!accept(response))
-        return false;
-    const QJsonObject data = response.value("data").toObject();
-    m_token = data.value("token").toString();
-    outAdmin = JsonCodec::adminFromJson(data.value("admin").toObject());
-    return !m_token.isEmpty() && outAdmin.id > 0;
+    return accept(response);
 }
 
 bool AdminApiClient::logout()

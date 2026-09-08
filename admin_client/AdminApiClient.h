@@ -25,7 +25,7 @@ public:
 
     bool loginAdmin(const QString &username, const QString &password, Admin &outAdmin);
     bool registerAdmin(const QString &username, const QString &password,
-                       const QString &realName, const QString &inviteCode, Admin &outAdmin);
+                       const QString &realName, const QString &inviteCode);
     bool logout();
 
     QJsonObject dashboard(int days);
