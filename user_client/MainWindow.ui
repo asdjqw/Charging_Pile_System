@@ -9,19 +9,19 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>640</width>
+    <width>540</width>
     <height>960</height>
    </rect>
   </property>
   <property name="minimumSize">
    <size>
-    <width>560</width>
+    <width>480</width>
     <height>840</height>
    </size>
   </property>
   <property name="maximumSize">
    <size>
-    <width>800</width>
+    <width>620</width>
     <height>16777215</height>
    </size>
   </property>
@@ -327,13 +327,13 @@
               <widget class="QWidget" name="reserveContent">
                <layout class="QVBoxLayout" name="reserveLayout" stretch="0,0,0,0,0,1,0,0">
                 <property name="leftMargin">
-                 <number>16</number>
+                 <number>14</number>
                 </property>
                 <property name="topMargin">
                  <number>14</number>
                 </property>
                 <property name="rightMargin">
-                 <number>16</number>
+                 <number>18</number>
                 </property>
                 <property name="bottomMargin">
                  <number>12</number>
@@ -387,6 +387,9 @@
                 </item>
                 <item>
                  <layout class="QHBoxLayout" name="pileFavRow" stretch="1,0">
+                  <property name="spacing">
+                   <number>10</number>
+                  </property>
                   <item>
                    <widget class="QPushButton" name="pileFavBtn">
                     <property name="text">
@@ -397,7 +400,7 @@
                   <item>
                    <widget class="QCheckBox" name="pileFavOnlyCheck">
                     <property name="text">
-                     <string>只看收藏电桩</string>
+                     <string>只看收藏</string>
                     </property>
                    </widget>
                   </item>

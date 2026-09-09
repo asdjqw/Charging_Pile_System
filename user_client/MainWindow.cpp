@@ -249,10 +249,10 @@ MainWindow::MainWindow(const User &user, QWidget *parent)
 
     buildUi();
     setWindowTitle(QStringLiteral("充电用户端 - %1").arg(m_user.username));
-    // 默认窗口：640×960，比原先 540×960 更宽，列表/卡片展示更舒展
-    resize(640, 960);
-    setMinimumSize(560, 840);
-    setMaximumWidth(800);
+    // 手机端默认窗口：540×960；裁切问题靠列表/Combo 约束修复，不靠加宽
+    resize(540, 960);
+    setMinimumSize(480, 840);
+    setMaximumWidth(620);
     statusBar()->setSizeGripEnabled(false);
     statusBar()->showMessage(QStringLiteral("正在加载…"));
 
@@ -401,6 +401,19 @@ void MainWindow::buildUi()
         m_countLabel->setWordWrap(true);
     if (m_locationLabel)
         m_locationLabel->setWordWrap(true);
+
+    // 长站名 Combo 禁止按最长项撑开整页宽度（否则横向溢出且右侧被裁切）
+    auto constrainCombo = [](QComboBox *box) {
+        if (!box)
+            return;
+        box->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+        box->setMinimumContentsLength(10);
+        box->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    };
+    constrainCombo(m_stationCombo);
+    constrainCombo(m_speedFilter);
+    constrainCombo(m_connectorFilter);
+    constrainCombo(m_regionCombo);
 
     // 详情浮层：不拆原布局，避免整页点击失效
     buildStationDetailPage();
@@ -939,7 +952,7 @@ void MainWindow::showStationDetail(const Station &station)
                 it->setData(Qt::UserRole + 3, r.comment);
                 it->setData(Qt::UserRole + 4, r.createdAt);
                 it->setToolTip(QStringLiteral("点击查看完整评价"));
-                it->setSizeHint(QSize(200, cardItemHeight(m_detailReviewList, 3)));
+                it->setSizeHint(QSize(0, cardItemHeight(m_detailReviewList, 3)));
             }
         }
     }
@@ -1091,8 +1104,8 @@ void MainWindow::refreshPilesForCharge()
                                  .arg(p.pricePerKwh, 0, 'f', 2)
                                  .arg(statusTextPile(p.status));
         auto *item = new QListWidgetItem(text, m_pileList);
-        item->setSizeHint(QSize(qMax(m_pileList->viewport()->width(), 240),
-                                cardItemHeight(m_pileList, 3)));
+        // 宽度交给列表视口自适应；写死 viewport 宽度会把内容撑出可视区，右侧文字被裁切
+        item->setSizeHint(QSize(0, cardItemHeight(m_pileList, 3)));
         item->setData(Qt::UserRole, p.id);
         item->setData(Qt::UserRole + 1, p.pricePerKwh);
         item->setData(Qt::UserRole + 2, p.powerKw);
