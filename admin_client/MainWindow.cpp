@@ -928,9 +928,9 @@ bool MainWindow::editStationDialog(Station &station, int *pileCount, bool isNew)
     form.nameEdit->setText(station.name);
     form.addrEdit->setText(station.address);
     form.latEdit->setText(station.latitude != 0 ? QString::number(station.latitude, 'f', 6)
-                                                : QStringLiteral("39.9042"));
+                                                : QStringLiteral("39.735678"));
     form.lngEdit->setText(station.longitude != 0 ? QString::number(station.longitude, 'f', 6)
-                                                 : QStringLiteral("116.4074"));
+                                                 : QStringLiteral("116.171271"));
     if (isNew && pileCount) {
         form.pileCountSpin->setValue(*pileCount > 0 ? *pileCount : 4);
         form.saveBtn->setText(QStringLiteral("完成新增"));

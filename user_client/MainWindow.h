@@ -103,10 +103,10 @@ private:
     Ui::MainWindow *ui = nullptr;
     User m_user;
     LocationProvider *m_locationProvider = nullptr;
-    double m_userLat = 39.9042;
-    double m_userLng = 116.4074;
-    QString m_userAddress = QStringLiteral("正在检测当前位置…");
-    QString m_locationSource = QStringLiteral("pending");
+    double m_userLat = 39.735678;
+    double m_userLng = 116.171271;
+    QString m_userAddress = QStringLiteral("北京理工大学良乡校区");
+    QString m_locationSource = QStringLiteral("default");
     QPushButton *m_locateBtn = nullptr;
     int m_visibleCount = 20;
     QVector<Station> m_cachedStations;

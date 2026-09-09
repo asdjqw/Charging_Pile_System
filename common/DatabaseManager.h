@@ -40,7 +40,7 @@ public:
     bool setUserStatus(int id, const QString &status, int adminId);
     bool deleteUser(int id);
 
-    QVector<Station> listStations(double userLat = 39.9042, double userLng = 116.4074,
+    QVector<Station> listStations(double userLat = 39.735678, double userLng = 116.171271,
                                   const QString &keyword = QString(),
                                   const QString &district = QString(),
                                   int limit = 80, int offset = 0);

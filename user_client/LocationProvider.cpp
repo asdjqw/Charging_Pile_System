@@ -2,8 +2,9 @@
 
 #include <QDBusConnection>
 #include <QDBusInterface>
-#include <QDBusReply>
 #include <QDBusObjectPath>
+#include <QDBusReply>
+#include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QNetworkAccessManager>
@@ -12,6 +13,36 @@
 #include <QTimer>
 #include <QUrl>
 #include <QVariantMap>
+
+namespace {
+
+bool looksLikeVirtualMachine()
+{
+    const QStringList paths = {
+        QStringLiteral("/sys/class/dmi/id/product_name"),
+        QStringLiteral("/sys/class/dmi/id/sys_vendor"),
+        QStringLiteral("/sys/class/dmi/id/bios_vendor")
+    };
+    for (const QString &path : paths) {
+        QFile f(path);
+        if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
+            continue;
+        const QString text = QString::fromUtf8(f.readAll()).toLower();
+        if (text.contains(QLatin1String("vmware"))
+            || text.contains(QLatin1String("virtualbox"))
+            || text.contains(QLatin1String("qemu"))
+            || text.contains(QLatin1String("kvm"))
+            || text.contains(QLatin1String("xen"))
+            || text.contains(QLatin1String("microsoft corporation"))
+            || text.contains(QLatin1String("bochs"))
+            || text.contains(QLatin1String("innotek"))) {
+            return true;
+        }
+    }
+    return false;
+}
+
+} // namespace
 
 LocationProvider::LocationProvider(QObject *parent)
     : QObject(parent)
@@ -26,17 +57,31 @@ void LocationProvider::requestCurrentLocation()
         return;
     m_busy = true;
     m_triedIp = false;
+    m_ipPending = false;
 
-    // 整体超时，避免卡在「定位中」
-    QTimer::singleShot(8000, this, [this]() {
+    // 整体超时：给 IP 回退留足时间，避免与 GeoClue 轮询抢超时
+    QTimer::singleShot(15000, this, [this]() {
         if (!m_busy)
             return;
         if (!m_triedIp) {
             tryIpLocate();
             return;
         }
-        finishFail(QStringLiteral("定位超时，请检查网络或改用手动地址"));
+        // IP 请求还在路上时继续等 onIpFinished，不要提前判失败
+        if (m_ipPending)
+            return;
+        finishFail(QStringLiteral(
+            "定位超时。虚拟机通常没有 Wi‑Fi/GPS，系统定位会失败；"
+            "请检查外网，或改用手动地址（如「国贸」「海淀区」）。"));
     });
+
+    // 虚拟机无法获得可靠系统定位：直接使用良乡校区默认坐标（课堂演示）
+    if (looksLikeVirtualMachine()) {
+        finishOk(39.735678, 116.171271,
+                 QStringLiteral("北京理工大学良乡校区"),
+                 QStringLiteral("default"));
+        return;
+    }
 
     tryGeoClue();
 }
@@ -44,12 +89,14 @@ void LocationProvider::requestCurrentLocation()
 void LocationProvider::finishOk(double lat, double lng, const QString &label, const QString &source)
 {
     m_busy = false;
+    m_ipPending = false;
     emit locationUpdated(lat, lng, label, source);
 }
 
 void LocationProvider::finishFail(const QString &reason)
 {
     m_busy = false;
+    m_ipPending = false;
     emit locationFailed(reason);
 }
 
@@ -80,12 +127,13 @@ void LocationProvider::tryGeoClue()
         return;
     }
 
+    // 需在 /etc/geoclue/geoclue.conf 增加 [charge-pile-user] allowed=true
     client.setProperty("DesktopId", QStringLiteral("charge-pile-user"));
-    client.setProperty("RequestedAccuracyLevel", QVariant::fromValue(uint(4)));
+    client.setProperty("RequestedAccuracyLevel", QVariant::fromValue(uint(4))); // city
     client.call(QStringLiteral("Start"));
 
     auto *timer = new QTimer(this);
-    timer->setInterval(400);
+    timer->setInterval(500);
     connect(timer, &QTimer::timeout, this, [this, path, timer, tries = 0]() mutable {
         if (!m_busy) {
             timer->stop();
@@ -116,7 +164,8 @@ void LocationProvider::tryGeoClue()
                 return;
             }
         }
-        if (tries >= 8) {
+        // 约 6 秒仍无结果则回退 IP
+        if (tries >= 12) {
             timer->stop();
             timer->deleteLater();
             client.call(QStringLiteral("Stop"));
@@ -129,25 +178,33 @@ void LocationProvider::tryGeoClue()
 void LocationProvider::tryIpLocate()
 {
     if (m_triedIp) {
-        finishFail(QStringLiteral("无法获取当前位置（系统定位与 IP 定位均失败）"));
+        if (!m_ipPending) {
+            finishFail(QStringLiteral(
+                "无法获取当前位置（系统定位与 IP 定位均失败）。"
+                "若在虚拟机中，请改用手动地址，或到带 Wi‑Fi/GPS 的物理机运行用户端。"));
+        }
         return;
     }
     m_triedIp = true;
+    m_ipPending = true;
+    // 多源：ip-api 为主
     QNetworkRequest req(QUrl(QStringLiteral(
-        "http://ip-api.com/json/?fields=status,message,lat,lon,city,regionName,country")));
+        "http://ip-api.com/json/?lang=zh-CN&fields=status,message,lat,lon,city,regionName,country,query")));
     req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("ChargePileUser/1.0"));
-    req.setTransferTimeout(5000);
+    req.setTransferTimeout(8000);
     m_nam->get(req);
 }
 
 void LocationProvider::onIpFinished(QNetworkReply *reply)
 {
     reply->deleteLater();
+    m_ipPending = false;
     if (!m_busy)
         return;
 
     if (reply->error() != QNetworkReply::NoError) {
-        finishFail(QStringLiteral("IP 定位失败：%1").arg(reply->errorString()));
+        finishFail(QStringLiteral("IP 定位失败：%1\n可填写「国贸」「朝阳区」等后点定位。")
+                       .arg(reply->errorString()));
         return;
     }
 
@@ -163,9 +220,15 @@ void LocationProvider::onIpFinished(QNetworkReply *reply)
     const QString city = obj.value(QStringLiteral("city")).toString();
     const QString region = obj.value(QStringLiteral("regionName")).toString();
     const QString country = obj.value(QStringLiteral("country")).toString();
-    const QString label = QStringLiteral("%1 %2 %3")
-                              .arg(country, region, city)
-                              .simplified();
+    const QString query = obj.value(QStringLiteral("query")).toString();
+    QString label = QStringLiteral("%1 %2 %3")
+                        .arg(country, region, city)
+                        .simplified();
+    if (!query.isEmpty())
+        label += QStringLiteral(" (出口IP %1)").arg(query);
+    if (looksLikeVirtualMachine())
+        label = QStringLiteral("[虚拟机·公网IP粗定位] ") + label;
+
     finishOk(lat, lng,
              label.isEmpty() ? QStringLiteral("IP 定位") : label,
              QStringLiteral("IP"));

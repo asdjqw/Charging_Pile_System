@@ -174,7 +174,7 @@ QJsonObject ApiDispatcher::dispatch(const QJsonObject &request)
         const int offset = qMax(0, data.value("offset").toInt());
         const QString keyword = data.value("keyword").toString().trimmed();
         const QString district = data.value("district").toString().trimmed();
-        return success(request, QJsonObject{{"items", stationsJson(db.listStations(39.9042, 116.4074,
+        return success(request, QJsonObject{{"items", stationsJson(db.listStations(39.735678, 116.171271,
                                                                           keyword, district, limit, offset))},
                                             {"total", db.stationCount(keyword, district)}, {"offset", offset},
                                             {"limit", limit}});
@@ -224,8 +224,8 @@ QJsonObject ApiDispatcher::dispatch(const QJsonObject &request)
     }
 
     if (action == QLatin1String("stations.list")) {
-        auto values = db.listStations(data.value("latitude").toDouble(39.9042),
-                                            data.value("longitude").toDouble(116.4074),
+        auto values = db.listStations(data.value("latitude").toDouble(39.735678),
+                                            data.value("longitude").toDouble(116.171271),
                                             data.value("keyword").toString(),
                                             data.value("district").toString(),
                                             qBound(1, data.value("limit").toInt(80), 500));
@@ -544,7 +544,7 @@ QJsonObject ApiDispatcher::dispatchAdmin(const QJsonObject &request, int adminId
         const QString keyword = data.value("keyword").toString();
         const QString district = data.value("district").toString();
         return success(request, QJsonObject{
-            {"items", stationsJson(db.listStations(39.9042, 116.4074, keyword, district, 1000, 0))},
+            {"items", stationsJson(db.listStations(39.735678, 116.171271, keyword, district, 1000, 0))},
             {"total", db.stationCount(keyword, district)}});
     }
 

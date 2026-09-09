@@ -79,12 +79,17 @@ QPair<double, double> realDistrictCoords(const QString &region)
         {QStringLiteral("望京"), {39.9965, 116.4803}},
         {QStringLiteral("中关村"), {39.9836, 116.3164}},
         {QStringLiteral("三里屯"), {39.9339, 116.4551}},
+        // 北京理工大学良乡校区（北校区附近，演示默认点）
+        {QStringLiteral("良乡"), {39.735678, 116.171271}},
+        {QStringLiteral("北理工"), {39.735678, 116.171271}},
+        {QStringLiteral("北京理工大学良乡"), {39.735678, 116.171271}},
+        {QStringLiteral("理工大学良乡校区"), {39.735678, 116.171271}},
     };
     for (auto it = kMap.constBegin(); it != kMap.constEnd(); ++it) {
         if (region.contains(it.key()))
             return it.value();
     }
-    return {39.9042, 116.4074};
+    return {39.735678, 116.171271};
 }
 
 constexpr int kFavoriteRole = Qt::UserRole + 20;
@@ -254,7 +259,7 @@ MainWindow::MainWindow(const User &user, QWidget *parent)
 
     buildUi();
     setWindowTitle(QStringLiteral("充电用户端 - %1").arg(m_user.username));
-    // 手机端默认窗口：540×960，比原先 400×700 / 448×784 更大，便于课堂演示
+    // 手机端默认窗口：540×960
     resize(540, 960);
     setMinimumSize(480, 840);
     setMaximumWidth(620);
@@ -604,11 +609,11 @@ void MainWindow::onChargeSubNav(int index)
 void MainWindow::applyUserLocation(const QString &regionOrAddress)
 {
     const QString text = regionOrAddress.trimmed();
-    const auto coords = realDistrictCoords(text.isEmpty() ? QStringLiteral("天安门") : text);
+    const auto coords = realDistrictCoords(text.isEmpty() ? QStringLiteral("良乡") : text);
     m_userLat = coords.first;
     m_userLng = coords.second;
     if (text.isEmpty())
-        m_userAddress = QStringLiteral("北京市东城区天安门");
+        m_userAddress = QStringLiteral("北京理工大学良乡校区");
     else if (text.contains(QStringLiteral("北京")))
         m_userAddress = text;
     else
@@ -644,16 +649,16 @@ void MainWindow::onRealLocationUpdated(double lat, double lng, const QString &la
 {
     const bool inBeijing = (lat >= 39.4 && lat <= 41.1 && lng >= 115.4 && lng <= 117.6);
     if (!inBeijing && source == QLatin1String("IP")) {
-        applyUserLocation(QStringLiteral("天安门"));
+        applyUserLocation(QStringLiteral("良乡"));
         m_locationSource = QStringLiteral("fallback");
-        m_userAddress = QStringLiteral("公网定位不在北京，已使用演示坐标（天安门）");
+        m_userAddress = QStringLiteral("公网定位不在北京，已使用演示坐标（北京理工大学良乡校区）");
         if (m_locateBtn) {
             m_locateBtn->setEnabled(true);
             m_locateBtn->setText(QStringLiteral("定位"));
         }
         refreshStations();
         showLargeMessage(this, QMessageBox::Warning, QStringLiteral("定位提示"),
-                         QStringLiteral("检测到公网出口不在北京，已自动切回演示坐标。\n"
+                         QStringLiteral("检测到公网出口不在北京，已自动切回良乡校区演示坐标。\n"
                                         "也可手动输入「朝阳区」「国贸」等后点定位。"));
         return;
     }
@@ -679,8 +684,9 @@ void MainWindow::onRealLocationFailed(const QString &reason)
     }
     m_locationLabel->setText(QStringLiteral("%1（可手动输入地址后回车）").arg(reason));
     if (m_locationSource == QLatin1String("pending")
-        || m_locationSource == QLatin1String("fallback")) {
-        applyUserLocation(QStringLiteral("天安门"));
+        || m_locationSource == QLatin1String("fallback")
+        || m_locationSource == QLatin1String("default")) {
+        applyUserLocation(QStringLiteral("良乡"));
         m_locationSource = QStringLiteral("fallback");
         refreshStations();
     }

@@ -37,4 +37,5 @@ private:
     QNetworkAccessManager *m_nam = nullptr;
     bool m_busy = false;
     bool m_triedIp = false;
+    bool m_ipPending = false;
 };

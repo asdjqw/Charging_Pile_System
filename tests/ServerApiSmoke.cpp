@@ -57,7 +57,7 @@ int main(int argc, char **argv)
         out << "stale reservation cleanup failed: " << client.lastError() << Qt::endl;
         return 4;
     }
-    const auto stations = client.listStations(39.9042, 116.4074, QString(), QString(), 30);
+    const auto stations = client.listStations(39.735678, 116.171271, QString(), QString(), 30);
     if (stations.isEmpty()) {
         out << "no stations: " << client.lastError() << Qt::endl;
         return 5;

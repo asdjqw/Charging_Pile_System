@@ -2508,9 +2508,9 @@ bool DatabaseManager::ensureDemoContent()
         && countQ.next())
         reviewedStations = countQ.value(0).toInt();
 
-    // 优先取天安门附近站（与用户端默认定位一致），演示列表第一页就能看到星级
-    const double demoLat = 39.9042;
-    const double demoLng = 116.4074;
+    // 优先取良乡校区附近站（与用户端默认定位一致），演示列表第一页就能看到星级
+    const double demoLat = 39.735678;
+    const double demoLng = 116.171271;
     QVector<int> nearStationIds;
     QVector<int> pileIds;
     QVector<int> pileStationIds;
@@ -2530,8 +2530,8 @@ bool DatabaseManager::ensureDemoContent()
     if (q.exec(QStringLiteral(
             "SELECT p.id, p.station_id FROM piles p "
             "JOIN stations s ON s.id=p.station_id "
-            "ORDER BY ((s.latitude-39.9042)*(s.latitude-39.9042)) + "
-            "(((s.longitude-116.4074)*0.77)*((s.longitude-116.4074)*0.77)) ASC "
+            "ORDER BY ((s.latitude-39.735678)*(s.latitude-39.735678)) + "
+            "(((s.longitude-116.171271)*0.77)*((s.longitude-116.171271)*0.77)) ASC "
             "LIMIT 120"))) {
         while (q.next()) {
             pileIds.push_back(q.value(0).toInt());
@@ -2589,28 +2589,7 @@ bool DatabaseManager::ensureDemoContent()
         }
     }
 
-    // 需要覆盖足够多「附近站」才跳过评论填充
-    if (finishedOrders >= 60 && reviewCount >= 200 && reviewedStations >= 60)
-        return true;
-
-    const QStringList comments = {
-        QStringLiteral("充电很快，环境干净，推荐！"),
-        QStringLiteral("位置好找，停车方便。"),
-        QStringLiteral("价格实惠，指引清楚。"),
-        QStringLiteral("晚高峰略忙，总体满意。"),
-        QStringLiteral("功率稳定，希望多加几根快充。"),
-        QStringLiteral("服务态度不错，下次还来。"),
-        QStringLiteral("导航定位准确，出桩顺利。"),
-        QStringLiteral("雨天场地有点滑，其他都好。"),
-        QStringLiteral("有遮阳棚，夏天体验体验好。"),
-        QStringLiteral("计费透明，APP 体验流畅。"),
-        QStringLiteral("周边餐饮方便，充电等待不无聊。"),
-        QStringLiteral("桩体较新，接口好用。"),
-        QStringLiteral("车位充足，进出方便。"),
-        QStringLiteral("夜间照明不错，安全感强。"),
-        QStringLiteral("客服响应及时，问题解决快。")
-    };
-
+    // 订单量已够时可跳过补订单，但附近站评价仍要保证（默认定位切到良乡后旧评价可能不在附近）
     if (finishedOrders < 60) {
         const int need = 60 - finishedOrders;
         for (int i = 0; i < need; ++i) {
@@ -2647,8 +2626,40 @@ bool DatabaseManager::ensureDemoContent()
         }
     }
 
-    if (reviewCount < 200 || reviewedStations < 60) {
-        int seq = reviewCount;
+    // 星级与用语匹配的演示评价池（按 rating 取文案）
+    const QMap<int, QStringList> commentsByRating = {
+        {5,
+         {QStringLiteral("功率拉满，十分钟多补不少电，强烈推荐！"),
+          QStringLiteral("导航准、车位好找，充电体验很顺。"),
+          QStringLiteral("场地干净、照明足，晚上来也很安心。"),
+          QStringLiteral("结算清晰，客服响应也快，五星好评。")}},
+        {4,
+         {QStringLiteral("整体不错，充电稳定，高峰稍微等了一会儿。"),
+          QStringLiteral("位置方便、价格合理，希望再多几根空闲桩。"),
+          QStringLiteral("指引清楚，出桩顺利，小细节再优化就完美了。"),
+          QStringLiteral("环境整洁，功率达标，周末人多但还能接受。")}},
+        {3,
+         {QStringLiteral("能充上电，但午间排队偏久，体验一般。"),
+          QStringLiteral("功率时高时低，总体还行，不算惊喜。"),
+          QStringLiteral("车位偏紧，进出要小心，充电本身没问题。"),
+          QStringLiteral("指示牌不够醒目，绕了一圈才找到桩。")}},
+        {2,
+         {QStringLiteral("到了发现好几根故障，白跑一趟挺郁闷。"),
+          QStringLiteral("排队太久，功率也不稳，体验一般偏差。"),
+          QStringLiteral("场地标识混乱，找桩费劲，希望尽快改进。"),
+          QStringLiteral("计费偶发延迟，客服处理偏慢。")}},
+    };
+
+    int nearReviewed = 0;
+    for (int stationId : nearStationIds) {
+        QSqlQuery exist(m_db);
+        exist.prepare(QStringLiteral("SELECT COUNT(*) FROM station_reviews WHERE station_id=?"));
+        exist.addBindValue(stationId);
+        if (exist.exec() && exist.next() && exist.value(0).toInt() > 0)
+            ++nearReviewed;
+    }
+    // 全局评价再多，只要附近站覆盖不够，就继续补（避免默认坐标切换后首页全是「暂无评分」）
+    if (nearReviewed < qMin(40, nearStationIds.size()) || reviewCount < 200 || reviewedStations < 60) {
         for (int si = 0; si < nearStationIds.size(); ++si) {
             const int stationId = nearStationIds[si];
             QSqlQuery exist(m_db);
@@ -2661,7 +2672,13 @@ bool DatabaseManager::ensureDemoContent()
             const int want = 3 + (si % 4); // 每站 3~6 条
             for (int j = already; j < want; ++j) {
                 const int userId = 1 + ((si + j) % 3);
-                const int rating = 2 + ((si * 3 + j * 2) % 4); // 2~5
+                // 附近站以 4~5 星为主，偶尔 3/2 星增加真实感
+                const int roll = (si * 5 + j * 3) % 10;
+                const int rating = (roll >= 7) ? 5 : (roll >= 4) ? 4 : (roll >= 1) ? 3 : 2;
+                const QStringList &pool = commentsByRating.value(rating);
+                const QString comment = pool.isEmpty()
+                                           ? QStringLiteral("充电体验一般。")
+                                           : pool[(si + j) % pool.size()];
                 const QDateTime when = QDateTime::currentDateTime().addDays(-(si + j + 1));
                 QSqlQuery insert(m_db);
                 insert.prepare(QStringLiteral(
@@ -2670,14 +2687,14 @@ bool DatabaseManager::ensureDemoContent()
                 insert.addBindValue(stationId);
                 insert.addBindValue(userId);
                 insert.addBindValue(rating);
-                insert.addBindValue(comments[(si + j) % comments.size()]);
+                insert.addBindValue(comment);
                 insert.addBindValue(when.toString(QStringLiteral("yyyy-MM-dd HH:mm:ss")));
-                if (insert.exec())
-                    ++seq;
+                insert.exec();
             }
         }
-        Q_UNUSED(seq);
     }
+    Q_UNUSED(reviewCount);
+    Q_UNUSED(reviewedStations);
 
     // 给演示账号收藏几座「附近」站，方便一眼看到黄底高亮
     QSqlQuery fav(m_db);
