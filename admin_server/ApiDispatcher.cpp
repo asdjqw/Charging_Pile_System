@@ -456,7 +456,7 @@ QJsonObject ApiDispatcher::dashboardPayload(int days) const
 QJsonObject ApiDispatcher::dispatchAdmin(const QJsonObject &request, int adminId)
 {
     auto &db = DatabaseManager::instance();
-    const QString action = request.value("action").toString().trimmed();
+    const QString action = request.value("action").toString().trimmed().toLower();
     const QJsonObject data = request.value("data").toObject();
 
     if (action == QLatin1String("admin.logout")) {
