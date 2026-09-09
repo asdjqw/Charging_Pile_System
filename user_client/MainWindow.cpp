@@ -249,10 +249,10 @@ MainWindow::MainWindow(const User &user, QWidget *parent)
 
     buildUi();
     setWindowTitle(QStringLiteral("充电用户端 - %1").arg(m_user.username));
-    // 手机端默认窗口：540×960
-    resize(540, 960);
-    setMinimumSize(480, 840);
-    setMaximumWidth(620);
+    // 默认窗口：640×960，比原先 540×960 更宽，列表/卡片展示更舒展
+    resize(640, 960);
+    setMinimumSize(560, 840);
+    setMaximumWidth(800);
     statusBar()->setSizeGripEnabled(false);
     statusBar()->showMessage(QStringLiteral("正在加载…"));
 

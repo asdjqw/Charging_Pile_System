@@ -17,7 +17,7 @@ LoginDialog::LoginDialog(QWidget *parent)
     , ui(new Ui::LoginDialog)
 {
     ui->setupUi(this);
-    setFixedSize(520, 920);
+    setFixedSize(620, 920);
 
     ui->hero->setObjectName(QStringLiteral("loginHero"));
     ui->hero->setAttribute(Qt::WA_StyledBackground, true);
