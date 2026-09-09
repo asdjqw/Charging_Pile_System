@@ -1,9 +1,166 @@
 #pragma once
 
+#include <QApplication>
 #include <QColor>
+#include <QDialog>
+#include <QEvent>
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QMessageBox>
+#include <QPushButton>
 #include <QString>
+#include <QTimer>
+#include <QVBoxLayout>
 
 namespace StyleHelper {
+
+/**
+ * @brief 自定义居中弹窗：正文在上、小按钮在底部居中，避免文字被挡住。
+ */
+inline QMessageBox::StandardButton execCenteredDialog(
+    QWidget *parent, const QString &title, const QString &text,
+    QMessageBox::StandardButtons buttons)
+{
+    QDialog dlg(parent);
+    dlg.setWindowTitle(title);
+    dlg.setModal(true);
+    dlg.setMinimumWidth(420);
+    if (parent)
+        dlg.setStyleSheet(parent->styleSheet());
+    else if (qApp)
+        dlg.setStyleSheet(qApp->styleSheet());
+
+    auto *root = new QVBoxLayout(&dlg);
+    root->setContentsMargins(28, 24, 28, 18);
+    root->setSpacing(18);
+
+    auto *textLabel = new QLabel(text, &dlg);
+    textLabel->setWordWrap(true);
+    textLabel->setAlignment(Qt::AlignHCenter | Qt::AlignVCenter);
+    textLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    textLabel->setMinimumWidth(360);
+    textLabel->setMaximumWidth(520);
+    textLabel->setStyleSheet(QStringLiteral("font-size: 15px; padding: 4px 8px;"));
+    root->addWidget(textLabel, 1, Qt::AlignHCenter);
+
+    auto *btnRow = new QHBoxLayout;
+    btnRow->setSpacing(12);
+    btnRow->addStretch();
+
+    auto addBtn = [&](const QString &caption, QMessageBox::StandardButton role, bool isDefault) {
+        auto *btn = new QPushButton(caption, &dlg);
+        btn->setMinimumSize(88, 36);
+        btn->setMaximumHeight(36);
+        btn->setDefault(isDefault);
+        btnRow->addWidget(btn);
+        QObject::connect(btn, &QPushButton::clicked, &dlg, [role, &dlg]() {
+            dlg.done(static_cast<int>(role));
+        });
+    };
+
+    const bool hasYes = buttons.testFlag(QMessageBox::Yes);
+    const bool hasNo = buttons.testFlag(QMessageBox::No);
+    const bool hasOk = buttons.testFlag(QMessageBox::Ok);
+    const bool hasCancel = buttons.testFlag(QMessageBox::Cancel);
+
+    if (hasNo)
+        addBtn(QStringLiteral("否"), QMessageBox::No, false);
+    if (hasCancel && !hasNo)
+        addBtn(QStringLiteral("取消"), QMessageBox::Cancel, false);
+    if (hasYes)
+        addBtn(QStringLiteral("是"), QMessageBox::Yes, true);
+    if (hasOk)
+        addBtn(QStringLiteral("确定"), QMessageBox::Ok, true);
+    if (!hasYes && !hasNo && !hasOk && !hasCancel)
+        addBtn(QStringLiteral("确定"), QMessageBox::Ok, true);
+
+    btnRow->addStretch();
+    root->addLayout(btnRow);
+
+    dlg.adjustSize();
+    if (dlg.width() < 420)
+        dlg.resize(420, dlg.height());
+    return static_cast<QMessageBox::StandardButton>(dlg.exec());
+}
+
+/**
+ * @brief 轻量处理残留 QMessageBox：去图标、缩小按钮，避免挡住正文。
+ */
+inline void polishMessageBox(QMessageBox *box)
+{
+    if (!box)
+        return;
+    box->setIcon(QMessageBox::NoIcon);
+    box->setMinimumWidth(420);
+    for (QLabel *lab : box->findChildren<QLabel *>()) {
+        if (!lab)
+            continue;
+        if (lab->text().isEmpty()) {
+            lab->hide();
+            lab->setFixedSize(0, 0);
+            continue;
+        }
+        lab->setWordWrap(true);
+        lab->setAlignment(Qt::AlignHCenter | Qt::AlignVCenter);
+    }
+    for (QPushButton *btn : box->findChildren<QPushButton *>()) {
+        if (!btn)
+            continue;
+        btn->setMinimumSize(88, 36);
+        btn->setMaximumHeight(36);
+    }
+}
+
+/**
+ * @brief 安装应用级过滤器，兜底处理原生 QMessageBox。
+ */
+inline void installCenteredMessageBoxes(QObject *owner)
+{
+    struct Filter final : QObject {
+        using QObject::QObject;
+        bool eventFilter(QObject *watched, QEvent *event) override
+        {
+            if (!event)
+                return QObject::eventFilter(watched, event);
+            if (event->type() == QEvent::Show) {
+                if (auto *box = qobject_cast<QMessageBox *>(watched)) {
+                    polishMessageBox(box);
+                    QTimer::singleShot(0, box, [box]() { polishMessageBox(box); });
+                }
+            }
+            return QObject::eventFilter(watched, event);
+        }
+    };
+    qApp->installEventFilter(new Filter(owner ? owner : qApp));
+}
+
+/**
+ * @brief 无图标、文字居中的询问框（小按钮置底居中）。
+ */
+inline QMessageBox::StandardButton question(QWidget *parent, const QString &title, const QString &text,
+                                           QMessageBox::StandardButtons buttons = QMessageBox::Yes
+                                               | QMessageBox::No)
+{
+    return execCenteredDialog(parent, title, text, buttons);
+}
+
+/** @brief 无图标、文字居中的提示框。 */
+inline void information(QWidget *parent, const QString &title, const QString &text)
+{
+    execCenteredDialog(parent, title, text, QMessageBox::Ok);
+}
+
+/** @brief 无图标、文字居中的警告框。 */
+inline void warning(QWidget *parent, const QString &title, const QString &text)
+{
+    execCenteredDialog(parent, title, text, QMessageBox::Ok);
+}
+
+/** @brief 无图标、文字居中的错误框。 */
+inline void critical(QWidget *parent, const QString &title, const QString &text)
+{
+    execCenteredDialog(parent, title, text, QMessageBox::Ok);
+}
 
 // 收藏高亮颜色。QListWidget 一旦写了 item 的 background，setBackground() 会被样式表盖掉，
 // 真正生效的是 FavoriteCardDelegate 读这里的颜色。改黄底只改下面两处即可。
@@ -133,16 +290,20 @@ inline QString userClientStyle()
         QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
         QMessageBox {
             background: #F3F6F5;
+            min-width: 420px;
         }
         QMessageBox QLabel {
-            min-width: 240px;
-            font-size: 14px;
+            min-width: 320px;
+            font-size: 15px;
+            padding: 8px 12px;
+            qproperty-alignment: AlignHCenter;
         }
         QMessageBox QPushButton {
-            min-width: 96px;
-            min-height: 40px;
+            min-width: 88px;
+            max-height: 36px;
+            min-height: 36px;
             font-size: 14px;
-            padding: 8px 16px;
+            padding: 6px 14px;
         }
         QStatusBar {
             background: #FFFFFF; color: #3D4A47; border: none; border-top: 1px solid #D8E0DE;
@@ -263,9 +424,24 @@ inline QString userClientDarkStyle()
         }
         QScrollBar::handle:vertical { background: #3D4A47; border-radius: 4px; min-height: 24px; }
         QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
-        QMessageBox { background: #1A2422; }
-        QMessageBox QLabel { min-width: 240px; font-size: 14px; color: #E8EEEC; }
-        QMessageBox QPushButton { min-width: 96px; min-height: 40px; font-size: 14px; padding: 8px 16px; }
+        QMessageBox {
+            background: #1A2422;
+            min-width: 420px;
+        }
+        QMessageBox QLabel {
+            min-width: 320px;
+            font-size: 15px;
+            color: #E8EEEC;
+            padding: 8px 12px;
+            qproperty-alignment: AlignHCenter;
+        }
+        QMessageBox QPushButton {
+            min-width: 88px;
+            max-height: 36px;
+            min-height: 36px;
+            font-size: 14px;
+            padding: 6px 14px;
+        }
         QStatusBar {
             background: #1A2422; color: #C5D0CD; border: none; border-top: 1px solid #2A3835;
         }

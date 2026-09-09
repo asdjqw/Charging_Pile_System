@@ -83,11 +83,11 @@ void LoginDialog::showRegisterPage()
 void LoginDialog::onLogin()
 {
     if (m_phoneEdit->text().trimmed().size() != 11) {
-        QMessageBox::warning(this, QStringLiteral("提示"), QStringLiteral("请输入 11 位手机号"));
+        StyleHelper::warning(this, QStringLiteral("提示"), QStringLiteral("请输入 11 位手机号"));
         return;
     }
     if (m_passwordEdit->text().isEmpty()) {
-        QMessageBox::warning(this, QStringLiteral("提示"),
+        StyleHelper::warning(this, QStringLiteral("提示"),
                              QStringLiteral("请输入密码。未注册请先点击下方注册。"));
         return;
     }
@@ -100,7 +100,7 @@ void LoginDialog::onLogin()
     QApplication::restoreOverrideCursor();
     setEnabled(true);
     if (!ok) {
-        QMessageBox::warning(this, QStringLiteral("登录失败"),
+        StyleHelper::warning(this, QStringLiteral("登录失败"),
                              ServerApiClient::instance().lastError());
         return;
     }
@@ -111,15 +111,15 @@ void LoginDialog::onLogin()
 void LoginDialog::onRegister()
 {
     if (m_regPhoneEdit->text().trimmed().size() != 11) {
-        QMessageBox::warning(this, QStringLiteral("提示"), QStringLiteral("请输入 11 位手机号"));
+        StyleHelper::warning(this, QStringLiteral("提示"), QStringLiteral("请输入 11 位手机号"));
         return;
     }
     if (m_regPasswordEdit->text().size() < 6) {
-        QMessageBox::warning(this, QStringLiteral("提示"), QStringLiteral("密码至少 6 位"));
+        StyleHelper::warning(this, QStringLiteral("提示"), QStringLiteral("密码至少 6 位"));
         return;
     }
     if (m_regPasswordEdit->text() != m_regConfirmEdit->text()) {
-        QMessageBox::warning(this, QStringLiteral("提示"), QStringLiteral("两次输入的密码不一致"));
+        StyleHelper::warning(this, QStringLiteral("提示"), QStringLiteral("两次输入的密码不一致"));
         return;
     }
     User user;
@@ -135,12 +135,12 @@ void LoginDialog::onRegister()
     QApplication::restoreOverrideCursor();
     setEnabled(true);
     if (!registered) {
-        QMessageBox::warning(this, QStringLiteral("注册失败"),
+        StyleHelper::warning(this, QStringLiteral("注册失败"),
                              ServerApiClient::instance().lastError());
         return;
     }
     if (!loggedIn) {
-        QMessageBox::warning(this, QStringLiteral("登录失败"),
+        StyleHelper::warning(this, QStringLiteral("登录失败"),
                              ServerApiClient::instance().lastError());
         return;
     }

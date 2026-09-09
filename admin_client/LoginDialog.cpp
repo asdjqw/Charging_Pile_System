@@ -82,14 +82,14 @@ void LoginDialog::onLogin()
     const QString username = m_usernameEdit->text().trimmed();
     const QString password = m_passwordEdit->text();
     if (username.isEmpty() || password.isEmpty()) {
-        QMessageBox::warning(this, QStringLiteral("提示"),
+        StyleHelper::warning(this, QStringLiteral("提示"),
                              QStringLiteral("请输入账号和密码"));
         return;
     }
 
     Admin admin;
     if (!AdminApiClient::instance().loginAdmin(username, password, admin)) {
-        QMessageBox::warning(this, QStringLiteral("登录失败"),
+        StyleHelper::warning(this, QStringLiteral("登录失败"),
                              AdminApiClient::instance().lastError());
         m_passwordEdit->clear();
         m_passwordEdit->setFocus();
@@ -104,21 +104,21 @@ void LoginDialog::onRegister()
     const QString username = m_regUsernameEdit->text().trimmed();
     const QString password = m_regPasswordEdit->text();
     if (password.size() < 6) {
-        QMessageBox::warning(this, QStringLiteral("提示"), QStringLiteral("密码至少 6 位"));
+        StyleHelper::warning(this, QStringLiteral("提示"), QStringLiteral("密码至少 6 位"));
         return;
     }
 
     if (!AdminApiClient::instance().registerAdmin(username, password,
                                                  m_regNameEdit->text().trimmed(),
                                                  m_inviteEdit->text().trimmed())) {
-        QMessageBox::warning(this, QStringLiteral("注册失败"),
+        StyleHelper::warning(this, QStringLiteral("注册失败"),
                              AdminApiClient::instance().lastError());
         return;
     }
 
     Admin admin;
     if (!AdminApiClient::instance().loginAdmin(username, password, admin)) {
-        QMessageBox::warning(this, QStringLiteral("登录失败"),
+        StyleHelper::warning(this, QStringLiteral("登录失败"),
                              AdminApiClient::instance().lastError());
         return;
     }

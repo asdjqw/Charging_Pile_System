@@ -12,6 +12,7 @@ int main(int argc, char *argv[])
     QApplication::setApplicationName(QStringLiteral("ChargePileUser"));
     QApplication::setOrganizationName(QStringLiteral("ChargePileLab"));
     app.setStyleSheet(StyleHelper::userClientStyle());
+    StyleHelper::installCenteredMessageBoxes(&app);
     app.setQuitOnLastWindowClosed(false);
 
     const QString host = qEnvironmentVariable("CHARGE_PILE_HOST", "127.0.0.1");
@@ -22,7 +23,7 @@ int main(int argc, char *argv[])
                              : 9000;
     if (!ServerApiClient::instance().initialize(host, port)
         || !ServerApiClient::instance().ping()) {
-        QMessageBox::critical(nullptr, QStringLiteral("服务端不可用"),
+        StyleHelper::critical(nullptr, QStringLiteral("服务端不可用"),
                               ServerApiClient::instance().lastError()
                                   + QStringLiteral("\n请先启动 admin_server。"));
         return 1;

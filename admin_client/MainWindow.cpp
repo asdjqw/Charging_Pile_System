@@ -328,7 +328,7 @@ void MainWindow::buildUi()
             showApiError(QStringLiteral("生成邀请码失败"));
             return;
         }
-        QMessageBox::information(this, QStringLiteral("邀请码已生成"), code);
+        StyleHelper::information(this, QStringLiteral("邀请码已生成"), code);
         refreshPermissions();
     });
     connect(ui->inviteRefreshBtn, &QPushButton::clicked, this, &MainWindow::refreshPermissions);
@@ -355,7 +355,7 @@ void MainWindow::onNavChanged(int row)
 
 void MainWindow::showApiError(const QString &title)
 {
-    QMessageBox::warning(this, title, AdminApiClient::instance().lastError());
+    StyleHelper::warning(this, title, AdminApiClient::instance().lastError());
 }
 
 void MainWindow::applySalesChart(const QJsonObject &payload)
@@ -717,11 +717,11 @@ void MainWindow::onDeleteReview()
         return;
     const int row = m_reviewTable->currentRow();
     if (row < 0) {
-        QMessageBox::information(this, QStringLiteral("提示"), QStringLiteral("请先选中一条评论"));
+        StyleHelper::information(this, QStringLiteral("提示"), QStringLiteral("请先选中一条评论"));
         return;
     }
     const int reviewId = m_reviewTable->item(row, 0)->data(Qt::UserRole).toInt();
-    if (QMessageBox::question(this, QStringLiteral("删除评论"),
+    if (StyleHelper::question(this, QStringLiteral("删除评论"),
                               QStringLiteral("确认删除该用户评论？此操作不可恢复。"))
         != QMessageBox::Yes)
         return;
@@ -752,18 +752,18 @@ void MainWindow::onRestartPile()
 {
     const int row = m_pileTable->currentRow();
     if (row < 0) {
-        QMessageBox::information(this, QStringLiteral("提示"), QStringLiteral("请先选中故障电桩"));
+        StyleHelper::information(this, QStringLiteral("提示"), QStringLiteral("请先选中故障电桩"));
         return;
     }
     const int pileId = m_pileTable->item(row, 0)->data(Qt::UserRole).toInt();
     const QString code = m_pileTable->item(row, 1)->text();
     const QString status = m_pileTable->item(row, 0)->data(Qt::UserRole + 1).toString();
     if (status != QLatin1String("fault")) {
-        QMessageBox::information(this, QStringLiteral("提示"),
+        StyleHelper::information(this, QStringLiteral("提示"),
                                  QStringLiteral("仅故障电桩可执行模拟维修（远程重启）。"));
         return;
     }
-    if (QMessageBox::question(this, QStringLiteral("模拟维修"),
+    if (StyleHelper::question(this, QStringLiteral("模拟维修"),
                               QStringLiteral("确认对故障电桩 %1 执行模拟维修？\n"
                                              "状态将变为「维修中」，约 1.5 秒后恢复空闲。")
                                   .arg(code))
@@ -773,7 +773,7 @@ void MainWindow::onRestartPile()
         showApiError(QStringLiteral("模拟维修失败"));
         return;
     }
-    QMessageBox::information(this, QStringLiteral("已下发"),
+    StyleHelper::information(this, QStringLiteral("已下发"),
                              QStringLiteral("模拟维修已开始，电桩进入维修中，稍后恢复空闲。"));
     refreshPiles();
     QTimer::singleShot(1800, this, [this]() {
@@ -792,7 +792,7 @@ void MainWindow::onAddStation()
         showApiError(QStringLiteral("新增电站失败"));
         return;
     }
-    QMessageBox::information(this, QStringLiteral("成功"),
+    StyleHelper::information(this, QStringLiteral("成功"),
                              QStringLiteral("已新增电站，并生成配套电桩。"));
     refreshStations();
     refreshPiles();
@@ -827,7 +827,7 @@ void MainWindow::onToggleUserStatus()
 {
     const int row = m_userTable->currentRow();
     if (row < 0) {
-        QMessageBox::information(this, QStringLiteral("提示"), QStringLiteral("请先选择用户"));
+        StyleHelper::information(this, QStringLiteral("提示"), QStringLiteral("请先选择用户"));
         return;
     }
     const int userId = m_userTable->item(row, 0)->data(Qt::UserRole).toInt();
@@ -835,7 +835,7 @@ void MainWindow::onToggleUserStatus()
     const QString next = current == QStringLiteral("冻结") ? QStringLiteral("normal")
                                                              : QStringLiteral("frozen");
     const QString action = next == QLatin1String("frozen") ? QStringLiteral("冻结") : QStringLiteral("解冻");
-    if (QMessageBox::question(this, QStringLiteral("风控操作"),
+    if (StyleHelper::question(this, QStringLiteral("风控操作"),
                               QStringLiteral("确认%1该用户账号？").arg(action))
         != QMessageBox::Yes)
         return;
@@ -861,7 +861,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
 
 bool MainWindow::confirmForce(const QString &title)
 {
-    return QMessageBox::question(this, title,
+    return StyleHelper::question(this, title,
                                  AdminApiClient::instance().lastError()
                                      + QStringLiteral("\n\n选择“是”将强制删除。"))
            == QMessageBox::Yes;
@@ -911,7 +911,7 @@ bool MainWindow::editPileDialog(Pile &pile, bool isNew)
     pile.status = form.statusCombo->currentText();
     pile.categoryLabel.clear();
     if (pile.pileCode.isEmpty()) {
-        QMessageBox::warning(this, QStringLiteral("提示"), QStringLiteral("请填写电桩编号"));
+        StyleHelper::warning(this, QStringLiteral("提示"), QStringLiteral("请填写电桩编号"));
         return false;
     }
     return true;
@@ -950,7 +950,7 @@ bool MainWindow::editStationDialog(Station &station, int *pileCount, bool isNew)
     if (isNew && pileCount)
         *pileCount = form.pileCountSpin->value();
     if (station.name.isEmpty() || station.address.isEmpty()) {
-        QMessageBox::warning(this, QStringLiteral("提示"), QStringLiteral("请填写站名和地址"));
+        StyleHelper::warning(this, QStringLiteral("提示"), QStringLiteral("请填写站名和地址"));
         return false;
     }
     return true;
@@ -961,7 +961,7 @@ void MainWindow::onAddPile()
     Pile pile;
     pile.stationId = m_pileStationFilter->currentData().toInt();
     if (pile.stationId <= 0) {
-        QMessageBox::information(this, QStringLiteral("提示"),
+        StyleHelper::information(this, QStringLiteral("提示"),
                                  QStringLiteral("请先在筛选中选择一个具体电站"));
         return;
     }
@@ -980,7 +980,7 @@ void MainWindow::onEditPile()
 {
     const int row = m_pileTable->currentRow();
     if (row < 0) {
-        QMessageBox::information(this, QStringLiteral("提示"), QStringLiteral("请先选中电桩"));
+        StyleHelper::information(this, QStringLiteral("提示"), QStringLiteral("请先选中电桩"));
         return;
     }
     const int pileId = m_pileTable->item(row, 0)->data(Qt::UserRole).toInt();
@@ -1011,12 +1011,12 @@ void MainWindow::onDeletePile()
 {
     const int row = m_pileTable->currentRow();
     if (row < 0) {
-        QMessageBox::information(this, QStringLiteral("提示"), QStringLiteral("请先选中电桩"));
+        StyleHelper::information(this, QStringLiteral("提示"), QStringLiteral("请先选中电桩"));
         return;
     }
     const int pileId = m_pileTable->item(row, 0)->data(Qt::UserRole).toInt();
     const QString code = m_pileTable->item(row, 1)->text();
-    if (QMessageBox::question(this, QStringLiteral("删除电桩"),
+    if (StyleHelper::question(this, QStringLiteral("删除电桩"),
                               QStringLiteral("确认删除电桩 %1？").arg(code))
         != QMessageBox::Yes)
         return;
@@ -1040,7 +1040,7 @@ void MainWindow::onEditStation()
 {
     const int row = m_stationTable->currentRow();
     if (row < 0) {
-        QMessageBox::information(this, QStringLiteral("提示"), QStringLiteral("请先选中电站"));
+        StyleHelper::information(this, QStringLiteral("提示"), QStringLiteral("请先选中电站"));
         return;
     }
     Station station;
@@ -1068,12 +1068,12 @@ void MainWindow::onDeleteStation()
 {
     const int row = m_stationTable->currentRow();
     if (row < 0) {
-        QMessageBox::information(this, QStringLiteral("提示"), QStringLiteral("请先选中电站"));
+        StyleHelper::information(this, QStringLiteral("提示"), QStringLiteral("请先选中电站"));
         return;
     }
     const int stationId = m_stationTable->item(row, 0)->data(Qt::UserRole).toInt();
     const QString name = m_stationTable->item(row, 1)->text();
-    if (QMessageBox::question(this, QStringLiteral("删除电站"),
+    if (StyleHelper::question(this, QStringLiteral("删除电站"),
                               QStringLiteral("确认删除电站「%1」及其全部电桩？").arg(name))
         != QMessageBox::Yes)
         return;
@@ -1097,7 +1097,7 @@ void MainWindow::onViewUserOrders()
 {
     const int row = m_userTable->currentRow();
     if (row < 0) {
-        QMessageBox::information(this, QStringLiteral("提示"), QStringLiteral("请先选择用户"));
+        StyleHelper::information(this, QStringLiteral("提示"), QStringLiteral("请先选择用户"));
         return;
     }
     const int userId = m_userTable->item(row, 0)->data(Qt::UserRole).toInt();
@@ -1130,7 +1130,7 @@ void MainWindow::onViewUserOrders()
         if (r < 0)
             return;
         const int orderId = table->item(r, 0)->data(Qt::UserRole).toInt();
-        if (QMessageBox::question(this, QStringLiteral("删除订单"), QStringLiteral("确认删除该充电记录？"))
+        if (StyleHelper::question(this, QStringLiteral("删除订单"), QStringLiteral("确认删除该充电记录？"))
             != QMessageBox::Yes)
             return;
         if (!AdminApiClient::instance().deleteOrder(orderId)) {
@@ -1162,11 +1162,11 @@ void MainWindow::onCancelReservation()
 {
     const int row = m_reservationTable->currentRow();
     if (row < 0) {
-        QMessageBox::information(this, QStringLiteral("提示"), QStringLiteral("请先选择预约"));
+        StyleHelper::information(this, QStringLiteral("提示"), QStringLiteral("请先选择预约"));
         return;
     }
     const int reservationId = m_reservationTable->item(row, 0)->data(Qt::UserRole).toInt();
-    if (QMessageBox::question(this, QStringLiteral("解除预约"),
+    if (StyleHelper::question(this, QStringLiteral("解除预约"),
                               QStringLiteral("确认解除该用户正在进行的预约？"))
         != QMessageBox::Yes)
         return;
@@ -1223,7 +1223,7 @@ void MainWindow::onTogglePermission()
             return;
         }
     }
-    QMessageBox::information(this, QStringLiteral("成功"), QStringLiteral("角色权限已更新"));
+    StyleHelper::information(this, QStringLiteral("成功"), QStringLiteral("角色权限已更新"));
     refreshPermissions();
 }
 

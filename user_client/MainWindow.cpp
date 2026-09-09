@@ -180,54 +180,44 @@ QString ratingSummary(double avg, int count)
         .arg(count);
 }
 
-void showLargeMessage(QWidget *parent, QMessageBox::Icon icon, const QString &title,
+void showLargeMessage(QWidget *parent, QMessageBox::Icon /*icon*/, const QString &title,
                       const QString &text)
 {
     QDialog dlg(parent);
     dlg.setWindowTitle(title);
     dlg.setModal(true);
+    dlg.setMinimumSize(480, 200);
     if (parent)
         dlg.setStyleSheet(parent->styleSheet());
 
     auto *layout = new QVBoxLayout(&dlg);
-    layout->setContentsMargins(20, 18, 20, 16);
-    layout->setSpacing(16);
+    layout->setContentsMargins(36, 28, 36, 22);
+    layout->setSpacing(20);
 
-    auto *row = new QWidget(&dlg);
-    auto *rowLayout = new QHBoxLayout(row);
-    rowLayout->setContentsMargins(0, 0, 0, 0);
-    rowLayout->setSpacing(12);
-
-    auto *iconLabel = new QLabel(row);
-    const QStyle::StandardPixmap sp =
-        icon == QMessageBox::Warning ? QStyle::SP_MessageBoxWarning
-        : icon == QMessageBox::Critical ? QStyle::SP_MessageBoxCritical
-                                        : QStyle::SP_MessageBoxInformation;
-    iconLabel->setPixmap(dlg.style()->standardIcon(sp).pixmap(32, 32));
-    iconLabel->setFixedSize(32, 32);
-    iconLabel->setAlignment(Qt::AlignCenter);
-
-    auto *textLabel = new QLabel(text, row);
+    auto *textLabel = new QLabel(text, &dlg);
     textLabel->setWordWrap(true);
-    textLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    textLabel->setAlignment(Qt::AlignHCenter | Qt::AlignVCenter);
     textLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    textLabel->setMinimumWidth(260);
-    textLabel->setMaximumWidth(400);
-
-    rowLayout->addWidget(iconLabel, 0, Qt::AlignTop);
-    rowLayout->addWidget(textLabel, 1);
-    layout->addWidget(row);
+    textLabel->setMinimumWidth(400);
+    textLabel->setMaximumWidth(560);
+    textLabel->setMinimumHeight(72);
+    textLabel->setStyleSheet(QStringLiteral("font-size: 16px;"));
+    layout->addWidget(textLabel, 1, Qt::AlignHCenter);
 
     auto *ok = new QPushButton(QStringLiteral("确定"), &dlg);
     ok->setDefault(true);
-    ok->setMinimumWidth(88);
+    ok->setMinimumSize(88, 36);
+    ok->setMaximumHeight(36);
     auto *btnRow = new QHBoxLayout;
     btnRow->addStretch();
     btnRow->addWidget(ok);
+    btnRow->addStretch();
     layout->addLayout(btnRow);
     QObject::connect(ok, &QPushButton::clicked, &dlg, &QDialog::accept);
 
     dlg.adjustSize();
+    if (dlg.width() < 480)
+        dlg.resize(480, qMax(200, dlg.height()));
     dlg.exec();
 }
 
