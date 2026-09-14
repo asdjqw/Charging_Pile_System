@@ -1,0 +1,11 @@
+# Do not enable until the upstream snapshot is ready and service paths are configured.
+[Unit]
+Description=Hourly charging prediction after warehouse publication
+
+[Timer]
+OnCalendar=*-*-* *:05:00 Asia/Shanghai
+Persistent=true
+Unit=charging-ml.service
+
+[Install]
+WantedBy=timers.target

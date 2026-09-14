@@ -1,0 +1,62 @@
+{
+  "algorithm": "xgboost_classifier_plus_xgboost",
+  "architecture": "two_stage",
+  "artifact_sha256": "654c2b3d5321e2ed4a2085974f02a3e8442c0cae554ab967bcb9dec6eacb8600",
+  "beijing_test_b_used": false,
+  "classification_threshold": 0.4,
+  "deadband": 0.0,
+  "feature_contract_version": "h1-20f-v1",
+  "feature_names": [
+    "hour",
+    "weekday",
+    "is_weekend",
+    "target_hour",
+    "target_weekday",
+    "target_is_weekend",
+    "load_lag_1",
+    "load_lag_6",
+    "load_lag_24",
+    "load_rolling_mean_6",
+    "load_rolling_mean_24",
+    "occupancy_lag_1",
+    "occupancy_lag_6",
+    "occupancy_lag_24",
+    "occupancy_rolling_mean_6",
+    "occupancy_rolling_mean_24",
+    "total_piles",
+    "station_capacity_kw",
+    "current_load_ratio",
+    "current_occupancy_ratio"
+  ],
+  "model_path": "/Users/bayuxuan/Documents/ChatGPT/充电桩/ml/artifacts/models/urbanev-local-v1_1-h1-20260903/models/occupancy_h1/model.joblib",
+  "model_version": "v1.1",
+  "ready_for_future_test": false,
+  "selected_params": {
+    "classifier": {
+      "colsample_bytree": 1.0,
+      "learning_rate": 0.05,
+      "max_depth": 5,
+      "min_child_weight": 20,
+      "reg_alpha": 0.1,
+      "reg_lambda": 5.0,
+      "subsample": 0.8
+    },
+    "regressor": {
+      "colsample_bytree": 1.0,
+      "learning_rate": 0.1,
+      "max_depth": 7,
+      "min_child_weight": 20,
+      "reg_alpha": 0.0,
+      "reg_lambda": 1.0,
+      "subsample": 1.0
+    },
+    "regressor_n_estimators": 603
+  },
+  "target_representation": "residual",
+  "task": "occupancy_h1",
+  "test_a_loaded": false,
+  "test_a_reused_for_tuning": false,
+  "training_source": "UrbanEV Shenzhen original Train only",
+  "uses_current_value": true,
+  "validation_usage": "one-shot development confirmation after freeze"
+}

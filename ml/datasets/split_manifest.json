@@ -1,0 +1,217 @@
+{
+  "feature_columns": [
+    "hour",
+    "weekday",
+    "is_weekend",
+    "target_hour",
+    "target_weekday",
+    "target_is_weekend",
+    "load_lag_1",
+    "load_lag_6",
+    "load_lag_24",
+    "load_rolling_mean_6",
+    "load_rolling_mean_24",
+    "occupancy_lag_1",
+    "occupancy_lag_6",
+    "occupancy_lag_24",
+    "occupancy_rolling_mean_6",
+    "occupancy_rolling_mean_24",
+    "total_piles",
+    "station_capacity_kw"
+  ],
+  "feature_count": 18,
+  "feature_frame_path": "/Users/bayuxuan/Documents/ChatGPT/充电桩/ml/artifacts/urbanev_preflight/shenzhen_feature_frame.parquet",
+  "feature_frame_sha256": "c404d5dd1c6bed7e89ccea57cec5234fe2920ad9467b5a9713f56e8902fe0341",
+  "feature_stats": {
+    "load_h1": {
+      "missing_values": 0,
+      "rows": 6124342,
+      "target_max": 1.0,
+      "target_mean": 0.1626211998957584,
+      "target_min": 0.0
+    },
+    "load_h24": {
+      "missing_values": 0,
+      "rows": 6091728,
+      "target_max": 1.0,
+      "target_mean": 0.16251513779726448,
+      "target_min": 0.0
+    },
+    "load_h6": {
+      "missing_values": 0,
+      "rows": 6117252,
+      "target_max": 1.0,
+      "target_mean": 0.16255446310697838,
+      "target_min": 0.0
+    },
+    "occupancy_h1": {
+      "missing_values": 0,
+      "rows": 6124342,
+      "target_max": 1.0,
+      "target_mean": 0.1737700981956387,
+      "target_min": 0.0
+    },
+    "occupancy_h24": {
+      "missing_values": 0,
+      "rows": 6091728,
+      "target_max": 1.0,
+      "target_mean": 0.17366187299646837,
+      "target_min": 0.0
+    },
+    "occupancy_h6": {
+      "missing_values": 0,
+      "rows": 6117252,
+      "target_max": 1.0,
+      "target_mean": 0.17369831673261785,
+      "target_min": 0.0
+    }
+  },
+  "prepared_at": "2026-09-02T06:12:57.649633+00:00",
+  "source_canonical_path": "/Users/bayuxuan/Documents/ChatGPT/充电桩/ml/data/external/urbanev/shenzhen_station_hour.parquet",
+  "source_sha256": "a06a5cfc99ded022b5d8d22094bd7780d731580415792ec6969f64d04728c4c0",
+  "split_boundaries": {
+    "test_a_start": "2023-02-01T20:00:00",
+    "validation_start": "2023-01-05T16:00:00"
+  },
+  "tasks": {
+    "load_h1": {
+      "horizon": 1,
+      "strategy": "global_unique_timestamp_70_15_15",
+      "target": "load",
+      "test_a": {
+        "end": "2023-02-28T22:00:00",
+        "rows": 923118,
+        "start": "2023-02-01T20:00:00",
+        "unique_timestamps": 651
+      },
+      "train": {
+        "end": "2023-01-05T15:00:00",
+        "rows": 4276688,
+        "start": "2022-09-02T00:00:00",
+        "unique_timestamps": 3016
+      },
+      "validation": {
+        "end": "2023-02-01T19:00:00",
+        "rows": 924536,
+        "start": "2023-01-05T16:00:00",
+        "unique_timestamps": 652
+      }
+    },
+    "load_h24": {
+      "horizon": 24,
+      "strategy": "global_unique_timestamp_70_15_15",
+      "target": "load",
+      "test_a": {
+        "end": "2023-02-27T23:00:00",
+        "rows": 890504,
+        "start": "2023-02-01T20:00:00",
+        "unique_timestamps": 628
+      },
+      "train": {
+        "end": "2023-01-05T15:00:00",
+        "rows": 4276688,
+        "start": "2022-09-02T00:00:00",
+        "unique_timestamps": 3016
+      },
+      "validation": {
+        "end": "2023-02-01T19:00:00",
+        "rows": 924536,
+        "start": "2023-01-05T16:00:00",
+        "unique_timestamps": 652
+      }
+    },
+    "load_h6": {
+      "horizon": 6,
+      "strategy": "global_unique_timestamp_70_15_15",
+      "target": "load",
+      "test_a": {
+        "end": "2023-02-28T17:00:00",
+        "rows": 916028,
+        "start": "2023-02-01T20:00:00",
+        "unique_timestamps": 646
+      },
+      "train": {
+        "end": "2023-01-05T15:00:00",
+        "rows": 4276688,
+        "start": "2022-09-02T00:00:00",
+        "unique_timestamps": 3016
+      },
+      "validation": {
+        "end": "2023-02-01T19:00:00",
+        "rows": 924536,
+        "start": "2023-01-05T16:00:00",
+        "unique_timestamps": 652
+      }
+    },
+    "occupancy_h1": {
+      "horizon": 1,
+      "strategy": "global_unique_timestamp_70_15_15",
+      "target": "occupancy",
+      "test_a": {
+        "end": "2023-02-28T22:00:00",
+        "rows": 923118,
+        "start": "2023-02-01T20:00:00",
+        "unique_timestamps": 651
+      },
+      "train": {
+        "end": "2023-01-05T15:00:00",
+        "rows": 4276688,
+        "start": "2022-09-02T00:00:00",
+        "unique_timestamps": 3016
+      },
+      "validation": {
+        "end": "2023-02-01T19:00:00",
+        "rows": 924536,
+        "start": "2023-01-05T16:00:00",
+        "unique_timestamps": 652
+      }
+    },
+    "occupancy_h24": {
+      "horizon": 24,
+      "strategy": "global_unique_timestamp_70_15_15",
+      "target": "occupancy",
+      "test_a": {
+        "end": "2023-02-27T23:00:00",
+        "rows": 890504,
+        "start": "2023-02-01T20:00:00",
+        "unique_timestamps": 628
+      },
+      "train": {
+        "end": "2023-01-05T15:00:00",
+        "rows": 4276688,
+        "start": "2022-09-02T00:00:00",
+        "unique_timestamps": 3016
+      },
+      "validation": {
+        "end": "2023-02-01T19:00:00",
+        "rows": 924536,
+        "start": "2023-01-05T16:00:00",
+        "unique_timestamps": 652
+      }
+    },
+    "occupancy_h6": {
+      "horizon": 6,
+      "strategy": "global_unique_timestamp_70_15_15",
+      "target": "occupancy",
+      "test_a": {
+        "end": "2023-02-28T17:00:00",
+        "rows": 916028,
+        "start": "2023-02-01T20:00:00",
+        "unique_timestamps": 646
+      },
+      "train": {
+        "end": "2023-01-05T15:00:00",
+        "rows": 4276688,
+        "start": "2022-09-02T00:00:00",
+        "unique_timestamps": 3016
+      },
+      "validation": {
+        "end": "2023-02-01T19:00:00",
+        "rows": 924536,
+        "start": "2023-01-05T16:00:00",
+        "unique_timestamps": 652
+      }
+    }
+  },
+  "training_started": false
+}

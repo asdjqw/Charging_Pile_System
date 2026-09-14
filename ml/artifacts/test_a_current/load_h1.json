@@ -1,0 +1,60 @@
+{
+  "task": "load_h1",
+  "status": "EVALUATION_COMPLETED",
+  "evaluation_type": "reused_original_test_a_regression",
+  "independent_unseen_holdout": false,
+  "retrained": false,
+  "tuned": false,
+  "evaluated_at": "2026-09-14T20:58:16.412363+08:00",
+  "model_version": "v1.1",
+  "model_sha256": "0c101a0d7206e4bf2cbc2cafde054445a552de23b167cd4632ce69e1d24169cd",
+  "freeze_id": "shenzhen-six-model-freeze-20260914",
+  "freeze_manifest_sha256": "b5c211be8b4ffc0e9908590c92ce09e73ba9edab02aade45426953d966f7151d",
+  "dataset_run_id": "urbanev-local-v1-20260902",
+  "cache_manifest_sha256": "98d6aa816c26ac7a0ba07395b6765444795551a7cde34c68dd2c947a65a3c78e",
+  "test_indices_sha256": "eb30d4c4a43c24e670d23486dbefd5f27fd0e88f401738f064b3bc107baf0ca3",
+  "rows": 923118,
+  "excluded_rows": 0,
+  "feature_count": 20,
+  "feature_row_start": "2023-02-01T20:00:00.000000000",
+  "feature_row_end": "2023-02-28T22:00:00.000000000",
+  "target_hour_offset": 1,
+  "timezone": "Asia/Shanghai",
+  "metrics": {
+    "RMSE": 0.040353804222606725,
+    "MAE": 0.013512870061755826,
+    "R2": 0.95690127142467,
+    "within_5_percentage_points": 0.9139405796442058,
+    "within_10_percentage_points": 0.9662491685786649
+  },
+  "persistence_metrics": {
+    "RMSE": 0.04887789193858954,
+    "MAE": 0.01595472804852154,
+    "R2": 0.9367704010832728,
+    "within_5_percentage_points": 0.8933657452243375,
+    "within_10_percentage_points": 0.9510885932242682
+  },
+  "relative_rmse_gain": 0.17439556776901355,
+  "relative_mae_gain": 0.15304917635321214,
+  "clip_count": 112,
+  "clip_rate": 0.00012132793424025964,
+  "raw_prediction": {
+    "min": -0.06816679239273071,
+    "max": 1.0976535975933075,
+    "mean": 0.14429159541441824
+  },
+  "clipped_prediction": {
+    "min": 0.0,
+    "max": 1.0,
+    "mean": 0.14429110627993258
+  },
+  "prediction_sha256_float64": "5b3bad3bc27e69ea6b1f22032a36a803246281c08d755e9a121d4a9d14199695",
+  "runtime_seconds": 3.0059554169420153,
+  "notes": "Original task-specific Test-A rows retained exactly; horizons have different valid end dates. Metrics use unrounded clipped model ratios. This reused set does not establish unseen-data generalization.",
+  "inference_policy": {
+    "classification_threshold": 0.4,
+    "deadband_tau": 0.0,
+    "alpha": 1.0,
+    "fallback": "persistence"
+  }
+}

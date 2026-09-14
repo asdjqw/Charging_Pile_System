@@ -1,0 +1,16 @@
+# Template: install only after adjusting paths and provisioning the DWS snapshot.
+[Unit]
+Description=Frozen charging forecast from warehouse hourly snapshot
+StartLimitIntervalSec=3600
+StartLimitBurst=5
+
+[Service]
+Type=oneshot
+User=charging
+WorkingDirectory=/opt/charging
+EnvironmentFile=/etc/charging-ml.env
+ExecStart=/opt/charging/.venv/bin/python -m ml.cli.warehouse_predict --snapshot ${ML_SNAPSHOT} --store mysql --audit-dir /var/lib/charging-ml/audit
+Restart=on-failure
+RestartSec=60
+TimeoutStartSec=1800
+UMask=0077
