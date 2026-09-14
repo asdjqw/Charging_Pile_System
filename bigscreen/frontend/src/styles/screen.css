@@ -1,0 +1,132 @@
+* {
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+}
+
+body {
+  font-family: 'Microsoft YaHei', 'PingFang SC', 'Helvetica Neue', Arial, sans-serif;
+  color: var(--panel-text);
+  background-color: var(--page-bg);
+  overflow: hidden;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* ------------------------------------------------------------------
+   暗色主题（默认）
+   ------------------------------------------------------------------ */
+html[data-theme='dark'],
+.stage[data-theme='dark'] {
+  --page-bg: #030d1a;
+  --stage-bg: radial-gradient(ellipse at 50% -10%, rgba(0, 140, 255, 0.28), transparent 60%),
+    linear-gradient(180deg, #051a33 0%, #03101f 55%, #020b16 100%);
+  --grid-line: rgba(0, 160, 255, 0.045);
+  --panel-text: #dceeff;
+  --panel-title: #e8f6ff;
+  --panel-sub: rgba(150, 200, 240, 0.85);
+  --title-gradient: linear-gradient(180deg, #ffffff 10%, #7ce9ff 55%, #2aa7ff 100%);
+  --title-shadow: 0 0 26px rgba(0, 180, 255, 0.45);
+  --chip-bg: rgba(6, 40, 74, 0.6);
+  --chip-border: rgba(0, 228, 255, 0.35);
+  --chip-text: #bfe9ff;
+  --chip-green-border: rgba(34, 230, 164, 0.45);
+  --chip-green-text: #9ff5d4;
+  --chip-gold-border: rgba(255, 209, 102, 0.5);
+  --chip-gold-text: #ffe1a3;
+  --clock-text: #d7f2ff;
+  --toggle-bg: rgba(6, 40, 74, 0.75);
+  --toggle-border: rgba(0, 228, 255, 0.45);
+  --toggle-hover-border: rgba(0, 228, 255, 0.9);
+  --toggle-text: #d7f2ff;
+  --kpi-border: rgba(0, 180, 255, 0.28);
+  --kpi-bg: linear-gradient(180deg, rgba(9, 42, 78, 0.85) 0%, rgba(5, 22, 44, 0.75) 100%);
+  --kpi-shadow: inset 0 0 24px rgba(0, 140, 255, 0.18);
+  --kpi-underline: linear-gradient(90deg, transparent, rgba(0, 228, 255, 0.75), transparent);
+  --kpi-label: rgba(168, 214, 250, 0.9);
+  --kpi-unit: rgba(140, 190, 230, 0.8);
+  --kpi-note: rgba(150, 205, 245, 0.85);
+}
+
+/* ------------------------------------------------------------------
+   亮色主题（白）
+   ------------------------------------------------------------------ */
+html[data-theme='light'],
+.stage[data-theme='light'] {
+  --page-bg: #eef4fb;
+  --stage-bg: radial-gradient(ellipse at 50% -10%, rgba(120, 180, 240, 0.35), transparent 62%),
+    linear-gradient(180deg, #f7fbff 0%, #eaf2fb 55%, #e2ecf8 100%);
+  --grid-line: rgba(60, 110, 165, 0.08);
+  --panel-text: #22405f;
+  --panel-title: #17405f;
+  --panel-sub: rgba(50, 85, 120, 0.85);
+  --title-gradient: linear-gradient(180deg, #1d4e7a 10%, #2b7fd4 60%, #1f6fd0 100%);
+  --title-shadow: 0 1px 10px rgba(31, 111, 208, 0.22);
+  --chip-bg: rgba(255, 255, 255, 0.92);
+  --chip-border: rgba(31, 111, 208, 0.35);
+  --chip-text: #1f5b96;
+  --chip-green-border: rgba(47, 163, 107, 0.45);
+  --chip-green-text: #217a51;
+  --chip-gold-border: rgba(224, 149, 31, 0.5);
+  --chip-gold-text: #a96c07;
+  --clock-text: #22405f;
+  --toggle-bg: linear-gradient(180deg, #ffffff 0%, #eaf2fb 100%);
+  --toggle-border: rgba(31, 111, 208, 0.45);
+  --toggle-hover-border: rgba(31, 111, 208, 0.9);
+  --toggle-text: #1d4e7a;
+  --kpi-border: rgba(31, 111, 208, 0.22);
+  --kpi-bg: linear-gradient(180deg, #ffffff 0%, #f1f7fd 100%);
+  --kpi-shadow: inset 0 0 18px rgba(31, 111, 208, 0.08), 0 2px 6px rgba(31, 111, 208, 0.06);
+  --kpi-underline: linear-gradient(90deg, transparent, rgba(31, 111, 208, 0.6), transparent);
+  --kpi-label: rgba(40, 80, 120, 0.92);
+  --kpi-unit: rgba(70, 110, 150, 0.85);
+  --kpi-note: rgba(50, 90, 130, 0.85);
+}
+
+/* 大屏整体背景：径向光晕 + 渐变（随主题切换） */
+.stage::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--stage-bg);
+  z-index: -1;
+  transition: background 0.3s ease;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--chip-border);
+  border-radius: 3px;
+}
+
+/* DataV 边框盒内容自适应 */
+.dv-border-box-12 {
+  width: 100%;
+  height: 100%;
+}
+
+/* DataV 锥形柱图 / 滚动榜在亮色下的文字可读性 */
+html[data-theme='light'] .dv-conical-column-chart text,
+html[data-theme='light'] .dv-scroll-board .row-item,
+html[data-theme='light'] .dv-scroll-board .header-item {
+  fill: #22405f !important;
+  color: #22405f !important;
+}
+
+/* 滚动榜字号（默认偏大，中文表头会被截断，这里统一压到 13px） */
+.dv-scroll-board .header-item {
+  font-size: 13px;
+}
+
+.dv-scroll-board .row-item {
+  font-size: 13px;
+}

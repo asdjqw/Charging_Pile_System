@@ -1,0 +1,24 @@
+# Python / 虚拟环境
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Spark / 运行产物（可由脚本重新生成）
+spark-warehouse/
+output/
+logs/
+data/raw_expanded/
+# 外部数据（合并进《充电桩综合管理系统》后复用仓库根目录的 data/北京市充电桩数据.csv）
+data/external/
+
+# 前端依赖与构建产物（构建产物已随 web/ 提交给业务系统）
+frontend/node_modules/
+frontend/dist/
+.npm/
+
+# 编辑器与系统文件
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

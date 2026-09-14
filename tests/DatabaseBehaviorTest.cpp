@@ -59,7 +59,8 @@ int main(int argc, char **argv)
     }
     const int pileId = piles.first().id;
     Pile pile;
-    if (!db.updatePileStatus(pileId, QStringLiteral("fault"), QStringLiteral("test"),
+    // source 取值受数据库约束限制（pile / system / admin），这里模拟"系统侧"把桩置为故障
+    if (!db.updatePileStatus(pileId, QStringLiteral("fault"), QStringLiteral("system"),
                              QStringLiteral("测试置为故障后再模拟维修"))) {
         out << "set fault failed: " << db.lastError() << Qt::endl;
         return 8;
