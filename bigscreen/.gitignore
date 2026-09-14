@@ -4,6 +4,9 @@ __pycache__/
 .venv/
 venv/
 
+# Machine-local database credentials (commit database.env.example only)
+config/database.env
+
 # Spark / 运行产物（可由脚本重新生成）
 spark-warehouse/
 output/
@@ -11,6 +14,10 @@ logs/
 data/raw_expanded/
 # 外部数据（合并进《充电桩综合管理系统》后复用仓库根目录的 data/北京市充电桩数据.csv）
 data/external/
+
+# Machine-local Hadoop pseudo-distributed runtime/configuration
+.runtime/
+deploy/hadoop_env.sh
 
 # 前端依赖与构建产物（构建产物已随 web/ 提交给业务系统）
 frontend/node_modules/

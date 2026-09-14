@@ -117,7 +117,7 @@ charging-bigscreen/
 │   ├─ src/api/index.js         接口封装
 │   ├─ dist/                    已构建产物（Flask 直接托管，无需再装 Node 也能跑）
 │   └─ package.json             依赖与构建脚本（node >= 23）
-├─ config/database.env          数据库连接（后端与装载脚本共用，环境变量优先）
+├─ config/database.env.example  数据库配置模板（复制为忽略提交的 database.env）
 ├─ sql/charging_screen.sql      MySQL 全库备份（26 张表，可直接还原）
 ├─ output/
 │   ├─ warehouse/               清洗层结果（Spark 输出）
@@ -228,7 +228,7 @@ nohup ./build/admin_server/admin_server > /tmp/admin_server.log 2>&1 &
 
 ```bash
 # 1) 把项目放到 /home/bit/charging-bigscreen（或 git clone 自己的仓库）
-# 2) 一键部署：装 Java/Python/MySQL/Node → 建库 → 跑 Spark → 构建前端 → 起服务
+# 2) 一键部署：自动从模板创建本机 database.env，再装依赖 → 建库 → Spark → 前端 → 服务
 bash deploy/deploy.sh
 # 3) （可选）搭建 Hadoop 伪分布式（HDFS + YARN）
 bash deploy/setup_hadoop.sh
@@ -262,6 +262,9 @@ curl -X POST http://127.0.0.1:5000/api/cache/refresh    # 清缓存，立即生�
 python -m venv .venv
 .venv\Scripts\pip install -r backend\requirements.txt
 .venv\Scripts\pip install pyspark==3.5.3 pandas
+
+:: 首次运行时创建本机数据库配置，再按实际账号密码修改
+copy config\database.env.example config\database.env
 
 :: 第 2 步：配置好 MySQL 后执行离线计算（清洗 → 分析 → 装载 MySQL）
 ::         连接信息写在 config\database.env
@@ -432,11 +435,12 @@ cp -r /home/bit/charging-bigscreen/frontend/dist/* .      # 放入我们的 inde
 | `GET /api/pipeline` | 本次作业的数据链路信息（计算引擎 Spark on YARN / 存储 HDFS） |
 | `POST /api/cache/refresh` | 清空后端缓存（数据更新后可立即生效） |
 
-数据源模式由 `config/database.env` 的 `DATA_SOURCE` 控制：`mysql`（默认）或 `csv`（MySQL 不可用时直接读 `output/ads/*.csv`）。
+首次运行先把 `config/database.env.example` 复制为 `config/database.env`。后者包含本机账号密码且已被 Git 忽略。
+数据源模式由其 `DATA_SOURCE` 控制：`mysql`（默认）或 `csv`（MySQL 不可用时直接读 `output/ads/*.csv`）。
 
 ## 十四、数据库说明
 
-- 库名：`charging_screen`；应用账号：`charging / charging123`（`deploy.sh` 部署时自动创建，也可自行修改 `config/database.env`）。
+- 库名：`charging_screen`；`deploy.sh` 会按本机配置初始化账号。真实密码只保存在被 Git 忽略的 `config/database.env`。
 - 共 **26 张表**：3 张明细/维度表（`session_detail` 3339 行、`battery_detail` 1594 行、`station_dim` 105 行）
   + 22 张分析结果表（`ads_*`）+ 作业日志表 `etl_job_log`。
 - 备份文件 `sql/charging_screen.sql` 可直接还原：
@@ -488,6 +492,7 @@ bash deploy/run_pipeline.sh                # 数据更新后重跑计算
 
 ## 十七、文档索引
 
+- [docs/数据扩容生成规则.md](docs/数据扩容生成规则.md)：55000 条模拟订单、北京站点和电池遥测的完整生成规则
 - [docs/答辩要点.md](docs/答辩要点.md)：清洗发现、维度设计、可直接口述的结论数据
 - [docs/答辩演示流程.md](docs/答辩演示流程.md)：10 分钟演示脚本与常见提问应答
 - [docs/虚拟机部署记录.md](docs/虚拟机部署记录.md)：虚拟机部署状态、命令与踩坑

@@ -34,6 +34,11 @@ fi
 # ---------------------------------------------------------------------------
 # 0. 读取数据库配置
 # ---------------------------------------------------------------------------
+if [[ ! -f config/database.env ]]; then
+  cp config/database.env.example config/database.env
+  log "已从 database.env.example 创建本机数据库配置"
+fi
+
 read_env_value() {
   local key="$1" default="$2"
   if [[ -f config/database.env ]]; then
@@ -172,7 +177,7 @@ init_mysql() {
       GRANT ALL PRIVILEGES ON \`$DB_NAME\`.* TO '$app_user'@'%';
       GRANT ALL PRIVILEGES ON \`$DB_NAME\`.* TO '$app_user'@'localhost';
       FLUSH PRIVILEGES;"; then
-      log "已创建应用账号 $app_user（密码 $app_pass），并写入 config/database.env"
+      log "已创建应用账号 $app_user，并写入本机 config/database.env"
       sed -i -e "s/^DB_USER=.*/DB_USER=$app_user/" -e "s/^DB_PASSWORD=.*/DB_PASSWORD=$app_pass/" config/database.env
       DB_USER="$app_user"; DB_PASSWORD="$app_pass"
     else

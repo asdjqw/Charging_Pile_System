@@ -1,0 +1,31 @@
+# Charging Bigscreen - complete runtime dependency manifest
+#
+# Install the Python packages with:
+#   /usr/bin/python3.12 -m venv .venv
+#   .venv/bin/python -m pip install -r requirements.txt
+#
+# Non-Python prerequisites documented in README.md (not installable by pip):
+#   - Python: 3.11 or 3.12 (3.12 recommended)
+#   - Java: OpenJDK 11 or 17 (required by Spark; this project uses Java 17)
+#   - Hadoop: 3.x with HDFS and YARN (required for the defence/full pipeline)
+#   - MySQL: 5.7 or 8.x (8.x recommended), client and server
+#   - Node.js: >=23.0.0 and npm >=10.0.0
+#   - Frontend packages: install from frontend/package-lock.json with `npm ci`
+#   - Optional production proxy/service: nginx and systemd
+#   - Linux utilities used by deployment scripts: curl, wget, tar, openssh-client,
+#     openssh-server, procps and ca-certificates
+#
+# Spark ETL and 15-dimensional analysis
+pyspark==3.5.3
+
+# Data tooling documented by the local-development workflow
+pandas==2.2.3
+
+# Flask REST API and MySQL access
+Flask==3.0.3
+flask-cors==4.0.1
+PyMySQL==1.1.1
+
+# Production WSGI server (Linux/macOS) / local Windows server
+gunicorn==22.0.0; sys_platform != "win32"
+waitress==3.0.0; sys_platform == "win32"
