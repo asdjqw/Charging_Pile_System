@@ -1,4 +1,104 @@
-# 充电桩综合管理系统
+# 充电桩综合管理系统（Qt 业务系统 + Spark/Flask/DataV 数据大屏）
+
+> 本仓库是一个**完整项目**，由两部分组成，统一目录、统一启动、共用一套数据。
+
+| 部分 | 位置 | 技术栈 | 职责 |
+| --- | --- | --- | --- |
+| Qt 业务系统 | `admin_client/`、`user_client/`、`admin_server/`、`common/`、`database/` | Qt 6 + C++17 + SQLite | 车主端、运营管理端、统一后端，覆盖找站—预约—充电—结算—运维 |
+| 数据大屏与分析平台 | `bigscreen/` | PySpark + MySQL + Flask + Vue 3 / DataV / ECharts | 数据清洗、15 个维度分析、REST 接口、可视化大屏（暗/亮双主题） |
+| 大屏前端（业务系统内入口） | `web/` | `bigscreen` 的构建产物 | **原项目的 web 大屏已完整删除**，`web/` 现在只包含本项目数据大屏的构建产物（`index.html` + `assets/`），由 `admin_server` 继续静态托管 |
+
+数据链路：`原始数据 → Spark 清洗与多维分析（本地 / HDFS + YARN）→ MySQL → Flask REST 接口 → Vue3 + DataV 大屏`。
+当前数据规模：充电站 3024 座（融合北京充电站 POI）、订单 55000 单、电池遥测 24816 条、用户 2556 人。
+
+## 目录结构
+
+```
+Charging_Pile_System/
+├─ admin_client/     Qt 运营管理端（销售业绩、桩状态、桩站/用户/预约/权限管理）
+├─ user_client/      Qt 车主端（注册登录、定位找站、收藏、预约、充电、充值、订单）
+├─ admin_server/     统一后端（TCP/HTTP 接入、鉴权、业务编排、数据库访问、静态大屏托管）
+├─ common/           公共库（数据模型、JSON、帧协议、密码处理、数据库实现）
+├─ database/         SQLite 结构与种子数据（schema.sql / seed.sql / presentation_seed.sql / DESIGN.md）
+├─ data/             业务数据（充电桩数据、演示用数据）
+├─ web/              运营大屏静态页（**已替换为 bigscreen 的构建产物**）
+├─ bigscreen/        ★ 数据大屏与分析平台（本项目新增部分，独立完整可运行）
+│   ├─ spark/jobs/   Spark 清洗、15 维分析、扩容数据生成、结果装载 MySQL
+│   ├─ backend/      Flask 接口服务（23 个 REST 接口 + 缓存 + CSV 兜底）
+│   ├─ frontend/     Vue3 + DataV + ECharts 大屏源码与构建产物
+│   ├─ deploy/       一键部署、Hadoop 伪分布式、Spark on YARN、systemd/nginx 配置
+│   ├─ data/         原始数据、扩容数据、外部数据（北京站点 POI）
+│   ├─ output/       清洗层与分析层结果（parquet / csv）
+│   ├─ sql/          MySQL 全库备份
+│   └─ docs/         答辩要点、演示流程、虚拟机部署记录、大屏预览图
+├─ scripts/          原项目的构建与运行脚本
+└─ tests/            原项目的单元测试
+```
+
+## 一键启动（完整顺序）
+
+### 1) 启动数据大屏服务（Flask + nginx + MySQL）
+
+```bash
+cd Charging_Pile_System/bigscreen
+sudo systemctl start mysql charging-screen nginx
+curl http://127.0.0.1:5000/api/health          # {"code":0,...,"data_source":"mysql"} 即正常
+# 浏览器打开  http://<主机>/        （推荐，nginx 80 端口）
+# 或         http://<主机>:5000/   （Flask 直连）
+```
+
+### 2) 启动 Qt 业务系统后端（它的大屏入口就是我们的大屏）
+
+```bash
+cd Charging_Pile_System
+bash scripts/build.sh                          # 首次或改了 C++ 代码后编译（需要 Qt 6）
+export CHARGE_PILE_WEB_ROOT=$PWD/web \
+       CHARGE_PILE_BIND_ADDRESS=0.0.0.0 \
+       CHARGE_PILE_PORT=9100 CHARGE_PILE_HTTP_PORT=8080
+nohup ./build/admin_server/admin_server > /tmp/admin_server.log 2>&1 &
+# 浏览器打开  http://<主机>:8080/index.html
+# 然后可分别启动 build/admin_client/admin_client、build/user_client/user_client 接入该后端
+```
+
+### 3) 重新计算大屏数据（可选：HDFS + Spark on YARN）
+
+```bash
+cd Charging_Pile_System/bigscreen
+source deploy/hadoop_env.sh
+hdfs --daemon start namenode; hdfs --daemon start datanode
+yarn --daemon start resourcemanager; yarn --daemon start nodemanager
+export SPARK_MASTER=yarn PYSPARK_PYTHON=$PWD/.venv/bin/python
+.venv/bin/python spark/jobs/run_all.py \
+  --raw       hdfs://bitdev:9000/user/bit/charging-bigscreen/raw_expanded \
+  --warehouse hdfs://bitdev:9000/user/bit/charging-bigscreen/warehouse \
+  --ads       hdfs://bitdev:9000/user/bit/charging-bigscreen/ads
+bash deploy/fetch_from_hdfs.sh && .venv/bin/python spark/jobs/load_mysql.py
+curl -X POST http://127.0.0.1:5000/api/cache/refresh
+```
+
+## 服务与端口
+
+| 端口 | 服务 | 说明 |
+| --- | --- | --- |
+| 80 | nginx → Flask | 数据大屏（推荐入口） |
+| 5000 | Flask + gunicorn | 后端 REST 接口（23 个，含大屏首屏聚合接口） |
+| 8080 | Qt admin_server（HTTP） | 业务系统内的大屏入口，内容已替换为本项目大屏 |
+| 9100 | Qt admin_server（TCP） | Qt 客户端与后端通信协议（避开 Hadoop 占用的 9000） |
+| 3306 | MySQL | 数据大屏结果库 `charging_screen` |
+| 9000 / 8088 / 9870 | Hadoop | HDFS RPC / YARN Web / HDFS Web UI |
+
+## 文档索引
+
+- `bigscreen/README.md` —— 数据大屏完整手册（数据扩容、清洗规则、15 维分析、接口、双主题、HDFS/YARN 部署）
+- `bigscreen/docs/答辩要点.md` —— 清洗发现、维度设计与结论数据
+- `bigscreen/docs/答辩演示流程.md` —— 10 分钟演示脚本与提问应答
+- `bigscreen/docs/虚拟机部署记录.md` —— 实际部署状态、命令与踩坑记录
+- `bigscreen/sql/charging_screen.sql` —— MySQL 全库备份（26 张表，可直接还原）
+- `database/DESIGN.md`、`docs/` —— Qt 业务系统的设计文档（原项目内容）
+
+---
+
+## 附：Qt 业务系统原始说明（README 原文）
 
 基于 Qt 6、C++17、SQLite 和 ECharts 的充电业务教学与演示系统。项目包含车主端、运营管理端、统一后端和 Web 运营大屏，覆盖“找站—预约—充电—结算—运维管理”的主要流程。
 

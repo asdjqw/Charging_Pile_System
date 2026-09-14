@@ -227,14 +227,19 @@ Web 运营大屏（浏览器）
 
 ### 6.3 Web 静态资源服务
 
+> **变更提示（数据大屏替换）**：本节描述的旧版 Web 大屏（`index.html` / `styles.css` / `app.js` / `echarts.min.js`）
+> **已整体删除**，`web/` 目录现在放置的是本项目数据大屏（Spark + Flask + Vue 3 + DataV）的构建产物
+> （`web/index.html` + `web/assets/*`），由 `admin_server` 继续以静态资源方式提供。
+> 具体改动见 `docs/FEATURE_DATA_BIGSCREEN.md`。
+
 新增 `web/` 目录：
 
 | 文件 | 作用 |
 |---|---|
-| `index.html` | 大屏结构和语义化内容 |
-| `styles.css` | 响应式运营界面、状态与可访问性样式 |
-| `app.js` | API 请求、图表更新、搜索、分页和错误状态 |
-| `echarts.min.js` | 离线 ECharts 运行资源，不依赖公网 CDN |
+| ~~`index.html`~~ | 已替换为数据大屏构建产物的入口页（引用 `assets/index-*.js`、`assets/index-*.css`） |
+| ~~`styles.css`~~ | **已删除**：样式改由数据大屏构建产物提供 |
+| ~~`app.js`~~ | **已删除**：功能改由数据大屏（Vue 3 + DataV + ECharts）实现 |
+| ~~`echarts.min.js`~~ | **已删除**：ECharts 已随数据大屏一起打包进 `web/assets/` |
 
 `admin_server` 启动后直接提供这些资源，因此不需要 Node.js、npm、Nginx 或独立 Web 后端。
 访问 `http://127.0.0.1:8080/` 即可打开大屏。
@@ -251,6 +256,10 @@ Web 运营大屏（浏览器）
 不会一次加载全部 3000 多个站点。
 
 ### 6.5 大屏功能与优化
+
+> **变更提示（数据大屏替换）**：以下旧大屏功能已被新的数据大屏取代，新大屏包含 9 项 KPI 翻牌器、
+> 16 个图表面板、暗/亮双主题切换、80 秒自动刷新等能力，详见 `docs/FEATURE_DATA_BIGSCREEN.md`
+> 与 `bigscreen/README.md`。原 `/api/dashboard`、`/api/stations` 接口保持不变，Qt 客户端不受影响。
 
 当前大屏包含：
 
