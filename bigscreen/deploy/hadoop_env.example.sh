@@ -16,6 +16,7 @@ export YARN_RESOURCEMANAGER_USER=$(id -un)
 export YARN_NODEMANAGER_USER=$(id -un)
 
 # 数据在 HDFS 上的存放目录（与 spark_submit.sh 中的变量保持一致）
-export HDFS_RAW=/data/charging/raw
+export LOCAL_RAW=data/raw_expanded
+export HDFS_RAW=/data/charging/raw_expanded
 export HDFS_WAREHOUSE=/data/charging/warehouse
 export HDFS_ADS=/data/charging/ads

@@ -20,7 +20,7 @@
 | 文件存储：本地测试 + 答辩放 Hadoop 3.x | 本地默认读写 `data/`、`output/`；答辩模式把原始数据与结果存入 **HDFS**（Hadoop 3.2.1） |
 | 使用 Spark 做清洗与分析，分析维度 ≥ 8，至少两组对比分析 | **15 个分析维度**，其中 **5 组对比分析**（站点类型、工作日 vs 周末、峰平谷、平台、行政区） |
 | 使用 Flask 处理 Web 请求并响应数据 | **23 个 REST 接口**（含大屏首屏聚合接口），30 秒内存缓存，MySQL 不可用时自动切 CSV 兜底 |
-| MySQL 版本不限 | MySQL 8.0，库 `charging_screen`，**26 张表**（明细表 + 分析结果表） |
+| MySQL 版本不限 | MySQL 8.0，库 `charging_screen`，**27 张表**（明细表 + 分析结果表） |
 | Node.js 23 及以上，前端 Vue3 | Node.js **23.11.1** + Vue **3.5** + Vite 构建（`package.json` 声明 `"node": ">=23"`） |
 | 使用 DataV 大屏展示，图表类型丰富、不单一 | DataV（边框盒/装饰/滚动榜/锥形柱/环形图/水球图）+ ECharts **16 类图表**，共 16 个面板 |
 | 大屏双主题（可选加分项） | 顶部按钮一键切换 **暗色 / 亮色** 两套配色，全部图表与组件同步换肤，支持 `?theme=light` 直达 |
@@ -29,13 +29,13 @@
 ## 二、系统架构
 
 ```
- data/raw/*.csv（或 HDFS /data/charging/raw）
+ data/raw_expanded/*.csv（或 HDFS /data/charging/raw_expanded）
           │
           ▼  ① Spark 清洗   spark/jobs/etl_clean.py
    清洗宽表：session_detail / battery_detail / station_dim（parquet + csv）
           │
           ▼  ② Spark 分析   spark/jobs/analysis.py   （15 个维度、5 组对比）
-   分析结果：output/ads/ads_*.csv（25 张结果表）
+   分析结果：output/ads/*.csv（26 张交换表：23 张 ADS + 3 张明细/维度）
           │
           ▼  ③ 装载 MySQL   spark/jobs/load_mysql.py （自动建表、建索引）
         MySQL  charging_screen
@@ -47,13 +47,17 @@
 
 虚拟机上的完整链路（已实测跑通）：**HDFS 原始数据 → Spark on YARN 清洗与分析 → 结果写回 HDFS（parquet + csv）→ 取回本地 → 装载 MySQL → Flask 接口 → 大屏展示**。
 
+新增的标准 Hive 数仓链路为：**Hive LOAD 分区采集 → ODS 外部表 → PySpark DWD → HQL DWS → HQL ADS**。表结构、脚本参数、集群运行和验证方法见 [`docs/Hive四层数据仓建设与运行.md`](docs/Hive四层数据仓建设与运行.md)。原 Spark/MySQL 试运行链路继续保留。
+
+单机伪分布式与多虚拟机集群的完整环境依赖、地址配置、节点角色、端口和启动检查见 [`docs/环境与部署模式配置.md`](docs/环境与部署模式配置.md)。
+
 ## 三、Hadoop 使用说明（HDFS 存储 + YARN 计算）
 
 项目**确实使用了 Hadoop 3.x**，不是只连 MySQL：
 
 | 使用方式 | 具体做法 |
 | --- | --- |
-| 文件存储 | 原始数据与计算结果全部放在 HDFS：`/user/bit/charging-bigscreen/{raw,warehouse,ads}`，结果同时输出 parquet 与 csv |
+| 文件存储 | 原始数据与计算结果全部放在 HDFS：`/user/bit/charging-bigscreen/{raw_expanded,warehouse,ads}`，结果同时输出 parquet 与 csv |
 | 计算引擎 | `SPARK_MASTER=yarn` 时把 Spark 清洗 + 分析作业提交到 **YARN** 运行（客户端模式，驱动在本地、执行器在 YARN 容器） |
 | 结果回流 | 用 `hdfs dfs -getmerge` 把 HDFS 上的结果表取回本地，再装载 MySQL 供 Flask / 大屏查询 |
 | 大屏可见 | 大屏顶部有 **「存储 HDFS (Hadoop)」「计算 Spark on YARN」** 两个标识，数据来自作业写入的 `ads_pipeline_info` 表 |
@@ -61,12 +65,13 @@
 ```bash
 # 一键：上传原始数据到 HDFS → 提交 Spark on YARN → 结果取回 → 装载 MySQL
 bash deploy/spark_submit.sh
+# 如需临时使用未扩容的小数据：LOCAL_RAW=data/raw HDFS_RAW=/data/charging/raw bash deploy/spark_submit.sh
 
 # 分步执行（本地模式与 HDFS 模式是同一份代码，只差路径参数）
 source deploy/hadoop_env.sh && export SPARK_MASTER=yarn
 export PYSPARK_PYTHON=$PWD/.venv/bin/python
 .venv/bin/python spark/jobs/run_all.py \
-  --raw       hdfs://bitdev:9000/user/bit/charging-bigscreen/raw \
+  --raw       hdfs://bitdev:9000/user/bit/charging-bigscreen/raw_expanded \
   --warehouse hdfs://bitdev:9000/user/bit/charging-bigscreen/warehouse \
   --ads       hdfs://bitdev:9000/user/bit/charging-bigscreen/ads
 bash deploy/fetch_from_hdfs.sh && .venv/bin/python spark/jobs/load_mysql.py
@@ -76,7 +81,7 @@ bash deploy/fetch_from_hdfs.sh && .venv/bin/python spark/jobs/load_mysql.py
 
 ```bash
 source deploy/hadoop_env.sh
-hdfs dfs -ls /user/bit/charging-bigscreen            # raw / warehouse / ads 三个目录
+hdfs dfs -ls /user/bit/charging-bigscreen            # raw_expanded / warehouse / ads 三个目录
 hdfs dfs -du -h /user/bit/charging-bigscreen         # 各目录占用（raw 523K、warehouse 1.5M、ads 1.2M）
 yarn application -list -appStates ALL | grep SPARK   # 已完成的 Spark 应用（ChargingPile-Batch，SUCCEEDED）
 ```
@@ -86,7 +91,7 @@ yarn application -list -appStates ALL | grep SPARK   # 已完成的 Spark 应用
 - 已提交并成功的 YARN 应用：`application_1789135071729_0005 / 0006 / 0007`（应用名 `ChargingPile-Batch`，类型 SPARK，Final-State SUCCEEDED）
 
 每次作业都会把「运行时间 / 计算引擎 / 存储位置 / 输入输出路径 / 记录数」写入 `ads_pipeline_info` 表，
-接口 `GET /api/pipeline` 可查询，例如当前为：`Spark on YARN` + `HDFS (Hadoop)` + `3339 条有效订单`。
+接口 `GET /api/pipeline` 可查询，例如当前为：`Spark on YARN` + `HDFS (Hadoop)` + `54944 条有效订单`。
 
 ## 四、目录结构
 
@@ -117,11 +122,11 @@ charging-bigscreen/
 │   ├─ src/api/index.js         接口封装
 │   ├─ dist/                    已构建产物（Flask 直接托管，无需再装 Node 也能跑）
 │   └─ package.json             依赖与构建脚本（node >= 23）
-├─ config/database.env          数据库连接（后端与装载脚本共用，环境变量优先）
-├─ sql/charging_screen.sql      MySQL 全库备份（26 张表，可直接还原）
+├─ config/database.env.example  数据库配置模板（复制为忽略提交的 database.env）
+├─ sql/charging_screen.sql      MySQL 备份快照（可还原；当前表以流水线输出为准）
 ├─ output/
 │   ├─ warehouse/               清洗层结果（Spark 输出）
-│   └─ ads/                     分析层结果 25 张 CSV（大屏数据源，可离线查看）
+│   └─ ads/                     分析层结果 26 张 CSV（大屏数据源，可离线查看）
 ├─ deploy/
 │   ├─ deploy.sh                一键部署：依赖 → MySQL 初始化 → Spark → 前端构建 → 启动服务
 │   ├─ setup_hadoop.sh          没有 Hadoop 时一键搭伪分布式（HDFS + YARN）
@@ -140,7 +145,7 @@ charging-bigscreen/
 ├─ start_backend.bat            Windows 本地启动后端
 ├─ data/external/               外部数据（对方项目的北京充电站 POI）
 │   └─ 北京市充电桩数据.csv     3025 条北京充电站 POI（用于扩容站点维度）
-├─ data/raw_expanded/           扩容后的原始数据（由 spark/jobs/generate_expanded_data.py 生成）
+├─ data/raw_expanded/           默认原始数据（3 张扩容 CSV，已纳入 Git，可直接运行）
 └─ run_pipeline.bat             Windows 本地一键跑离线计算
 ```
 
@@ -324,7 +329,7 @@ bash deploy/spark_submit.sh
 source deploy/hadoop_env.sh && export SPARK_MASTER=yarn
 export PYSPARK_PYTHON=$PWD/.venv/bin/python
 .venv/bin/python spark/jobs/run_all.py \
-  --raw       hdfs://<NameNode>:9000/user/bit/charging-bigscreen/raw \
+  --raw       hdfs://<NameNode>:9000/user/bit/charging-bigscreen/raw_expanded \
   --warehouse hdfs://<NameNode>:9000/user/bit/charging-bigscreen/warehouse \
   --ads       hdfs://<NameNode>:9000/user/bit/charging-bigscreen/ads
 bash deploy/fetch_from_hdfs.sh && .venv/bin/python spark/jobs/load_mysql.py
@@ -459,10 +464,12 @@ cp -r /home/bit/charging-bigscreen/frontend/dist/* .      # 放入我们的 inde
 
 ## 十四、数据库说明
 
-- 库名：`charging_screen`；应用账号：`charging / charging123`（`deploy.sh` 部署时自动创建，也可自行修改 `config/database.env`）。
-- 共 **26 张表**：3 张明细/维度表（`session_detail` 3339 行、`battery_detail` 1594 行、`station_dim` 105 行）
-  + 22 张分析结果表（`ads_*`）+ 作业日志表 `etl_job_log`。
-- 备份文件 `sql/charging_screen.sql` 可直接还原：
+- 库名：`charging_screen`；`deploy.sh` 会按本机配置初始化账号（演示默认 `charging / charging123`）。密码只写在被 Git 忽略的 `config/database.env`。
+- 当前流水线共生成 **27 张表**：3 张明细/维度表（`session_detail`、`battery_detail`、`station_dim`）
+  + 23 张分析/作业信息表（`ads_*`）+ 作业日志表 `etl_job_log`。字段和前端接口映射详见
+  [`docs/MySQL数据库Schema说明.md`](docs/MySQL数据库Schema说明.md)。Hive 四层表见
+  [`docs/Hive四层数据仓建设与运行.md`](docs/Hive四层数据仓建设与运行.md)。
+- 备份文件 `sql/charging_screen.sql` 可还原生成时点的数据；当前 Schema 以流水线动态建表结果为准：
 
 ```bash
 mysql -uroot -p < sql/charging_screen.sql     # 还原整个库（含建表与数据）

@@ -24,7 +24,7 @@ if not defined JAVA_HOME (
 if defined JAVA_HOME echo [INFO] JAVA_HOME=%JAVA_HOME%
 
 echo [1/2] Spark 清洗与多维分析
-"%PY%" spark\jobs\run_all.py --raw data\raw
+"%PY%" spark\jobs\run_all.py --raw data\raw_expanded
 if errorlevel 1 goto :error
 echo [2/2] 装载分析结果到 MySQL
 "%PY%" spark\jobs\load_mysql.py

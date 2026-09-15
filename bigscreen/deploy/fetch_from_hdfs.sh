@@ -33,7 +33,7 @@ while read -r dir; do
   name="$(basename "$dir" | sed 's/\.csv_dir$//')"
   hdfs dfs -getmerge "$dir" "$DEST/${name}.csv"
   count=$((count + 1))
-done < <(hdfs dfs -ls -C "$HDFS_ADS" | grep 'csv_dir$' || true)
+done < <(hdfs dfs -ls -C "$HDFS_ADS" | grep '\.csv_dir$' || true)
 
 echo "[OK] 已从 $HDFS_ADS 取回 $count 张结果表到 $DEST"
 ls -1 "$DEST" | head -5
