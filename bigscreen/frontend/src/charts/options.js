@@ -32,12 +32,13 @@ const shortStation = (name) => {
 export function monthlyTrendOption(monthly = []) {
   const rows = monthly.slice(-12)
   return {
-    grid: { left: 44, right: 42, top: 30, bottom: 30 },
+    grid: { left: 46, right: 46, top: 36, bottom: 34 },
     legend: {
-      right: 4,
-      top: 0,
+      left: 'center',
+      top: 2,
       itemWidth: 9,
       itemHeight: 7,
+      itemGap: 10,
       textStyle: { color: theme.subTextColor, fontSize: 10 },
       data: ['充电量(kWh)', '订单数(单)']
     },
@@ -77,12 +78,13 @@ export function monthlyTrendOption(monthly = []) {
 export function hourLoadOption(hourLoad = []) {
   const rows = [...hourLoad].sort((a, b) => num(a.start_hour) - num(b.start_hour))
   return {
-    grid: { left: 40, right: 40, top: 28, bottom: 26 },
+    grid: { left: 40, right: 40, top: 34, bottom: 28 },
     legend: {
-      right: 4,
-      top: 0,
+      left: 'center',
+      top: 2,
       itemWidth: 9,
       itemHeight: 7,
+      itemGap: 10,
       textStyle: { color: theme.subTextColor, fontSize: 10 },
       data: ['充电订单', '平均功率(kW)']
     },
@@ -107,8 +109,8 @@ export function hourLoadOption(hourLoad = []) {
           }
         })),
         markPoint: {
-          symbolSize: 40,
-          label: { fontSize: 10, color: theme.markPointText },
+          symbolSize: 32,
+          label: { fontSize: 9, color: theme.markPointText },
           itemStyle: { color: theme.markPointColor },
           data: [{ type: 'max', name: '峰值' }]
         }
@@ -131,29 +133,31 @@ export function hourLoadOption(hourLoad = []) {
 export function facilityRadarOption(facility = []) {
   const rows = facility.filter((r) => r.facility_type_cn && r.facility_type_cn !== '未知')
   const indicators = [
-    { key: 'sessions', name: '订单量' },
-    { key: 'kwh', name: '充电量' },
-    { key: 'avg_power', name: '平均功率' },
-    { key: 'avg_kwh', name: '单次电量' },
-    { key: 'orders_per_device', name: '桩均订单' },
-    { key: 'avg_hours', name: '平均时长' }
+    { key: 'sessions', name: '订单' },
+    { key: 'kwh', name: '电量' },
+    { key: 'avg_power', name: '功率' },
+    { key: 'avg_kwh', name: '单次' },
+    { key: 'orders_per_device', name: '桩均' },
+    { key: 'avg_hours', name: '时长' }
   ]
   const maxOf = (key) => Math.max(...rows.map((r) => num(r[key])), 1)
   const maxMap = Object.fromEntries(indicators.map((i) => [i.key, maxOf(i.key)]))
   return {
     tooltip: { trigger: 'item', backgroundColor: theme.tooltipBg, borderColor: theme.tooltipBorder, textStyle: { color: theme.tooltipText, fontSize: 12 } },
     legend: {
-      bottom: 0,
-      itemWidth: 10,
-      itemHeight: 8,
-      textStyle: { color: theme.subTextColor, fontSize: 11 }
+      bottom: 2,
+      left: 'center',
+      itemWidth: 9,
+      itemHeight: 7,
+      itemGap: 8,
+      textStyle: { color: theme.subTextColor, fontSize: 10 }
     },
     radar: {
-      center: ['50%', '46%'],
-      radius: '62%',
+      center: ['50%', '43%'],
+      radius: '56%',
       splitNumber: 4,
       indicator: indicators.map((i) => ({ name: i.name, max: 100 })),
-      axisName: { color: theme.textColor, fontSize: 11 },
+      axisName: { color: theme.textColor, fontSize: 10, padding: [0, 1] },
       axisLine: { lineStyle: { color: theme.radarLine } },
       splitLine: { lineStyle: { color: theme.radarLine } },
       splitArea: { areaStyle: { color: theme.radarSplitArea } }
@@ -189,20 +193,22 @@ export function durationRoseOption(duration = []) {
       orient: 'vertical',
       right: 2,
       top: 'middle',
-      itemWidth: 8,
-      itemHeight: 7,
-      itemGap: 6,
-      textStyle: { color: theme.subTextColor, fontSize: 10 }
+      itemWidth: 7,
+      itemHeight: 6,
+      itemGap: 5,
+      textStyle: { color: theme.subTextColor, fontSize: 9 }
     },
     series: [
       {
         type: 'pie',
-        center: ['35%', '54%'],
-        radius: ['24%', '66%'],
+        center: ['36%', '54%'],
+        radius: ['22%', '58%'],
         roseType: 'radius',
         itemStyle: { borderColor: theme.pieBorder, borderWidth: 2 },
-        label: { color: theme.textColor, fontSize: 10, formatter: '{d}%' },
-        labelLine: { length: 4, length2: 4, lineStyle: { color: theme.radarLine } },
+        // 小卡里不显示引导线标签（会互相压字），用图例 + 悬浮提示；详情页再显示
+        label: { show: false },
+        labelLine: { show: false },
+        emphasis: { label: { show: true, fontSize: 11, color: theme.textColor, formatter: '{b}\n{d}%' } },
         data: duration.map((r, i) => ({
           name: `${r.bin_label}`,
           value: num(r.sessions),
@@ -320,7 +326,7 @@ export function weekdayHeatOption(heat = []) {
 export function stationTopOption(list = []) {
   const rows = [...list].sort((a, b) => num(a.kwh) - num(b.kwh))
   return {
-    grid: { left: 96, right: 56, top: 14, bottom: 12 },
+    grid: { left: 104, right: 78, top: 16, bottom: 14 },
     tooltip: tooltipStyle({
       formatter: (params) => {
         const row = rows[params[0].dataIndex]
@@ -337,7 +343,13 @@ export function stationTopOption(list = []) {
         barWidth: '58%',
         data: rows.map((r) => num(r.kwh)),
         itemStyle: { borderRadius: [0, 4, 4, 0], color: barGradient(theme.accent, false) },
-        label: { show: true, position: 'right', color: theme.labelText, fontSize: 11, formatter: '{c}' }
+        label: {
+          show: true,
+          position: 'right',
+          color: theme.labelText,
+          fontSize: 10,
+          formatter: (p) => (p.value >= 1000 ? `${(p.value / 1000).toFixed(2)}k` : `${p.value}`)
+        }
       }
     ]
   }
@@ -350,18 +362,19 @@ export function weekendOption(weekend = []) {
   return {
     grid: { ...baseGrid, top: 42, bottom: 24 },
     legend: {
-      right: 6,
+      left: 'center',
       top: 2,
-      itemWidth: 10,
-      itemHeight: 8,
-      textStyle: { color: theme.subTextColor, fontSize: 11 },
+      itemWidth: 9,
+      itemHeight: 7,
+      itemGap: 8,
+      textStyle: { color: theme.subTextColor, fontSize: 10 },
       data: ['日均订单(单)', '日均电量(kWh)', '平均单次电量(kWh)']
     },
     tooltip: tooltipStyle(),
-    xAxis: categoryAxis(rows.map((r) => r.day_type), { axisLabel: { color: theme.textColor, fontSize: 12 } }),
+    xAxis: categoryAxis(rows.map((r) => r.day_type), { axisLabel: { color: theme.textColor, fontSize: 11 } }),
     yAxis: [
-      valueAxis({ name: '日均', nameTextStyle: { color: theme.subTextColor, fontSize: 10 } }),
-      valueAxis({ splitLine: { show: false }, name: 'kWh', nameTextStyle: { color: theme.subTextColor, fontSize: 10 } })
+      valueAxis({ axisLabel: { color: theme.textColor, fontSize: 10 } }),
+      valueAxis({ splitLine: { show: false }, axisLabel: { color: theme.textColor, fontSize: 10 } })
     ],
     series: [
       {
@@ -399,20 +412,21 @@ export function platformOption(platform = []) {
   return {
     grid: { ...baseGrid, top: 42, bottom: 24 },
     legend: {
-      right: 6,
+      left: 'center',
       top: 2,
-      itemWidth: 10,
-      itemHeight: 8,
-      textStyle: { color: theme.subTextColor, fontSize: 11 },
+      itemWidth: 9,
+      itemHeight: 7,
+      itemGap: 8,
+      textStyle: { color: theme.subTextColor, fontSize: 10 },
       data: ['订单数(单)', '平均单次电量(kWh)']
     },
     tooltip: tooltipStyle(),
     xAxis: categoryAxis(rows.map((r) => String(r.platform).toUpperCase()), {
-      axisLabel: { color: theme.textColor, fontSize: 12 }
+      axisLabel: { color: theme.textColor, fontSize: 11 }
     }),
     yAxis: [
-      valueAxis({ name: '单', nameTextStyle: { color: theme.subTextColor, fontSize: 10 } }),
-      valueAxis({ splitLine: { show: false }, name: 'kWh', nameTextStyle: { color: theme.subTextColor, fontSize: 10 } })
+      valueAxis({ axisLabel: { color: theme.textColor, fontSize: 10 } }),
+      valueAxis({ splitLine: { show: false }, axisLabel: { color: theme.textColor, fontSize: 10 } })
     ],
     series: [
       {
@@ -421,7 +435,7 @@ export function platformOption(platform = []) {
         barWidth: '34%',
         data: rows.map((r) => num(r.sessions)),
         itemStyle: { borderRadius: [4, 4, 0, 0], color: barGradient(theme.success) },
-        label: { show: true, position: 'top', color: theme.labelText2, fontSize: 11, formatter: (p) => `${p.value}` }
+        label: { show: true, position: 'top', color: theme.labelText2, fontSize: 10, formatter: (p) => `${p.value}` }
       },
       {
         name: '平均单次电量(kWh)',
@@ -454,27 +468,29 @@ export function userSegmentOption(segment = []) {
       }
     },
     legend: {
-      orient: 'vertical',
-      right: 6,
-      top: 'center',
-      itemWidth: 10,
-      itemHeight: 8,
-      textStyle: { color: theme.subTextColor, fontSize: 11 }
+      // 图例放到下方并限制宽度（自动换行），避免与圆环一起挤出面板边框
+      left: 'center',
+      bottom: 0,
+      width: '96%',
+      itemWidth: 8,
+      itemHeight: 7,
+      itemGap: 4,
+      textStyle: { color: theme.subTextColor, fontSize: 9 }
     },
     title: {
       text: `${total}`,
       subtext: '累计用户(人)',
-      left: '30%',
-      top: '42%',
+      left: '50%',
+      top: '36%',
       textAlign: 'center',
-      textStyle: { color: theme.accent, fontSize: 22, fontWeight: 'bold' },
-      subtextStyle: { color: theme.subTextColor, fontSize: 11 }
+      textStyle: { color: theme.accent, fontSize: 20, fontWeight: 'bold' },
+      subtextStyle: { color: theme.subTextColor, fontSize: 10 }
     },
     series: [
       {
         type: 'pie',
-        center: ['32%', '50%'],
-        radius: ['48%', '70%'],
+        center: ['50%', '44%'],
+        radius: ['34%', '58%'],
         itemStyle: { borderColor: theme.pieBorder, borderWidth: 2 },
         label: { show: false },
         labelLine: { show: false },
@@ -494,20 +510,23 @@ export function batteryHealthOption(health = []) {
     (a, b) => parseInt(String(a.soc_bin).split('-')[0], 10) - parseInt(String(b.soc_bin).split('-')[0], 10)
   )
   return {
-    grid: { ...baseGrid, top: 42, bottom: 24 },
+    grid: { ...baseGrid, top: 34, bottom: 30 },
     legend: {
-      right: 6,
+      left: 'center',
       top: 2,
-      itemWidth: 10,
-      itemHeight: 8,
-      textStyle: { color: theme.subTextColor, fontSize: 11 },
+      itemWidth: 9,
+      itemHeight: 7,
+      itemGap: 8,
+      textStyle: { color: theme.subTextColor, fontSize: 10 },
       data: ['充电功率(kW)', '单体压差(mV)', '温升(℃)']
     },
     tooltip: tooltipStyle(),
-    xAxis: categoryAxis(rows.map((r) => `${r.soc_bin}%`), { axisLabel: { color: theme.textColor, fontSize: 11 } }),
+    xAxis: categoryAxis(rows.map((r) => String(r.soc_bin)), {
+      axisLabel: { color: theme.textColor, fontSize: 9, interval: 0, formatter: (v) => String(v).split('-')[0] }
+    }),
     yAxis: [
-      valueAxis({ name: 'kW / mV', nameTextStyle: { color: theme.subTextColor, fontSize: 10 } }),
-      valueAxis({ splitLine: { show: false }, name: '℃', nameTextStyle: { color: theme.subTextColor, fontSize: 10 } })
+      valueAxis({ axisLabel: { color: theme.textColor, fontSize: 10 } }),
+      valueAxis({ splitLine: { show: false }, axisLabel: { color: theme.textColor, fontSize: 10 } })
     ],
     series: [
       {
@@ -559,19 +578,21 @@ export function timePeriodFunnelOption(period = []) {
     series: [
       {
         type: 'funnel',
-        left: '6%',
-        right: '6%',
-        top: 10,
-        bottom: 6,
-        minSize: '32%',
+        left: '8%',
+        right: '8%',
+        top: 8,
+        bottom: 4,
+        minSize: '38%',
         sort: 'descending',
-        gap: 4,
-        label: { color: theme.labelText, fontSize: 11, formatter: (p) => `${p.name} ${(p.value ?? 0).toFixed(0)}kWh` },
-        labelLine: { length: 8, lineStyle: { color: theme.radarLine } },
+        gap: 3,
+        // 标签放在漏斗内部并压缩字数，避免与色块/边缘重叠
+        label: { position: 'inside', color: '#ffffff', fontSize: 11, formatter: (p) => `${p.name} ${p.data.pct}%` },
+        labelLine: { show: false },
         itemStyle: { borderWidth: 0, opacity: 0.92 },
         data: rows.map((r) => ({
           name: `${r.time_period}时段`,
           value: num(r.kwh),
+          pct: Number(num(r.kwh_pct).toFixed(1)),
           itemStyle: { color: hexToRgba(periodColor(r.time_period), 0.85) }
         }))
       }
@@ -583,20 +604,21 @@ export function timePeriodFunnelOption(period = []) {
 export function energyDistOption(energy = []) {
   const rows = [...energy].sort((a, b) => num(a.bin_order) - num(b.bin_order))
   return {
-    grid: { ...baseGrid, top: 40, bottom: 24 },
+    grid: { ...baseGrid, top: 30, bottom: 26 },
     legend: {
-      right: 6,
+      left: 'center',
       top: 2,
-      itemWidth: 10,
-      itemHeight: 8,
-      textStyle: { color: theme.subTextColor, fontSize: 11 },
+      itemWidth: 9,
+      itemHeight: 7,
+      itemGap: 10,
+      textStyle: { color: theme.subTextColor, fontSize: 10 },
       data: ['订单数(单)', '占比(%)']
     },
     tooltip: tooltipStyle(),
     xAxis: categoryAxis(rows.map((r) => `${r.bin_label}`), { axisLabel: { color: theme.textColor, fontSize: 10, interval: 0 } }),
     yAxis: [
-      valueAxis({ name: '单', nameTextStyle: { color: theme.subTextColor, fontSize: 10 } }),
-      valueAxis({ splitLine: { show: false }, name: '%', max: 100, nameTextStyle: { color: theme.subTextColor, fontSize: 10 } })
+      valueAxis({ axisLabel: { color: theme.textColor, fontSize: 10 } }),
+      valueAxis({ splitLine: { show: false }, max: 100, axisLabel: { color: theme.textColor, fontSize: 10 } })
     ],
     series: [
       {
@@ -624,22 +646,23 @@ export function energyDistOption(energy = []) {
 export function revenueStructOption(revenue = [], dimType = '站点类型') {
   const rows = revenue.filter((r) => r.dim_type === dimType).sort((a, b) => num(b.revenue) - num(a.revenue))
   return {
-    grid: { ...baseGrid, top: 40, bottom: 34 },
+    grid: { ...baseGrid, top: 30, bottom: 30 },
     legend: {
-      right: 6,
+      left: 'center',
       top: 2,
-      itemWidth: 10,
-      itemHeight: 8,
-      textStyle: { color: theme.subTextColor, fontSize: 11 },
+      itemWidth: 9,
+      itemHeight: 7,
+      itemGap: 10,
+      textStyle: { color: theme.subTextColor, fontSize: 10 },
       data: ['收入(元)', '付费率(%)']
     },
     tooltip: tooltipStyle(),
-    xAxis: categoryAxis(rows.map((r) => r.dim_name), {
-      axisLabel: { color: theme.textColor, fontSize: 9, interval: 0, rotate: rows.length > 3 ? 26 : 0 }
+    xAxis: categoryAxis(rows.map((r) => String(r.dim_name).replace('充电站', '')), {
+      axisLabel: { color: theme.textColor, fontSize: 10, interval: 0, rotate: rows.length > 4 ? 18 : 0 }
     }),
     yAxis: [
-      valueAxis({ name: '元', nameTextStyle: { color: theme.subTextColor, fontSize: 10 } }),
-      valueAxis({ splitLine: { show: false }, name: '%', max: 100, nameTextStyle: { color: theme.subTextColor, fontSize: 10 } })
+      valueAxis({ axisLabel: { color: theme.textColor, fontSize: 10 } }),
+      valueAxis({ splitLine: { show: false }, max: 100, axisLabel: { color: theme.textColor, fontSize: 10 } })
     ],
     series: [
       {
@@ -664,18 +687,36 @@ export function revenueStructOption(revenue = [], dimType = '站点类型') {
   }
 }
 
-/* ----------------------------- 15. 行政区分布（DataV 锥形柱图配置） ----------------------------- */
-export function districtConicalConfig(district = []) {
-  const rows = [...district].sort((a, b) => num(b.kwh) - num(a.kwh)).slice(0, 6)
+/* -------------------- 15. 行政区分布（横向条形，按区县对比） -------------------- */
+export function districtBarOption(district = []) {
+  const rows = [...district].sort((a, b) => num(a.kwh) - num(b.kwh)).slice(-6)
   return {
-    data: rows.map((r) => ({
-      name: String(r.district || '').replace('新区', '').replace('区', ''),
-      value: num(r.kwh)
-    })),
-    showValue: true,
-    fontSize: 11,
-    color: [theme.accent, theme.accent2, theme.purple, theme.success],
-    unit: 'kWh'
+    grid: { left: 74, right: 76, top: 12, bottom: 10 },
+    tooltip: tooltipStyle({
+      formatter: (params) => {
+        const row = rows[params[0].dataIndex]
+        return `${row.district}<br/>充电量 ${num(row.kwh)} kWh（占比 ${num(row.kwh_pct)}%）<br/>订单 ${num(row.sessions)} 单<br/>站点 ${num(row.station_cnt)} 座 · 桩 ${num(row.device_cnt)} 台`
+      }
+    }),
+    xAxis: valueAxis({ splitLine: { show: true } }),
+    yAxis: categoryAxis(rows.map((r) => String(r.district || '').replace('新区', '')), {
+      axisLabel: { color: theme.textColor, fontSize: 11 }
+    }),
+    series: [
+      {
+        type: 'bar',
+        barWidth: '56%',
+        data: rows.map((r) => num(r.kwh)),
+        itemStyle: { borderRadius: [0, 4, 4, 0], color: barGradient(theme.accent, false) },
+        label: {
+          show: true,
+          position: 'right',
+          color: theme.labelText,
+          fontSize: 10,
+          formatter: (p) => `${p.value} kWh`
+        }
+      }
+    ]
   }
 }
 
