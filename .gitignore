@@ -21,3 +21,6 @@ qrc_*.cpp
 object_script.*
 *.Debug
 *.Release
+/ml-models-*.tar.gz
+/charging-bigscreen-export.tar.gz
+SHA256SUMS

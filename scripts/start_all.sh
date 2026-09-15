@@ -272,21 +272,40 @@ stop_bigscreen() {
 start_ml() {
   ensure_ml_venv || return 0
   local pidf="$LOG_DIR/ml.pid"
-  if alive "$pidf"; then
-    log "机器学习查询服务已在运行 :5010"
-    return 0
-  fi
   local results="$ROOT/ml/fixtures"
+  local kind="SIMULATED"
   local ads="$ROOT/ml/data/warehouse/ads"
-  if [[ -d "$ads" ]] && ls "$ads"/*.json >/dev/null 2>&1; then
+  mkdir -p "$ads"
+  if [[ -f "$ROOT/ml/fixtures/measured_forecast.json" ]]; then
+    kind="MEASURED"
+    local qt_db="${CHARGE_PILE_DB:-$HOME/.local/share/ChargePileLab/charge_pile.db}"
+    if [[ -f "$qt_db" ]] && (cd "$ROOT" && python3 -m ml.cli.bind_forecast_to_qt \
+        --results-dir "$ROOT/ml/fixtures" \
+        --qt-db "$qt_db" \
+        --out "$ads/measured_forecast.json") >/dev/null 2>&1; then
+      results="$ads"
+    fi
+  fi
+  if grep -q '"source_kind": "MEASURED"' "$ads"/*.json 2>/dev/null; then
+    kind="MEASURED"
+    results="$ads"
+  elif [[ "$kind" != "MEASURED" ]] && ls "$ads"/*.json >/dev/null 2>&1; then
     results="$ads"
   fi
-  log "启动机器学习查询服务 :5010  （数据 $results）"
+  if alive "$pidf"; then
+    if [[ "$kind" == "MEASURED" ]] && ! curl -sf http://127.0.0.1:5010/api/forecast/latest 2>/dev/null | grep -q '"source_kind": "MEASURED"'; then
+      stop_ml
+    else
+      log "机器学习查询服务已在运行 :5010"
+      return 0
+    fi
+  fi
+  log "启动机器学习查询服务 :5010  （$kind  数据 $results）"
   (
     cd "$ROOT"
     export PYTHONUNBUFFERED=1
     nohup "$ML_VENV/bin/python" -m ml.cli.warehouse_api \
-      --store file --results-dir "$results" --source-kind SIMULATED --port 5010 \
+      --store file --results-dir "$results" --source-kind "$kind" --port 5010 \
       >>"$LOG_DIR/ml.log" 2>&1 &
     echo $! > "$pidf"
   )
