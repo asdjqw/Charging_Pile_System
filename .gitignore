@@ -25,3 +25,4 @@ object_script.*
 /charging-bigscreen-export.tar.gz
 SHA256SUMS
 files/
+derby.log

@@ -13,10 +13,13 @@ port_up() { ss -H -ltn "sport = :$1" 2>/dev/null | grep -q .; }
 
 mkdir -p "$HIVE_LOG_DIR" "$HIVE_PID_DIR"
 
-port_up 9000 || hdfs --daemon start namenode
-port_up 9866 || hdfs --daemon start datanode
-port_up 8032 || yarn --daemon start resourcemanager
-port_up 8042 || yarn --daemon start nodemanager
+# 本仓库伪分布式 NameNode 默认 8020（避开 Qt TCP 9000）。已在跑则跳过。
+if ! hdfs dfs -ls / >/dev/null 2>&1; then
+  hdfs --daemon start namenode || true
+  hdfs --daemon start datanode || true
+fi
+port_up 8032 || yarn --daemon start resourcemanager || true
+port_up 8042 || yarn --daemon start nodemanager || true
 
 for _ in $(seq 1 30); do hdfs dfs -ls / >/dev/null 2>&1 && break; sleep 1; done
 hdfs dfs -mkdir -p /tmp /tmp/hive /user/hive/warehouse \
