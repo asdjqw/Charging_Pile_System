@@ -26,6 +26,9 @@ _pool_created = 0
 _cache = {}
 _cache_lock = threading.Lock()
 
+_breaker_until = 0.0          # 熔断截止时间戳：期间不再尝试 MySQL，直接走 CSV 兜底
+_last_error = ""              # 最近一次数据库错误，供 /api/health 展示
+
 
 def _new_connection():
     return pymysql.connect(
@@ -37,8 +40,32 @@ def _new_connection():
         charset="utf8mb4",
         cursorclass=pymysql.cursors.DictCursor,
         autocommit=True,
-        connect_timeout=5,
+        connect_timeout=config.DB_CONNECT_TIMEOUT,
+        read_timeout=config.DB_READ_TIMEOUT,
+        write_timeout=config.DB_WRITE_TIMEOUT,
     )
+
+
+def db_breaker_open():
+    """MySQL 是否处于熔断期（此前连接失败，短时间内不再重试）。"""
+    return time.time() < _breaker_until
+
+
+def db_last_error():
+    return _last_error
+
+
+def _trip_breaker(reason):
+    """记录错误并进入熔断期，让接口快速降级而不是逐个查询等待超时。"""
+    global _breaker_until, _last_error
+    _breaker_until = time.time() + config.DB_BREAKER_SECONDS
+    _last_error = str(reason)[:300]
+
+
+def _reset_breaker():
+    global _breaker_until, _last_error
+    _breaker_until = 0.0
+    _last_error = ""
 
 
 def _borrow():
@@ -52,7 +79,7 @@ def _borrow():
             _pool_created += 1
             return _new_connection(), True
     try:
-        return _pool.get(timeout=5), False
+        return _pool.get(timeout=config.DB_POOL_TIMEOUT), False
     except queue.Empty:
         return _new_connection(), True
 
@@ -86,10 +113,12 @@ def _serialize_row(row):
 
 def query(sql, params=None):
     """执行查询，返回 dict 列表。"""
+    global _last_error
     conn, _ = _borrow()
     try:
         with conn.cursor() as cur:
             cur.execute(sql, params or ())
+            _reset_breaker()
             return [_serialize_row(row) for row in cur.fetchall()]
     except (pymysql.err.OperationalError, pymysql.err.InterfaceError):
         # 连接失效则重建一次
@@ -100,6 +129,7 @@ def query(sql, params=None):
         conn = _new_connection()
         with conn.cursor() as cur:
             cur.execute(sql, params or ())
+            _reset_breaker()
             return [_serialize_row(row) for row in cur.fetchall()]
     finally:
         _release(conn)
@@ -107,9 +137,12 @@ def query(sql, params=None):
 
 def db_available():
     try:
+        if db_breaker_open():
+            return False
         query("SELECT 1")
         return True
-    except Exception:
+    except Exception as exc:
+        _trip_breaker(exc)
         return False
 
 
@@ -149,6 +182,9 @@ def fetch(table, where="", params=None, order="", limit=None):
         CSV  模式 -> 读取 Spark 输出 CSV 后在内存中过滤/排序
     """
     if config.DATA_SOURCE == "mysql":
+        if db_breaker_open():
+            # 熔断期内直接读 CSV，避免每次请求都去等数据库超时（大屏首屏有 ~20 个查询）
+            return _fetch_from_csv(table, where, order, limit)
         sql = f"SELECT * FROM `{table}`"
         if where:
             sql += f" WHERE {where}"
@@ -159,7 +195,13 @@ def fetch(table, where="", params=None, order="", limit=None):
         try:
             return query(sql, params)
         except Exception as exc:
-            print(f"[WARN] MySQL 查询失败，回退 CSV：{exc}")
+            _trip_breaker(exc)
+            print(f"[WARN] MySQL 查询失败（已熔断 {config.DB_BREAKER_SECONDS}s），回退 CSV：{exc}")
+    return _fetch_from_csv(table, where, order, limit)
+
+
+def _fetch_from_csv(table, where="", order="", limit=None):
+    """CSV 兜底数据源：读取 Spark 输出的结果表。"""
     rows = _csv_rows(table)
     if where:
         print(f"[WARN] CSV 模式忽略过滤条件：{where}")

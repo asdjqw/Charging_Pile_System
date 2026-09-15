@@ -34,11 +34,6 @@ fi
 # ---------------------------------------------------------------------------
 # 0. 读取数据库配置
 # ---------------------------------------------------------------------------
-if [[ ! -f config/database.env ]]; then
-  cp config/database.env.example config/database.env
-  log "已从 database.env.example 创建本机数据库配置"
-fi
-
 read_env_value() {
   local key="$1" default="$2"
   if [[ -f config/database.env ]]; then
@@ -168,21 +163,24 @@ init_mysql() {
     warn "数据库初始化失败，请确认 config/database.env 中的账号密码（或使用 sudo 执行本脚本）"
   fi
 
-  # Ubuntu 下 root 默认走 auth_socket，应用需要一个可用的密码账号
-  if [[ "$DB_USER" == "root" && -z "$DB_PASSWORD" ]]; then
-    local app_user="charging" app_pass="charging123"
-    if mysql_exec "
-      CREATE USER IF NOT EXISTS '$app_user'@'%' IDENTIFIED BY '$app_pass';
-      CREATE USER IF NOT EXISTS '$app_user'@'localhost' IDENTIFIED BY '$app_pass';
-      GRANT ALL PRIVILEGES ON \`$DB_NAME\`.* TO '$app_user'@'%';
-      GRANT ALL PRIVILEGES ON \`$DB_NAME\`.* TO '$app_user'@'localhost';
-      FLUSH PRIVILEGES;"; then
-      log "已创建应用账号 $app_user，并写入本机 config/database.env"
+  # Ubuntu 下 root 默认走 auth_socket（TCP 连不上），应用需要一个带密码的账号；
+  # 只要能用 root 执行 SQL，就确保 charging 账号存在（幂等）
+  local app_user="charging" app_pass="charging123"
+  if mysql_exec "
+    CREATE USER IF NOT EXISTS '$app_user'@'%' IDENTIFIED BY '$app_pass';
+    CREATE USER IF NOT EXISTS '$app_user'@'localhost' IDENTIFIED BY '$app_pass';
+    GRANT ALL PRIVILEGES ON \`$DB_NAME\`.* TO '$app_user'@'%';
+    GRANT ALL PRIVILEGES ON \`$DB_NAME\`.* TO '$app_user'@'localhost';
+    FLUSH PRIVILEGES;"; then
+    if [[ "$DB_USER" == "root" && -z "$DB_PASSWORD" ]]; then
+      log "已创建应用账号 $app_user（密码 $app_pass），并写入 config/database.env"
       sed -i -e "s/^DB_USER=.*/DB_USER=$app_user/" -e "s/^DB_PASSWORD=.*/DB_PASSWORD=$app_pass/" config/database.env
       DB_USER="$app_user"; DB_PASSWORD="$app_pass"
     else
-      warn "创建应用账号失败，请手工准备 MySQL 账号后修改 config/database.env"
+      log "应用账号 $app_user 已确认存在（配置用户：$DB_USER）"
     fi
+  else
+    warn "创建应用账号失败（需要 root/sudo 的 MySQL 访问权限），请手工准备账号后修改 config/database.env"
   fi
 }
 

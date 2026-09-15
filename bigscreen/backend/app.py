@@ -36,7 +36,7 @@ from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 
 from config import config
-from db import cached, clear_cache, db_available, fetch
+from db import cached, clear_cache, db_available, db_breaker_open, db_last_error, fetch
 
 app = Flask(__name__, static_folder=None)
 app.config["JSON_AS_ASCII"] = False
@@ -266,12 +266,33 @@ def api_refresh():
 @app.get("/api/health")
 def api_health():
     available = db_available()
+    csv_results = os.path.isdir(config.ADS_DIR) and any(
+        name.endswith(".csv") for name in os.listdir(config.ADS_DIR)
+    )
+    hint = ""
+    if not available and not csv_results:
+        hint = (
+            "既没有连上 MySQL，也没有找到 CSV 结果：请在项目根目录执行 bash deploy/deploy.sh "
+            "（会创建数据库账号并跑离线计算），或检查 config/database.env 的账号密码"
+        )
+    elif not available:
+        hint = "MySQL 未连接，当前使用 output/ads 下的 CSV 结果（部分面板可能较旧）"
     return ok(
         {
             "status": "up",
             "data_source": "mysql" if available and config.DATA_SOURCE == "mysql" else "csv",
             "configured_source": config.DATA_SOURCE,
-            "mysql": {"host": config.DB_HOST, "port": config.DB_PORT, "database": config.DB_NAME, "connected": available},
+            "csv_results": csv_results,
+            "hint": hint,
+            "mysql": {
+                "host": config.DB_HOST,
+                "port": config.DB_PORT,
+                "database": config.DB_NAME,
+                "user": config.DB_USER,
+                "connected": available,
+                "breaker_open": db_breaker_open(),
+                "last_error": db_last_error(),
+            },
         }
     )
 
