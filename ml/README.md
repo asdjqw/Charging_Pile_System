@@ -24,7 +24,7 @@ python3 -m ml.cli.warehouse_api --store file --results-dir ml/fixtures --source-
 curl -s http://127.0.0.1:5010/api/forecast/latest
 ```
 
-`scripts/start_all.sh` 会按同样方式拉起查询服务。
+`scripts/start_all.sh` 在存在 `ml/fixtures/measured_forecast.json` 时改为 `--source-kind MEASURED`，否则才用上面的模拟批次。
 
 ## 真预测：先下载模型
 
@@ -40,7 +40,13 @@ tar -xzf /下载目录/ml-models-h6.tar.gz
 tar -xzf /下载目录/ml-models-h24.tar.gz
 ```
 
-六个模型应出现在 `ml/artifacts/models/`。模型不是输入数据；推理还要小时快照。
+六个模型应出现在 `ml/artifacts/models/`。模型不是输入数据；推理还要小时快照。本仓库可用大屏 MySQL `session_detail` 现做 MEASURED 快照：
+
+```bash
+bash scripts/run_measured_ml.sh
+```
+
+脚本会：从 `charging_screen.session_detail` 构建小时序列 → 跑六个冻结模型 → 把结果绑定到 Qt `stations.id` → 以 MEASURED 重启 `:5010`。用户端电站详情「充电预测」随后显示实测数据，而不是 `demo_forecast.json`。
 
 建议 Python **3.12+** 独立 venv：
 

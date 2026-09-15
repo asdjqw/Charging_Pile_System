@@ -185,22 +185,23 @@ void ForecastDialog::applyCharts()
     const QJsonObject h24 = horizon(forecast, "24h");
     const QJsonObject business = station.value(QStringLiteral("business_status")).toObject();
     const bool matched = m_payload.value(QStringLiteral("matched")).toBool(true);
+    const bool mapped = m_payload.value(QStringLiteral("station_mapped")).toBool(false);
 
     m_subtitle->setText(QStringLiteral("%1  ·  电站ID %2")
                             .arg(m_stationName.isEmpty() ? QStringLiteral("未命名电站") : m_stationName)
                             .arg(m_stationId));
 
-    if (matched) {
-        m_note->setText(QStringLiteral("已匹配该站在最新预测批次中的结果。"));
+    if (m_payload.value(QStringLiteral("simulation")).toBool()) {
+        m_note->setText(QStringLiteral("当前为模拟批次，不是冻结模型在实测小时序列上的输出。"));
+    } else if (matched && !mapped) {
+        m_note->setText(QStringLiteral("已匹配该站在最新实测预测批次中的冻结模型结果。"));
     } else {
-        m_note->setText(
-            QStringLiteral("当前预测批次未包含本站 ID（模型侧站点 %1）。下面展示该批次的模型输出，便于联调；发布含本站小时快照后即可显示专属预测。")
-                .arg(m_payload.value(QStringLiteral("sample_station_id")).toInt()));
+        m_note->setText(QStringLiteral("该站预测来自冻结模型在实测充电会话小时序列上的输出，并已按本站桩数换算负荷。"));
     }
 
     const QString source = m_payload.value(QStringLiteral("simulation")).toBool()
                                ? QStringLiteral("模拟数据")
-                               : QStringLiteral("实测数据");
+                               : QStringLiteral("实测数据 · 冻结模型");
     const QString stale = m_payload.value(QStringLiteral("stale")).toBool()
                               ? QStringLiteral("已过期")
                               : QStringLiteral("有效");

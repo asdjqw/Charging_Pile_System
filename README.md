@@ -96,7 +96,7 @@ Windows 本机：Qt Creator 打开 `ChargePile.pro`，先起 `admin_server`，�
 
 销售业绩、电桩状态、充电桩管理、充电站管理、**充电预测**、**评价管理**、用户管理、预约管理、权限管理。
 
-预测页依赖 `:5010`。无 3GB 模型时，`start_all.sh` 会用 `ml/fixtures/demo_forecast.json` 做模拟查询。
+预测页依赖 `:5010`。有 `ml/fixtures/measured_forecast.json` 时，`start_all.sh` 以 **MEASURED** 实测批次启动，并把结果绑定到 Qt 电站 ID。没有实测批次时才退回 `ml/fixtures/demo_forecast.json` 模拟查询。重新跑冻结模型：`bash scripts/run_measured_ml.sh`。
 
 ## 环境变量
 
