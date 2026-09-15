@@ -2,13 +2,13 @@
   <div class="header">
     <dv-decoration-8 class="header__deco-left" :color="theme.panelBorder" />
     <dv-decoration-8 class="header__deco-right" :color="theme.panelBorder" :reverse="true" />
-    <div class="header__center">
-      <div class="header__title">北京市充电桩运营数据可视化大屏</div>
-      <div class="header__subtitle">Charging Pile Operation Analysis · {{ rangeText }}</div>
-    </div>
     <div class="header__left">
       <span class="chip chip--blue">数据源 {{ dataSource.toUpperCase() }}</span>
       <span class="chip chip--green">清洗记录 {{ qualityText }}</span>
+    </div>
+    <div class="header__center">
+      <div class="header__title">北京市充电桩运营数据可视化大屏</div>
+      <div class="header__subtitle">Charging Pile Operation Analysis · {{ rangeText }}</div>
     </div>
     <div class="header__right">
       <button class="theme-toggle" type="button" @click="onToggleTheme">
@@ -17,8 +17,8 @@
       </button>
       <span class="clock">{{ now }}</span>
       <span class="chip chip--blue">更新 {{ updatedAt || '--' }}</span>
-      <span v-if="pipeline.engine" class="chip chip--gold">计算 {{ pipeline.engine }}</span>
-      <span v-if="pipeline.storage" class="chip chip--gold">存储 {{ pipeline.storage }}</span>
+      <span v-if="pipeline.engine" class="chip chip--gold">计算 {{ engineText }}</span>
+      <span v-if="pipeline.storage" class="chip chip--gold">存储 {{ storageText }}</span>
     </div>
   </div>
 </template>
@@ -39,6 +39,10 @@ const now = ref('')
 let timer = null
 
 const isLight = computed(() => theme.mode === 'light')
+
+// 顶部右侧空间有限，这里把引擎/存储描述压短，避免与标题挤在一起
+const engineText = computed(() => String(props.pipeline.engine || '').replace('Spark on ', '').replace('Spark ', '') || '--')
+const storageText = computed(() => String(props.pipeline.storage || '').split(' ')[0] || '--')
 
 function onToggleTheme() {
   persistTheme(toggleTheme())
@@ -71,19 +75,23 @@ const qualityText = computed(() => {
 
 <style scoped>
 .header {
-  position: relative;
   height: 76px;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 12px;
+  box-sizing: border-box;
 }
 
 .header__deco-left,
 .header__deco-right {
   position: absolute;
-  top: 8px;
-  width: 300px;
-  height: 46px;
+  top: 6px;
+  width: 168px;
+  height: 40px;
+  opacity: 0.7;
+  pointer-events: none;
 }
 
 .header__deco-left {
@@ -96,12 +104,15 @@ const qualityText = computed(() => {
 
 .header__center {
   text-align: center;
+  flex: none;
+  max-width: 46%;
 }
 
 .header__title {
-  font-size: 32px;
+  font-size: 27px;
   font-weight: 700;
-  letter-spacing: 6px;
+  letter-spacing: 4px;
+  white-space: nowrap;
   background: var(--title-gradient);
   -webkit-background-clip: text;
   background-clip: text;
@@ -110,6 +121,7 @@ const qualityText = computed(() => {
 }
 
 .header__subtitle {
+  white-space: nowrap;
   margin-top: 2px;
   font-size: 12px;
   letter-spacing: 2px;
@@ -118,20 +130,24 @@ const qualityText = computed(() => {
 
 .header__left,
 .header__right {
-  position: absolute;
-  top: 22px;
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 12px;
+  flex: 1 1 0;
+  min-width: 0;
+  flex-wrap: nowrap;
+  overflow: hidden;
 }
 
 .header__left {
-  left: 20px;
+  justify-content: flex-start;
+  padding-right: 6px;
 }
 
 .header__right {
-  right: 20px;
+  justify-content: flex-end;
+  padding-left: 6px;
   flex-direction: row-reverse;
 }
 
