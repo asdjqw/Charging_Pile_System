@@ -21,3 +21,8 @@ qrc_*.cpp
 object_script.*
 *.Debug
 *.Release
+
+# 本地导出产物（打包用，不要提交）
+charging-bigscreen-export/
+charging-bigscreen-export.tar.gz
+charging-bigscreen-export.zip
