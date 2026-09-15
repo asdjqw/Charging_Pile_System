@@ -19,15 +19,23 @@ HDFS_RAW="${HDFS_RAW:-/data/charging/raw}"
 HDFS_WAREHOUSE="${HDFS_WAREHOUSE:-/data/charging/warehouse}"
 HDFS_ADS="${HDFS_ADS:-/data/charging/ads}"
 
+VENV_DIR="${VENV_DIR:-}"
+if [[ -z "$VENV_DIR" && -f "$ROOT_DIR/deploy/venv_path.sh" ]]; then
+  # shellcheck disable=SC1091
+  source "$ROOT_DIR/deploy/venv_path.sh"
+fi
+VENV_DIR="${VENV_DIR:-$ROOT_DIR/.venv}"
+SPARK_SUBMIT="$VENV_DIR/bin/spark-submit"
+
 echo "[1/3] 上传原始数据到 HDFS"
 hdfs dfs -mkdir -p "$HDFS_RAW"
 hdfs dfs -put -f data/raw/*.csv "$HDFS_RAW/"
 hdfs dfs -ls "$HDFS_RAW"
 
 echo "[2/3] 提交 Spark 作业（YARN 集群模式）"
-export PYSPARK_PYTHON="$ROOT_DIR/.venv/bin/python"
+export PYSPARK_PYTHON="$VENV_DIR/bin/python"
 export PYSPARK_DRIVER_PYTHON="$PYSPARK_PYTHON"
-.venv/bin/spark-submit \
+"$SPARK_SUBMIT" \
   --master yarn \
   --deploy-mode client \
   --driver-memory 1g \
@@ -35,9 +43,9 @@ export PYSPARK_DRIVER_PYTHON="$PYSPARK_PYTHON"
   --num-executors 1 \
   --conf spark.yarn.maxAppAttempts=1 \
   spark/jobs/run_all.py \
-  --raw "hdfs://${HDFS_RAW}" \
-  --warehouse "hdfs://${HDFS_WAREHOUSE}" \
-  --ads "hdfs://${HDFS_ADS}"
+  --raw "$HDFS_RAW" \
+  --warehouse "$HDFS_WAREHOUSE" \
+  --ads "$HDFS_ADS"
 
 echo "[3/3] 结果表从 HDFS 取回本地并装载 MySQL"
 rm -rf output/ads && mkdir -p output/ads
@@ -46,5 +54,5 @@ for dir in $(hdfs dfs -ls "$HDFS_ADS" 2>/dev/null | awk '{print $NF}' | grep '_c
   hdfs dfs -getmerge "$dir" "output/ads/${name}.csv"
   echo "  - ${name}.csv"
 done
-.venv/bin/python spark/jobs/load_mysql.py
+"$VENV_DIR/bin/python" spark/jobs/load_mysql.py
 echo "完成：HDFS 存储 + Spark on YARN + MySQL 装载"

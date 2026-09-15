@@ -23,8 +23,16 @@ _FILE_ENV = _read_env_file(os.path.join(PROJECT_ROOT, "config", "database.env"))
 
 
 def env(key, default=None):
-    """环境变量优先，其次 config/database.env，最后默认值。"""
-    return os.environ.get(key) or _FILE_ENV.get(key) or default
+    """
+    环境变量优先，其次 config/database.env，最后默认值。
+    注意：这里用"键是否存在"判断，而不是取值真值——
+    否则 Windows 本地开发写成 DB_PASSWORD=（空密码）会被默认值覆盖，导致连不上库。
+    """
+    if key in os.environ:
+        return os.environ[key]
+    if key in _FILE_ENV:
+        return _FILE_ENV[key]
+    return default
 
 
 class Config:

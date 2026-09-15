@@ -16,6 +16,12 @@ fi
 HDFS_ADS="${HDFS_ADS:-/data/charging/ads}"
 DEST="${DEST:-output/ads}"
 
+VENV_DIR="${VENV_DIR:-}"
+if [[ -z "$VENV_DIR" && -f "$ROOT_DIR/deploy/venv_path.sh" ]]; then
+  # shellcheck disable=SC1091
+  source "$ROOT_DIR/deploy/venv_path.sh"
+fi
+
 command -v hdfs >/dev/null 2>&1 || { echo "[ERROR] 未找到 hdfs 命令，请先执行 bash deploy/setup_hadoop.sh"; exit 1; }
 
 rm -rf "$DEST" && mkdir -p "$DEST"

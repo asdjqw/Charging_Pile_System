@@ -14,9 +14,31 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+# ---------------------------------------------------------------------------
+# 虚拟环境位置：项目放在 VMware 共享目录（/mnt/hgfs/...）时，hgfs 不支持符号链接、
+# chmod 也不生效，venv 建在里面会失败或极慢，因此自动改用家目录下的本地路径。
+# ---------------------------------------------------------------------------
+resolve_venv_dir() {
+  if [[ -n "${VENV_DIR:-}" ]]; then echo "$VENV_DIR"; return; fi
+  if [[ -f "$ROOT_DIR/deploy/venv_path.sh" ]]; then
+    # shellcheck disable=SC1091
+    source "$ROOT_DIR/deploy/venv_path.sh"
+    [[ -n "${VENV_DIR:-}" ]] && { echo "$VENV_DIR"; return; }
+  fi
+  case "$ROOT_DIR" in
+    /mnt/hgfs/*|/media/sf_*|/mnt/*) echo "$HOME/.venvs/charge-pile-bigscreen" ;;
+    *) echo "$ROOT_DIR/.venv" ;;
+  esac
+}
+
+VENV_DIR="$(resolve_venv_dir)"
+PY="$VENV_DIR/bin/python"
+PIP="$VENV_DIR/bin/pip"
+
 PYTHON_BIN="${PYTHON_BIN:-python3.12}"
 SKIP_INSTALL="${SKIP_INSTALL:-0}"
 SKIP_SPARK="${SKIP_SPARK:-0}"
+LOAD_SQL="${LOAD_SQL:-auto}"     # auto：有 sql 备份且跳过 Spark 时直接导入，速度最快
 SERVER_PORT="${SERVER_PORT:-5000}"
 
 log()  { printf '\033[36m[%s]\033[0m %s\n' "$(date '+%H:%M:%S')" "$*"; }
@@ -188,30 +210,78 @@ init_mysql() {
 # 3. Python 虚拟环境
 # ---------------------------------------------------------------------------
 setup_venv() {
-  log "创建 Python 虚拟环境 .venv"
+  log "创建 Python 虚拟环境：$VENV_DIR"
   local py=""
   for candidate in "$PYTHON_BIN" python3.12 python3.11 python3; do
     if have "$candidate"; then py="$candidate"; break; fi
   done
   [[ -n "$py" ]] || die "未找到 python3，请先安装 Python 3.11/3.12"
   "$py" -V
-  [[ -d .venv ]] || "$py" -m venv .venv
-  ./.venv/bin/python -m pip install --upgrade pip -i "${PIP_INDEX:-https://pypi.tuna.tsinghua.edu.cn/simple}" || true
+  [[ -d "$VENV_DIR" ]] || "$py" -m venv "$VENV_DIR"
+  "$PIP" install --upgrade pip -i "${PIP_INDEX:-https://mirrors.aliyun.com/pypi/simple}" || true
   log "安装 PySpark 与 Flask 依赖（约 350MB，请耐心等待）"
-  ./.venv/bin/pip install -r backend/requirements.txt -i "${PIP_INDEX:-https://pypi.tuna.tsinghua.edu.cn/simple}"
-  ./.venv/bin/pip install "pyspark==3.5.3" -i "${PIP_INDEX:-https://pypi.tuna.tsinghua.edu.cn/simple}"
+  "$PIP" install -r backend/requirements.txt -i "${PIP_INDEX:-https://mirrors.aliyun.com/pypi/simple}"
+  if [[ "$SKIP_SPARK" == "1" ]]; then
+    log "SKIP_SPARK=1：不安装 PySpark，直接使用 sql/charging_screen.sql 中的结果数据"
+  else
+    "$PIP" install "pyspark==3.5.3" -i "${PIP_INDEX:-https://mirrors.aliyun.com/pypi/simple}"
+  fi
+  # 记录 venv 位置，供 run_pipeline.sh / install_service.sh 等脚本复用
+  printf '# 由 deploy.sh 生成：虚拟环境位置（共享目录场景会放到家目录）\nexport VENV_DIR=%q\n' "$VENV_DIR" > deploy/venv_path.sh
 }
 
 # ---------------------------------------------------------------------------
 # 4. Spark 离线计算 + 装载 MySQL
 # ---------------------------------------------------------------------------
 run_pipeline() {
+  if [[ "$SKIP_SPARK" == "1" ]]; then
+    log "SKIP_SPARK=1：跳过 Spark 计算"
+    if [[ -f sql/charging_screen.sql ]]; then
+      log "从 sql/charging_screen.sql 导入结果数据（约 1MB，秒级完成）"
+      load_sql_dump
+    else
+      warn "未找到 sql/charging_screen.sql，跳过数据装载（大屏会没有数据）"
+    fi
+    return
+  fi
   log "执行 Spark 数据清洗与多维分析"
   export JAVA_HOME="${JAVA_HOME:-$(dirname "$(dirname "$(readlink -f "$(command -v java)")")")}"
-  export PYSPARK_PYTHON="$ROOT_DIR/.venv/bin/python"
-  ./.venv/bin/python spark/jobs/run_all.py --raw data/raw
+  export PYSPARK_PYTHON="$PY"
+  local raw_path="${RAW_PATH:-}"
+  if [[ -z "$raw_path" ]]; then
+    if [[ -d data/raw_expanded ]]; then raw_path="data/raw_expanded"; else raw_path="data/raw"; fi
+  fi
+  log "输入数据目录：$raw_path"
+  "$PY" spark/jobs/run_all.py --raw "$raw_path"
   log "装载分析结果到 MySQL"
-  ./.venv/bin/python spark/jobs/load_mysql.py
+  "$PY" spark/jobs/load_mysql.py
+}
+
+# 直接用仓库里的 MySQL 备份还原结果数据（新机器最快的起步方式）
+load_sql_dump() {
+  local sql_file="$ROOT_DIR/sql/charging_screen.sql"
+  if [[ ! -f "$sql_file" ]]; then
+    warn "未找到 $sql_file"
+    return 1
+  fi
+  mysql_import "$sql_file"
+}
+
+mysql_import() {
+  local sql_file="$1"
+  if [[ -n "$DB_PASSWORD" ]] && \
+     mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASSWORD" < "$sql_file" 2>/dev/null; then
+    log "已导入 $(basename "$sql_file")"
+    return 0
+  fi
+  if mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" < "$sql_file" 2>/dev/null; then
+    log "已导入 $(basename "$sql_file")"
+    return 0
+  fi
+  $SUDO mysql -uroot < "$sql_file" 2>/dev/null && { log "已通过 root 导入 $(basename "$sql_file")"; return 0; }
+  mysql -uroot < "$sql_file" 2>/dev/null && { log "已通过 root 导入 $(basename "$sql_file")"; return 0; }
+  warn "导入 SQL 失败，请手工执行： mysql -uroot -p < $sql_file"
+  return 1
 }
 
 # ---------------------------------------------------------------------------
@@ -219,11 +289,19 @@ run_pipeline() {
 # ---------------------------------------------------------------------------
 build_frontend() {
   if ! have node; then
-    warn "跳过前端构建（未安装 Node.js）"
+    if [[ -d "$ROOT_DIR/../web" ]]; then
+      log "未安装 Node.js，改用仓库 ../web 中已构建的大屏产物"
+      rm -rf frontend/dist && mkdir -p frontend/dist && cp -rf "$ROOT_DIR/../web/." frontend/dist/
+      return
+    fi
+    warn "跳过前端构建（未安装 Node.js 且没有 ../web 构建产物）"
     return
   fi
   log "构建前端（Vue3 + DataV + ECharts）"
-  ( cd frontend && npm install --no-fund --no-audit && npm run build )
+  ( cd frontend && npm install --no-fund --no-audit && npm run build ) || {
+    warn "npm 构建失败，改用仓库 ../web 中已构建的大屏产物"
+    rm -rf frontend/dist && mkdir -p frontend/dist && cp -rf "$ROOT_DIR/../web/." frontend/dist/
+  }
   log "前端构建完成：frontend/dist"
 }
 
@@ -233,7 +311,7 @@ build_frontend() {
 start_backend() {
   log "启动 Flask 服务（gunicorn，端口 $SERVER_PORT）"
   pkill -f 'gunicorn.*backend.wsgi' >/dev/null 2>&1 || true
-  PORT="$SERVER_PORT" nohup ./.venv/bin/gunicorn -c deploy/gunicorn.conf.py backend.wsgi:application \
+  PORT="$SERVER_PORT" nohup "$VENV_DIR/bin/gunicorn" -c deploy/gunicorn.conf.py backend.wsgi:application \
     > logs/gunicorn.log 2>&1 &
   sleep 3
   if curl -sf "http://127.0.0.1:${SERVER_PORT}/api/health" >/dev/null; then
