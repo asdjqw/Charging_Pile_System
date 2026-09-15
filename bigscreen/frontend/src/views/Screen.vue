@@ -175,7 +175,10 @@ async function load() {
     const { payload, updatedAt: time } = await fetchScreenBundle()
     bundle.value = payload || {}
     updatedAt.value = time || ''
-    errorMessage.value = ''
+    const sessions = Number(payload?.overview?.total_sessions || 0)
+    errorMessage.value = sessions > 0
+      ? ''
+      : '未取到数据：请确认后端已连上 MySQL（config/database.env），或已执行 bash deploy/deploy.sh / run_pipeline 生成结果'
   } catch (err) {
     errorMessage.value = `数据接口异常：${err.message}`
   } finally {
