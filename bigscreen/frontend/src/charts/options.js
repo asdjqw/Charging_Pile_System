@@ -468,28 +468,29 @@ export function userSegmentOption(segment = []) {
       }
     },
     legend: {
-      orient: 'vertical',
-      right: 0,
-      top: 'center',
+      // 图例放到下方并限制宽度（自动换行），避免与圆环一起挤出面板边框
+      left: 'center',
+      bottom: 0,
+      width: '96%',
       itemWidth: 8,
       itemHeight: 7,
-      itemGap: 5,
+      itemGap: 4,
       textStyle: { color: theme.subTextColor, fontSize: 9 }
     },
     title: {
       text: `${total}`,
       subtext: '累计用户(人)',
-      left: '28%',
-      top: '42%',
+      left: '50%',
+      top: '36%',
       textAlign: 'center',
-      textStyle: { color: theme.accent, fontSize: 22, fontWeight: 'bold' },
-      subtextStyle: { color: theme.subTextColor, fontSize: 11 }
+      textStyle: { color: theme.accent, fontSize: 20, fontWeight: 'bold' },
+      subtextStyle: { color: theme.subTextColor, fontSize: 10 }
     },
     series: [
       {
         type: 'pie',
-        center: ['30%', '50%'],
-        radius: ['46%', '66%'],
+        center: ['50%', '44%'],
+        radius: ['34%', '58%'],
         itemStyle: { borderColor: theme.pieBorder, borderWidth: 2 },
         label: { show: false },
         labelLine: { show: false },
