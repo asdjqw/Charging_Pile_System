@@ -38,6 +38,7 @@ PIP="$VENV_DIR/bin/pip"
 PYTHON_BIN="${PYTHON_BIN:-python3.12}"
 SKIP_INSTALL="${SKIP_INSTALL:-0}"
 SKIP_SPARK="${SKIP_SPARK:-0}"
+SKIP_BACKEND="${SKIP_BACKEND:-0}"   # 1：只准备环境与数据，不启动/重启后端（用于准备阶段或调试）
 LOAD_SQL="${LOAD_SQL:-auto}"     # auto：有 sql 备份且跳过 Spark 时直接导入，速度最快
 SERVER_PORT="${SERVER_PORT:-5000}"
 
@@ -53,6 +54,21 @@ if [[ "$(id -u)" -ne 0 ]] && have sudo; then
   SUDO="sudo"
 fi
 
+SUDO_KEEPALIVE_PID=""
+
+# 提前获取一次 sudo 授权（只提示一次密码），后续建库/装依赖都不再打断
+ensure_sudo() {
+  [[ -n "$SUDO" ]] || return 0
+  if ! $SUDO -n true 2>/dev/null; then
+    log "后面要安装依赖、初始化 MySQL，需要管理员权限；请输入 sudo 密码（本虚拟机通常是 123456）"
+    $SUDO -v || die "sudo 授权失败：请改用  sudo bash deploy/deploy.sh  重新执行"
+  fi
+  # 后台刷新 sudo 时间戳，避免长时间安装过程中授权过期
+  ( while true; do $SUDO -n true 2>/dev/null || exit; sleep 50; done ) &
+  SUDO_KEEPALIVE_PID=$!
+  trap '[[ -n "$SUDO_KEEPALIVE_PID" ]] && kill "$SUDO_KEEPALIVE_PID" 2>/dev/null || true' EXIT
+}
+
 # ---------------------------------------------------------------------------
 # 0. 读取数据库配置
 # ---------------------------------------------------------------------------
@@ -66,11 +82,48 @@ read_env_value() {
   echo "$default"
 }
 
+# config/database.env 是本机凭据（被 .gitignore 忽略）：不存在时先从模板生成，后续步骤才能改写它
+ensure_env_file() {
+  [[ -f config/database.env ]] && return 0
+  if [[ -f config/database.env.example ]]; then
+    cp config/database.env.example config/database.env
+    log "已从 config/database.env.example 生成 config/database.env"
+  else
+    printf 'DB_HOST=127.0.0.1\nDB_PORT=3306\nDB_USER=root\nDB_PASSWORD=\nDB_NAME=charging_screen\nDATA_SOURCE=mysql\nCACHE_TTL=30\n' \
+      > config/database.env
+    log "已生成默认 config/database.env"
+  fi
+}
+
 DB_HOST="$(read_env_value DB_HOST 127.0.0.1)"
 DB_PORT="$(read_env_value DB_PORT 3306)"
 DB_USER="$(read_env_value DB_USER root)"
 DB_PASSWORD="$(read_env_value DB_PASSWORD '')"
 DB_NAME="$(read_env_value DB_NAME charging_screen)"
+
+# ---------------------------------------------------------------------------
+# pip 安装：镜像可能是坏的/被墙的，按顺序自动换源重试
+# ---------------------------------------------------------------------------
+PIP_MIRRORS=(
+  "${PIP_INDEX:-}"
+  "https://mirrors.aliyun.com/pypi/simple"
+  "https://pypi.tuna.tsinghua.edu.cn/simple"
+  "https://mirrors.cloud.tencent.com/pypi/simple"
+  "https://pypi.org/simple"
+)
+
+pip_install() {
+  local index
+  for index in "${PIP_MIRRORS[@]}"; do
+    [[ -z "$index" ]] && continue
+    if "$PIP" install -i "$index" "$@"; then
+      log "依赖安装成功（镜像：$index）"
+      return 0
+    fi
+    warn "镜像 $index 安装失败，自动换下一个源重试"
+  done
+  return 1
+}
 
 # ---------------------------------------------------------------------------
 # 1. 环境检查 / 依赖安装
@@ -182,7 +235,9 @@ init_mysql() {
   if mysql_exec "$sql"; then
     log "数据库已就绪：$DB_NAME"
   else
-    warn "数据库初始化失败，请确认 config/database.env 中的账号密码（或使用 sudo 执行本脚本）"
+    warn "数据库初始化失败：当前账号没有 MySQL 的管理权限。"
+    warn "  请在项目根目录用 sudo 重新执行：  sudo bash deploy/deploy.sh"
+    warn "  或先手工建库建账号：  sudo mysql  （然后执行 deploy/deploy.sh 里 init_mysql 的 SQL）"
   fi
 
   # Ubuntu 下 root 默认走 auth_socket（TCP 连不上），应用需要一个带密码的账号；
@@ -202,7 +257,8 @@ init_mysql() {
       log "应用账号 $app_user 已确认存在（配置用户：$DB_USER）"
     fi
   else
-    warn "创建应用账号失败（需要 root/sudo 的 MySQL 访问权限），请手工准备账号后修改 config/database.env"
+    warn "创建应用账号失败（需要 root/sudo 的 MySQL 访问权限）。"
+    warn "  解决办法：用 sudo 重新执行本脚本  ->  sudo bash deploy/deploy.sh"
   fi
 }
 
@@ -218,13 +274,13 @@ setup_venv() {
   [[ -n "$py" ]] || die "未找到 python3，请先安装 Python 3.11/3.12"
   "$py" -V
   [[ -d "$VENV_DIR" ]] || "$py" -m venv "$VENV_DIR"
-  "$PIP" install --upgrade pip -i "${PIP_INDEX:-https://mirrors.aliyun.com/pypi/simple}" || true
+  pip_install --upgrade pip >/dev/null 2>&1 || warn "pip 升级失败（继续使用现有 pip）"
   log "安装 PySpark 与 Flask 依赖（约 350MB，请耐心等待）"
-  "$PIP" install -r backend/requirements.txt -i "${PIP_INDEX:-https://mirrors.aliyun.com/pypi/simple}"
+  pip_install -r backend/requirements.txt || die "Flask 依赖安装失败：请检查网络或手动执行 $PIP install -r backend/requirements.txt"
   if [[ "$SKIP_SPARK" == "1" ]]; then
     log "SKIP_SPARK=1：不安装 PySpark，直接使用 sql/charging_screen.sql 中的结果数据"
   else
-    "$PIP" install "pyspark==3.5.3" -i "${PIP_INDEX:-https://mirrors.aliyun.com/pypi/simple}"
+    pip_install "pyspark==3.5.3" || die "PySpark 安装失败（数据量较大，可加 SKIP_SPARK=1 跳过）"
   fi
   # 记录 venv 位置，供 run_pipeline.sh / install_service.sh 等脚本复用
   printf '# 由 deploy.sh 生成：虚拟环境位置（共享目录场景会放到家目录）\nexport VENV_DIR=%q\n' "$VENV_DIR" > deploy/venv_path.sh
@@ -269,6 +325,15 @@ load_sql_dump() {
 
 mysql_import() {
   local sql_file="$1"
+  # 备份里含 CREATE DATABASE，优先用 root 导入（权限最完整），失败再退回应用账号
+  if $SUDO mysql -uroot < "$sql_file" 2>/dev/null; then
+    log "已通过 root 导入 $(basename "$sql_file")"
+    return 0
+  fi
+  if mysql -uroot < "$sql_file" 2>/dev/null; then
+    log "已通过 root 导入 $(basename "$sql_file")"
+    return 0
+  fi
   if [[ -n "$DB_PASSWORD" ]] && \
      mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASSWORD" < "$sql_file" 2>/dev/null; then
     log "已导入 $(basename "$sql_file")"
@@ -278,9 +343,7 @@ mysql_import() {
     log "已导入 $(basename "$sql_file")"
     return 0
   fi
-  $SUDO mysql -uroot < "$sql_file" 2>/dev/null && { log "已通过 root 导入 $(basename "$sql_file")"; return 0; }
-  mysql -uroot < "$sql_file" 2>/dev/null && { log "已通过 root 导入 $(basename "$sql_file")"; return 0; }
-  warn "导入 SQL 失败，请手工执行： mysql -uroot -p < $sql_file"
+  warn "导入 SQL 失败：请用 sudo 重新执行本脚本（sudo bash deploy/deploy.sh），或手工执行  sudo mysql < $sql_file"
   return 1
 }
 
@@ -323,14 +386,20 @@ start_backend() {
 
 main() {
   mkdir -p logs
+  ensure_env_file
   log "项目目录：$ROOT_DIR"
+  ensure_sudo
   if [[ "$SKIP_INSTALL" != "1" ]]; then install_dependencies; fi
   start_mysql
   init_mysql
   setup_venv
   if [[ "$SKIP_SPARK" != "1" ]]; then run_pipeline; fi
   build_frontend
-  start_backend
+  if [[ "$SKIP_BACKEND" == "1" ]]; then
+    log "SKIP_BACKEND=1：跳过服务启动（需要时手动执行： bash deploy/install_service.sh 或 sudo systemctl restart charging-screen）"
+  else
+    start_backend
+  fi
   log "部署完成。浏览器访问： http://<虚拟机IP>:${SERVER_PORT}/"
   log "如需 nginx 与开机自启，请执行： bash deploy/install_service.sh"
 }
