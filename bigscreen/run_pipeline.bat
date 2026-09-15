@@ -8,7 +8,7 @@ if not exist "%PY%" set PY=python
 cd /d "%ROOT%"
 set PYTHONIOENCODING=utf-8
 echo [1/2] Spark 清洗与多维分析
-"%PY%" spark\jobs\run_all.py --raw data\raw
+"%PY%" spark\jobs\run_all.py --raw data\raw_expanded
 if errorlevel 1 goto :error
 echo [2/2] 装载分析结果到 MySQL
 "%PY%" spark\jobs\load_mysql.py

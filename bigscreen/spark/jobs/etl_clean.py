@@ -47,12 +47,14 @@ PEAK_HOURS = {8, 9, 10, 11, 18, 19, 20}      # 高峰 08:30-11:30 / 18:00-21:00
 VALLEY_HOURS = {0, 1, 2, 3, 4, 5, 6, 23}     # 低谷 23:00-次日 07:00
 
 
-def build_spark(app_name: str) -> SparkSession:
+def build_spark(app_name: str, enable_hive: bool = False) -> SparkSession:
     """创建（或复用）SparkSession，本地模式与 YARN/HDFS 环境通用。"""
     builder = (
         SparkSession.builder.appName(app_name)
         .config("spark.sql.shuffle.partitions", os.environ.get("SPARK_SHUFFLE_PARTITIONS", "8"))
         .config("spark.sql.session.timeZone", "Asia/Shanghai")
+        .config("spark.sql.parquet.compression.codec", "snappy")
+        .config("spark.sql.sources.partitionOverwriteMode", "dynamic")
         .config("spark.ui.showConsoleProgress", "false")
         .config("spark.sql.warehouse.dir", "spark-warehouse")
     )
@@ -62,6 +64,8 @@ def build_spark(app_name: str) -> SparkSession:
         builder = builder.master(master)
     if os.name == "nt":  # Windows 本地调试时固定 driver 地址，避免 hostname 反解失败
         builder = builder.config("spark.driver.host", "127.0.0.1").config("spark.driver.bindAddress", "127.0.0.1")
+    if enable_hive:
+        builder = builder.enableHiveSupport()
     return builder.getOrCreate()
 
 
@@ -75,6 +79,11 @@ def _read_csv(spark: SparkSession, path: str, header: bool = True):
         .option("escape", '"')
         .csv(path)
     )
+
+
+def _read_source(spark: SparkSession, source):
+    """兼容原 CSV 路径和 Hive ODS DataFrame，保证本地链路与数仓链路共用清洗规则。"""
+    return _read_csv(spark, source) if isinstance(source, str) else source
 
 
 # ----------------------------------------------------------------------------
@@ -102,8 +111,8 @@ def time_period_expr(hour_col):
 # ----------------------------------------------------------------------------
 # 二、订单数据清洗
 # ----------------------------------------------------------------------------
-def clean_sessions(spark: SparkSession, raw_path: str, station_dim):
-    raw = _read_csv(spark, raw_path)
+def clean_sessions(spark: SparkSession, raw_path, station_dim):
+    raw = _read_source(spark, raw_path)
     raw_cnt = raw.count()
 
     # 1) 去重 + 空值校验（业务主键 sessionId）
@@ -216,8 +225,8 @@ def clean_sessions(spark: SparkSession, raw_path: str, station_dim):
 # ----------------------------------------------------------------------------
 # 三、电池遥测数据清洗
 # ----------------------------------------------------------------------------
-def clean_battery(spark: SparkSession, raw_path: str, session_detail, station_dim):
-    raw = _read_csv(spark, raw_path)
+def clean_battery(spark: SparkSession, raw_path, session_detail, station_dim):
+    raw = _read_source(spark, raw_path)
     raw_cnt = raw.count()
     dedup = raw.dropDuplicates()                       # 全字段去重
     dedup_cnt = dedup.count()
@@ -293,8 +302,8 @@ def clean_battery(spark: SparkSession, raw_path: str, session_detail, station_di
 # ----------------------------------------------------------------------------
 # 四、站点维度表清洗
 # ----------------------------------------------------------------------------
-def clean_station(spark: SparkSession, raw_path: str):
-    raw = _read_csv(spark, raw_path)
+def clean_station(spark: SparkSession, raw_path):
+    raw = _read_source(spark, raw_path)
     dim = (
         raw.dropDuplicates(["stationId"])
         .withColumn("device_count", F.col("device_count").cast("int"))
@@ -332,7 +341,7 @@ def save_table(df, out_dir: str, name: str, partitions: int = 1):
     """
     写出结果表：
         - 本地目录（测试）：<out_dir>/<name>.csv 单文件 + <name>.parquet，供直接装载 MySQL
-        - HDFS 目录（答辩）：<out_dir>/<name>.parquet + <out_dir>/<name>_csv/（由 hdfs dfs -getmerge 取回）
+        - HDFS 目录（答辩）：<out_dir>/<name>.parquet + <out_dir>/<name>.csv_dir/（由 hdfs dfs -getmerge 取回）
     """
     df_to_write = df.coalesce(partitions) if df.rdd.getNumPartitions() > partitions else df
     remote = "://" in out_dir
@@ -450,7 +459,7 @@ def main(argv=None):
     import argparse
 
     parser = argparse.ArgumentParser(description="充电桩运营数据清洗（Spark）")
-    parser.add_argument("--raw", default="data/raw", help="原始数据目录（本地路径或 hdfs:// 路径）")
+    parser.add_argument("--raw", default="data/raw_expanded", help="原始数据目录（默认扩容数据，本地路径或 hdfs:// 路径）")
     parser.add_argument("--out", default="output/warehouse", help="清洗结果输出目录")
     args = parser.parse_args(argv)
 

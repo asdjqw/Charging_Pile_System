@@ -126,9 +126,9 @@ yarn --daemon start nodemanager
 sleep 8
 jps
 
-log "上传原始数据到 HDFS"
-hdfs dfs -mkdir -p /data/charging/raw
-hdfs dfs -put -f data/raw/*.csv /data/charging/raw/
-hdfs dfs -ls /data/charging/raw
+log "上传扩容后的默认原始数据到 HDFS"
+hdfs dfs -mkdir -p /data/charging/raw_expanded
+hdfs dfs -put -f data/raw_expanded/*.csv /data/charging/raw_expanded/
+hdfs dfs -ls /data/charging/raw_expanded
 
 log "完成：HDFS http://localhost:9870 ，YARN http://localhost:8088"

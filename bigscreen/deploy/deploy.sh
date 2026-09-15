@@ -211,7 +211,7 @@ run_pipeline() {
   log "执行 Spark 数据清洗与多维分析"
   export JAVA_HOME="${JAVA_HOME:-$(dirname "$(dirname "$(readlink -f "$(command -v java)")")")}"
   export PYSPARK_PYTHON="$ROOT_DIR/.venv/bin/python"
-  ./.venv/bin/python spark/jobs/run_all.py --raw data/raw
+  ./.venv/bin/python spark/jobs/run_all.py --raw data/raw_expanded
   log "装载分析结果到 MySQL"
   ./.venv/bin/python spark/jobs/load_mysql.py
 }

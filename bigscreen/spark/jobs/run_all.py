@@ -3,7 +3,7 @@
 一键执行 Spark 离线计算：数据清洗(ETL) -> 多维分析(ADS)
 
 用法：
-    python spark/jobs/run_all.py                     # 本地数据（默认路径）
+    python spark/jobs/run_all.py                     # 本地扩容数据（默认 data/raw_expanded）
     python spark/jobs/run_all.py --raw hdfs:///data/charging/raw --warehouse hdfs:///data/charging/warehouse
     SPARK_MASTER=yarn python spark/jobs/run_all.py   # 提交到 YARN（答辩环境）
 """
@@ -29,7 +29,7 @@ from etl_clean import (  # noqa: E402
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="充电桩数据离线计算总入口")
-    parser.add_argument("--raw", default="data/raw", help="原始数据目录（支持 hdfs://）")
+    parser.add_argument("--raw", default="data/raw_expanded", help="原始数据目录（默认扩容数据，支持 hdfs://）")
     parser.add_argument("--warehouse", default="output/warehouse", help="清洗层输出目录")
     parser.add_argument("--ads", default="output/ads", help="分析层输出目录")
     parser.add_argument("--top-n", type=int, default=15, help="站点排行条数")
@@ -60,7 +60,8 @@ def main(argv=None):
     build_ads(spark, args.warehouse, args.ads, args.top_n)
 
     # 记录本次作业的数据链路（计算引擎 / 存储位置），大屏顶部与 MySQL 均可见
-    master = os.environ.get("SPARK_MASTER", "local[*]")
+    # 以 SparkContext 的实际 master 为准；spark-submit --master yarn 不一定会写入 SPARK_MASTER 环境变量。
+    master = spark.sparkContext.master
     engine = "Spark on YARN" if master.lower().startswith("yarn") else f"Spark {master}"
     storage = "HDFS (Hadoop)" if "://" in args.raw and "file:" not in args.raw else "本地文件系统"
     info = [[

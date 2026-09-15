@@ -7,6 +7,6 @@ cd "$ROOT_DIR"
 export JAVA_HOME="${JAVA_HOME:-$(dirname "$(dirname "$(readlink -f "$(command -v java)")")")}"
 export PYSPARK_PYTHON="$ROOT_DIR/.venv/bin/python"
 
-.venv/bin/python spark/jobs/run_all.py --raw "${RAW_PATH:-data/raw}" "$@"
+.venv/bin/python spark/jobs/run_all.py --raw "${RAW_PATH:-data/raw_expanded}" "$@"
 .venv/bin/python spark/jobs/load_mysql.py
 echo "[OK] 离线计算完成，大屏数据已刷新"

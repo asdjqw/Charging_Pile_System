@@ -21,3 +21,4 @@ qrc_*.cpp
 object_script.*
 *.Debug
 *.Release
+files/
