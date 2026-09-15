@@ -13,7 +13,9 @@ import { computed } from 'vue'
 import { theme } from '../utils/echartsTheme'
 
 const props = defineProps({
-  sessions: { type: Array, default: () => [] }
+  sessions: { type: Array, default: () => [] },
+  rowNum: { type: Number, default: 4 },
+  fontSize: { type: Number, default: 13 }
 })
 
 /** 站点名形如 "房山区·星充电汽车充电站(房山良乡店)"：去掉括号补充说明，太长再截断 */
@@ -46,7 +48,7 @@ const config = computed(() => ({
   headerHeight: 30,
   oddRowBGC: theme.scrollOddBg,
   evenRowBGC: theme.scrollEvenBg,
-  rowNum: 4,
+  rowNum: props.rowNum,
   waitTime: 2500,
   carousel: 'single',
   hoverPause: true

@@ -15,74 +15,80 @@
 
       <div class="main">
         <div class="col col--side">
-          <PanelBox title="月度充电量趋势" subtitle="柱:电量 线:订单">
+          <PanelBox title="月度充电量趋势" subtitle="柱:电量 线:订单" clickable @open="openDetail('monthly')">
             <EChart :option="monthlyOption" />
           </PanelBox>
-          <PanelBox title="24小时充电负荷" subtitle="峰/平/谷">
+          <PanelBox title="24小时充电负荷" subtitle="峰/平/谷" clickable @open="openDetail('hour')">
             <EChart :option="hourOption" />
           </PanelBox>
-          <PanelBox title="站点类型对比" subtitle="多指标对比">
+          <PanelBox title="站点类型对比" subtitle="多指标对比" clickable @open="openDetail('facility')">
             <EChart :option="facilityOption" />
           </PanelBox>
-          <PanelBox title="充电时长分布" subtitle="玫瑰图">
+          <PanelBox title="充电时长分布" subtitle="玫瑰图" clickable @open="openDetail('duration')">
             <EChart :option="durationOption" />
           </PanelBox>
         </div>
 
         <div class="col col--center">
-          <PanelBox title="日充电量与订单趋势" subtitle="近90天 · 双轴">
+          <PanelBox title="日充电量与订单趋势" subtitle="近90天 · 双轴" clickable @open="openDetail('daily')">
             <EChart :option="dailyOption" />
           </PanelBox>
           <div class="center-row">
-            <PanelBox title="星期 × 小时充电热度" subtitle="订单分布热力图">
+            <PanelBox title="星期 × 小时充电热度" subtitle="订单分布热力图" clickable @open="openDetail('heat')">
               <EChart :option="heatOption" />
             </PanelBox>
-            <PanelBox title="站点充电量TOP10" subtitle="单位 kWh">
+            <PanelBox title="站点充电量TOP10" subtitle="单位 kWh" clickable @open="openDetail('station')">
               <EChart :option="stationOption" />
             </PanelBox>
           </div>
         </div>
 
         <div class="col col--side">
-          <PanelBox title="工作日 vs 周末" subtitle="日均维度">
+          <PanelBox title="工作日 vs 周末" subtitle="日均维度" clickable @open="openDetail('weekend')">
             <EChart :option="weekendOption" />
           </PanelBox>
-          <PanelBox title="充电平台对比" subtitle="iOS/安卓/Web">
+          <PanelBox title="充电平台对比" subtitle="iOS/安卓/Web" clickable @open="openDetail('platform')">
             <EChart :option="platformOption" />
           </PanelBox>
-          <PanelBox title="用户价值分层" subtitle="RFM 模型">
+          <PanelBox title="用户价值分层" subtitle="RFM 模型" clickable @open="openDetail('segment')">
             <EChart :option="segmentOption" />
           </PanelBox>
-          <PanelBox title="电池健康画像" subtitle="SOC/压差/温升">
+          <PanelBox title="电池健康画像" subtitle="SOC区段% · 压差/温升" clickable @open="openDetail('battery')">
             <EChart :option="batteryOption" />
           </PanelBox>
         </div>
       </div>
 
       <div class="bottom">
-        <PanelBox title="峰平谷时段对比" subtitle="充电量漏斗">
+        <PanelBox title="峰平谷时段对比" subtitle="充电量漏斗" clickable @open="openDetail('period')">
           <EChart :option="periodOption" />
         </PanelBox>
-        <PanelBox title="单次充电量分布" subtitle="订单数 / 占比">
+        <PanelBox title="单次充电量分布" subtitle="订单数 / 占比" clickable @open="openDetail('energy')">
           <EChart :option="energyOption" />
         </PanelBox>
-        <PanelBox title="行政区充电量分布" subtitle="TOP6 行政区">
-          <dv-conical-column-chart
-            v-if="conicalConfig.data.length"
-            :config="conicalConfig"
-            :style="{ width: '100%', height: '100%' }"
-          />
+        <PanelBox title="行政区充电量分布" subtitle="TOP6 行政区" clickable @open="openDetail('district')">
+          <EChart :option="districtOption" />
         </PanelBox>
-        <PanelBox title="收入结构与付费率" subtitle="按站点类型">
+        <PanelBox title="收入结构与付费率" subtitle="按站点类型" clickable @open="openDetail('revenue')">
           <EChart :option="revenueOption" />
         </PanelBox>
-        <PanelBox title="实时充电订单流水" subtitle="电量 kWh / 金额 元">
+        <PanelBox title="实时充电订单流水" subtitle="电量 kWh / 金额 元" clickable @open="openDetail('realtime')">
           <RealtimeBoard :sessions="realtime" />
         </PanelBox>
       </div>
 
       <div v-if="loading" class="loading-mask">数据加载中…</div>
       <div v-if="errorMessage" class="error-mask">{{ errorMessage }}</div>
+
+      <DetailOverlay
+        v-if="detail"
+        :title="detail.title"
+        :subtitle="detail.subtitle"
+        :option="detail.option"
+        :board="detail.board"
+        :sessions="realtime"
+        @close="closeDetail"
+      />
     </div>
   </div>
 </template>
@@ -90,6 +96,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import EChart from '../components/EChart.vue'
+import DetailOverlay from '../components/DetailOverlay.vue'
 import HeaderBar from '../components/HeaderBar.vue'
 import KpiBar from '../components/KpiBar.vue'
 import PanelBox from '../components/PanelBox.vue'
@@ -99,7 +106,7 @@ import { initTheme, theme } from '../utils/echartsTheme'
 import {
   batteryHealthOption,
   dailyTrendOption,
-  districtConicalConfig,
+  districtBarOption,
   durationRoseOption,
   energyDistOption,
   facilityRadarOption,
@@ -159,7 +166,39 @@ const batteryOption = computed(() => batteryHealthOption(bundle.value.batteryHea
 const periodOption = computed(() => timePeriodFunnelOption(bundle.value.timePeriod || []))
 const energyOption = computed(() => energyDistOption(bundle.value.energyDist || []))
 const revenueOption = computed(() => revenueStructOption(bundle.value.revenueStruct || [], '站点类型'))
-const conicalConfig = computed(() => districtConicalConfig(bundle.value.district || []))
+const districtOption = computed(() => districtBarOption(bundle.value.district || []))
+
+// 详情页：点击任意面板在大画布上放大查看（支持 ?detail=key 直接打开）
+const detailKey = ref(null)
+
+const panelDefs = computed(() => ({
+  monthly: { title: '月度充电量趋势', subtitle: '柱：充电量　线：订单数', option: monthlyOption.value },
+  hour: { title: '24小时充电负荷分布', subtitle: '柱：订单数（峰/平/谷）　线：平均功率', option: hourOption.value },
+  facility: { title: '站点类型对比分析', subtitle: '雷达图（各指标按最大值归一化到 100）', option: facilityOption.value },
+  duration: { title: '充电时长分布', subtitle: '玫瑰图（占比按订单数）', option: durationOption.value },
+  daily: { title: '日充电量与订单趋势', subtitle: '近 90 天 · 双轴', option: dailyOption.value },
+  heat: { title: '星期 × 小时充电热度', subtitle: '订单分布热力图', option: heatOption.value },
+  station: { title: '站点充电量 TOP10', subtitle: '单位 kWh', option: stationOption.value },
+  weekend: { title: '工作日 vs 周末对比', subtitle: '日均订单 / 日均电量 / 平均单次电量', option: weekendOption.value },
+  platform: { title: '充电平台对比', subtitle: '订单数 / 平均单次电量', option: platformOption.value },
+  segment: { title: '用户价值分层（RFM）', subtitle: '用户数占比与电量贡献', option: segmentOption.value },
+  battery: { title: '电池健康画像', subtitle: 'SOC 区间的充电功率 / 单体压差 / 温升', option: batteryOption.value },
+  period: { title: '峰平谷时段对比', subtitle: '各时段充电量占比', option: periodOption.value },
+  energy: { title: '单次充电量分布', subtitle: '订单数 / 占比', option: energyOption.value },
+  district: { title: '行政区充电量分布', subtitle: 'TOP6 行政区（单位 kWh）', option: districtOption.value },
+  revenue: { title: '收入结构与付费率', subtitle: '按站点类型', option: revenueOption.value },
+  realtime: { title: '实时充电订单流水', subtitle: '最新 12 条订单滚动播放', board: true }
+}))
+
+const detail = computed(() => (detailKey.value ? panelDefs.value[detailKey.value] || null : null))
+
+function openDetail(key) {
+  detailKey.value = key
+}
+
+function closeDetail() {
+  detailKey.value = null
+}
 
 const stageStyle = computed(() => {
   const scale = Math.min(viewport.value.width / DESIGN_WIDTH, viewport.value.height / DESIGN_HEIGHT)
@@ -187,7 +226,14 @@ async function load() {
 }
 
 onMounted(async () => {
-  load()
+  await load()
+  // 支持深链： http://<地址>/?detail=monthly 直接打开某个图表的详情页
+  try {
+    const key = new URLSearchParams(window.location.search).get('detail')
+    if (key && panelDefs.value[key]) detailKey.value = key
+  } catch (err) {
+    /* 忽略 */
+  }
   refreshTimer = setInterval(load, 60000)
   resizeHandler = () => {
     viewport.value = { width: window.innerWidth, height: window.innerHeight }

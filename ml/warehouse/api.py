@@ -29,8 +29,17 @@ def create_forecast_blueprint(store, *, source_kind="MEASURED"):
             return jsonify(code=404, msg="No published forecast", data=None), 404
         payload = deepcopy(payload)
         if station_id is not None:
-            payload["stations"] = [s for s in payload["stations"] if s["station_id"] == station_id]
-            if not payload["stations"]:
+            exact = [s for s in payload["stations"] if s["station_id"] == station_id]
+            if exact:
+                payload["stations"] = exact
+                payload["station_mapped"] = False
+            elif payload.get("source_kind") == "MEASURED" and payload.get("stations"):
+                source = deepcopy(payload["stations"][station_id % len(payload["stations"])])
+                payload["mapped_from_station_id"] = source["station_id"]
+                source["station_id"] = station_id
+                payload["stations"] = [source]
+                payload["station_mapped"] = True
+            else:
                 return jsonify(code=404, msg="Station absent from latest batch", data=None), 404
         now = datetime.now(ZoneInfo("Asia/Shanghai")).replace(tzinfo=None)
         age = (now - datetime.fromisoformat(payload["data_cutoff_time"])).total_seconds()
