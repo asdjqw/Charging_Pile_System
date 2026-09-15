@@ -1,6 +1,8 @@
 [Unit]
 Description=Charging Pile Big Screen (Flask + Gunicorn)
 After=network.target mysqld.service mysql.service
+# 项目放在 VMware 共享目录（hgfs）时，等挂载完成后再启动
+RequiresMountsFor=__ROOT_DIR__
 
 [Service]
 Type=simple
@@ -8,7 +10,7 @@ User=__USER__
 WorkingDirectory=__ROOT_DIR__
 Environment=PYTHONUNBUFFERED=1
 Environment=PORT=5000
-ExecStart=__ROOT_DIR__/.venv/bin/gunicorn -c __ROOT_DIR__/deploy/gunicorn.conf.py backend.wsgi:application
+ExecStart=__VENV_DIR__/bin/gunicorn -c __ROOT_DIR__/deploy/gunicorn.conf.py backend.wsgi:application
 Restart=always
 RestartSec=5
 

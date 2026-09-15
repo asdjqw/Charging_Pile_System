@@ -43,7 +43,14 @@ app.config["JSON_AS_ASCII"] = False
 app.json.ensure_ascii = False
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
-DIST_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend", "dist")
+# 前端静态目录：优先 frontend/dist（npm 构建产物），没有时回退到合并工程里的 ../web
+_BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+_PROJECT_DIR = os.path.dirname(_BACKEND_DIR)
+_DIST_CANDIDATES = [
+    os.path.join(_PROJECT_DIR, "frontend", "dist"),
+    os.path.join(os.path.dirname(_PROJECT_DIR), "web"),
+]
+DIST_DIR = next((p for p in _DIST_CANDIDATES if os.path.isfile(os.path.join(p, "index.html"))), _DIST_CANDIDATES[0])
 
 
 def ok(data, **extra):
