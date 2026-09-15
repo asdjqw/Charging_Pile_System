@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include "ForecastDialog.h"
 #include "ServerApiClient.h"
 #include "LocationProvider.h"
 #include "StyleHelper.h"
@@ -22,6 +23,7 @@
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QJsonObject>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -526,8 +528,11 @@ void MainWindow::buildStationDetailPage()
     m_detailFavBtn = new QPushButton(QStringLiteral("收藏"));
     m_detailFavBtn->setObjectName(QStringLiteral("secondaryBtn"));
     m_detailChargeBtn = new QPushButton(QStringLiteral("去充电"));
+    m_detailForecastBtn = new QPushButton(QStringLiteral("充电预测"));
+    m_detailForecastBtn->setObjectName(QStringLiteral("secondaryBtn"));
     actions->addWidget(m_detailNavBtn);
     actions->addWidget(m_detailFavBtn);
+    actions->addWidget(m_detailForecastBtn);
     actions->addWidget(m_detailChargeBtn);
     root->addLayout(actions);
 
@@ -543,6 +548,7 @@ void MainWindow::buildStationDetailPage()
     connect(m_detailFavBtn, &QPushButton::clicked, this, &MainWindow::onStationDetailFavorite);
     connect(m_detailNavBtn, &QPushButton::clicked, this, &MainWindow::onStationDetailNavigate);
     connect(m_detailChargeBtn, &QPushButton::clicked, this, &MainWindow::onStationDetailGoCharge);
+    connect(m_detailForecastBtn, &QPushButton::clicked, this, &MainWindow::onStationDetailForecast);
     connect(m_detailReviewList, &QListWidget::itemClicked,
             this, &MainWindow::onReviewItemClicked);
 }
@@ -1054,6 +1060,19 @@ void MainWindow::onStationDetailGoCharge()
     syncChargeStationSelection(m_detailStation.id);
     onBottomNav(1);
     onChargeSubNav(0);
+}
+
+void MainWindow::onStationDetailForecast()
+{
+    if (m_detailStation.id <= 0)
+        return;
+    QJsonObject payload;
+    if (!ServerApiClient::instance().stationForecast(m_detailStation.id, payload)) {
+        StyleHelper::warning(this, QStringLiteral("充电预测"), ServerApiClient::instance().lastError());
+        return;
+    }
+    ForecastDialog dialog(m_detailStation.id, m_detailStation.name, payload, m_darkMode, this);
+    dialog.exec();
 }
 
 int MainWindow::selectedStationId() const

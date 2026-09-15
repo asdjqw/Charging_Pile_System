@@ -32,6 +32,7 @@ private:
     int authorizedAdmin(const QJsonObject &request);
     bool adminHasPermission(int adminId, const QString &permission) const;
     QJsonObject dashboardPayload(int days) const;
+    QJsonObject stationForecastPayload(const QJsonObject &request);
     QJsonObject dispatchAdmin(const QJsonObject &request, int adminId);
     QJsonObject denyIfNoPermission(const QJsonObject &request, int adminId,
                                    const QString &permission) const;

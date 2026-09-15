@@ -563,7 +563,7 @@
          <widget class="QWidget" name="stationPage">
           <layout class="QVBoxLayout" name="stationLayout" stretch="0,3,0,2">
            <item>
-            <layout class="QHBoxLayout" name="stationRow" stretch="0,1,0,0,0,0">
+            <layout class="QHBoxLayout" name="stationRow" stretch="0,1,0,0,0,0,0">
              <item>
               <widget class="QLabel" name="stationTitle">
                <property name="text">
@@ -582,6 +582,13 @@
               <widget class="QPushButton" name="stationSearchBtn">
                <property name="text">
                 <string>查询</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="stationForecastBtn">
+               <property name="text">
+                <string>充电预测</string>
                </property>
               </widget>
              </item>

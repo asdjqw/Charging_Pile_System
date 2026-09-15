@@ -8,13 +8,15 @@ include(../common/common.pri)
 HEADERS += \
     LoginDialog.h \
     AdminApiClient.h \
-    MainWindow.h
+    MainWindow.h \
+    ../common/ForecastDialog.h
 
 SOURCES += \
     main.cpp \
     LoginDialog.cpp \
     AdminApiClient.cpp \
-    MainWindow.cpp
+    MainWindow.cpp \
+    ../common/ForecastDialog.cpp
 
 FORMS += \
     LoginDialog.ui \

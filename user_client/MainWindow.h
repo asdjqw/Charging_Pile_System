@@ -70,6 +70,7 @@ private slots:
     void onStationDetailFavorite();
     void onStationDetailNavigate();
     void onStationDetailGoCharge();
+    void onStationDetailForecast();
     void onReviewItemClicked(QListWidgetItem *item);
 
 private:
@@ -143,6 +144,7 @@ private:
     QPushButton *m_detailFavBtn = nullptr;
     QPushButton *m_detailNavBtn = nullptr;
     QPushButton *m_detailChargeBtn = nullptr;
+    QPushButton *m_detailForecastBtn = nullptr;
     QListWidget *m_detailReviewList = nullptr;
     Station m_detailStation;
 

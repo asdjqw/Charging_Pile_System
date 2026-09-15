@@ -1,5 +1,6 @@
 #include "MainWindow.h"
 #include "AdminApiClient.h"
+#include "ForecastDialog.h"
 #include "StyleHelper.h"
 
 #include <QAbstractItemView>
@@ -16,6 +17,7 @@
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QJsonObject>
 #include <QJsonArray>
 #include <QLabel>
 #include <QLineEdit>
@@ -190,6 +192,7 @@ void MainWindow::applyStyleObjectNames()
     ui->stationTitle->setObjectName(QStringLiteral("pageTitle"));
     ui->editStationBtn->setObjectName(QStringLiteral("secondaryBtn"));
     ui->delStationBtn->setObjectName(QStringLiteral("dangerBtn"));
+    ui->stationForecastBtn->setObjectName(QStringLiteral("secondaryBtn"));
     ui->stationDetailTitle->setObjectName(QStringLiteral("muted"));
     ui->reviewsTitle->setObjectName(QStringLiteral("pageTitle"));
     ui->reviewDeleteBtn->setObjectName(QStringLiteral("dangerBtn"));
@@ -309,6 +312,7 @@ void MainWindow::buildUi()
     connect(ui->addStationBtn, &QPushButton::clicked, this, &MainWindow::onAddStation);
     connect(ui->editStationBtn, &QPushButton::clicked, this, &MainWindow::onEditStation);
     connect(ui->delStationBtn, &QPushButton::clicked, this, &MainWindow::onDeleteStation);
+    connect(ui->stationForecastBtn, &QPushButton::clicked, this, &MainWindow::onStationForecast);
     connect(m_stationTable, &QTableWidget::cellClicked, this, &MainWindow::onStationRowClicked);
     connect(ui->reviewSearchBtn, &QPushButton::clicked, this, &MainWindow::refreshReviews);
     connect(ui->reviewRefreshBtn, &QPushButton::clicked, this, &MainWindow::refreshReviews);
@@ -821,6 +825,25 @@ void MainWindow::onStationRowClicked(int row, int)
         m_stationPileTable->setItem(i, 3, textItem(statusTextPile(p.status)));
         m_stationPileTable->setItem(i, 4, textItem(QString::number(p.totalChargeCount)));
     }
+}
+
+void MainWindow::onStationForecast()
+{
+    const int row = m_stationTable->currentRow();
+    if (row < 0) {
+        StyleHelper::information(this, QStringLiteral("提示"), QStringLiteral("请先点击要查看的电站"));
+        return;
+    }
+    const int stationId = m_stationTable->item(row, 0)->data(Qt::UserRole).toInt();
+    const QString name = m_stationTable->item(row, 1) ? m_stationTable->item(row, 1)->text()
+                                                      : QStringLiteral("电站");
+    QJsonObject payload;
+    if (!AdminApiClient::instance().stationForecast(stationId, payload)) {
+        showApiError(QStringLiteral("充电预测"));
+        return;
+    }
+    ForecastDialog dialog(stationId, name, payload, m_darkMode, this);
+    dialog.exec();
 }
 
 void MainWindow::onToggleUserStatus()

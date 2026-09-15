@@ -10,9 +10,11 @@ include(../common/runtime_copy.pri)
 
 HEADERS += \
     ApiDispatcher.h \
-    LocalServer.h
+    LocalServer.h \
+    MlForecastGateway.h
 
 SOURCES += \
     ApiDispatcher.cpp \
     LocalServer.cpp \
+    MlForecastGateway.cpp \
     main.cpp

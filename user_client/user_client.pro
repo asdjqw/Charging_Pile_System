@@ -1,4 +1,4 @@
-QT += core gui widgets sql network dbus
+QT += core gui widgets sql network dbus charts
 CONFIG += c++17 utf8_source
 TARGET = user_client
 TEMPLATE = app
@@ -10,14 +10,16 @@ HEADERS += \
     LoginDialog.h \
     LocationProvider.h \
     ServerApiClient.h \
-    MainWindow.h
+    MainWindow.h \
+    ../common/ForecastDialog.h
 
 SOURCES += \
     main.cpp \
     LoginDialog.cpp \
     LocationProvider.cpp \
     ServerApiClient.cpp \
-    MainWindow.cpp
+    MainWindow.cpp \
+    ../common/ForecastDialog.cpp
 
 FORMS += \
     LoginDialog.ui \

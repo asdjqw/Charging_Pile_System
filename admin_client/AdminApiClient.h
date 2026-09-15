@@ -58,6 +58,7 @@ public:
 
     QVector<StationReview> listReviews(int stationId = -1);
     bool deleteReview(int reviewId);
+    bool stationForecast(int stationId, QJsonObject &out);
 
 private:
     explicit AdminApiClient(QObject *parent = nullptr);

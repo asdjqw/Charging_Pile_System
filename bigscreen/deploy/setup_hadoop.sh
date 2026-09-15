@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # ============================================================================
 # 在单机上搭建 Hadoop 3.x 伪分布式环境（HDFS + YARN），并把原始数据存入 HDFS
+# NameNode RPC 使用 8020，避免和一期 Qt TCP 默认 9000 冲突。
 #
 #   用法： bash deploy/setup_hadoop.sh
 #   完成后： bash deploy/spark_submit.sh   # 用 Spark on YARN 重新计算
@@ -49,7 +50,7 @@ EOF
 cat > "$CONF/core-site.xml" <<EOF
 <?xml version="1.0"?>
 <configuration>
-  <property><name>fs.defaultFS</name><value>hdfs://localhost:9000</value></property>
+  <property><name>fs.defaultFS</name><value>hdfs://localhost:8020</value></property>
   <property><name>hadoop.tmp.dir</name><value>$DATA_DIR/tmp</value></property>
   <property><name>io.file.buffer.size</name><value>131072</value></property>
 </configuration>

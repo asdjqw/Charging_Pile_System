@@ -7,6 +7,7 @@
 #include <QElapsedTimer>
 #include <QHostAddress>
 #include <QJsonArray>
+#include <QJsonObject>
 #include <QTcpSocket>
 #include <QUuid>
 
@@ -369,4 +370,13 @@ QVector<ChargingOrder> ServerApiClient::listOrders(int, const QString &status)
     for (const QJsonValue &value : response.value("data").toObject().value("items").toArray())
         values.push_back(JsonCodec::orderFromJson(value.toObject()));
     return values;
+}
+
+bool ServerApiClient::stationForecast(int stationId, QJsonObject &out)
+{
+    const QJsonObject response = call(QStringLiteral("forecast.station"), {{"stationId", stationId}});
+    if (!accept(response))
+        return false;
+    out = response.value("data").toObject();
+    return true;
 }

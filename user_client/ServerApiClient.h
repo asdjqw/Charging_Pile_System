@@ -55,6 +55,7 @@ public:
     bool stopCharging(int orderId, double energyKwh, ChargingOrder &outOrder);
     bool getOngoingOrderByUser(int userId, ChargingOrder &outOrder);
     QVector<ChargingOrder> listOrders(int userId, const QString &status = QString());
+    bool stationForecast(int stationId, QJsonObject &out);
 
 private:
     explicit ServerApiClient(QObject *parent = nullptr);

@@ -47,6 +47,7 @@ private slots:
     void onEditStation();
     void onDeleteStation();
     void onStationRowClicked(int row, int column);
+    void onStationForecast();
     void onDeleteReview();
     void onToggleUserStatus();
     void onViewUserOrders();

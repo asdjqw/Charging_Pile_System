@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Spark / 输出
+spark-warehouse/
+output/
+logs/
+*.log
+
+# 前端
+node_modules/
+frontend/dist/
+.npm/
+
+# 编辑器
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

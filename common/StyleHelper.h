@@ -223,6 +223,12 @@ inline QString userClientStyle()
         QFrame#card {
             background: white; border: 1px solid #D8E0DE; border-radius: 8px;
         }
+        QFrame#kpiCard {
+            background: white; border: 1px solid #D8E0DE; border-radius: 4px;
+        }
+        QLabel#kpiValue { font-size: 20px; font-weight: 600; color: #15201E; font-family: 'Consolas','Noto Sans Mono','monospace'; }
+        QLabel#kpiTitle { color: #64716E; font-size: 12px; }
+        QChartView { background: white; border: 1px solid #D8E0DE; }
         QWidget#bottomNav {
             background: #FFFFFF; border-top: 1px solid #D8E0DE;
         }
@@ -360,6 +366,12 @@ inline QString userClientDarkStyle()
         QFrame#card {
             background: #1A2422; border: 1px solid #2A3835; border-radius: 8px;
         }
+        QFrame#kpiCard {
+            background: #1A2422; border: 1px solid #2A3835; border-radius: 4px;
+        }
+        QLabel#kpiValue { font-size: 20px; font-weight: 600; color: #F3F6F5; font-family: 'Consolas','Noto Sans Mono','monospace'; }
+        QLabel#kpiTitle { color: #8A9693; font-size: 12px; }
+        QChartView { background: #1A2422; border: 1px solid #2A3835; }
         QWidget#bottomNav {
             background: #1A2422; border-top: 1px solid #2A3835;
         }

@@ -1,0 +1,16 @@
+[Unit]
+Description=Charging Pile Big Screen (Flask + Gunicorn)
+After=network.target mysqld.service mysql.service
+
+[Service]
+Type=simple
+User=__USER__
+WorkingDirectory=__ROOT_DIR__
+Environment=PYTHONUNBUFFERED=1
+Environment=PORT=5000
+ExecStart=__ROOT_DIR__/.venv/bin/gunicorn -c __ROOT_DIR__/deploy/gunicorn.conf.py backend.wsgi:application
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

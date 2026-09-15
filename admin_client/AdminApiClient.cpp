@@ -5,6 +5,7 @@
 
 #include <QElapsedTimer>
 #include <QJsonArray>
+#include <QJsonObject>
 #include <QTcpSocket>
 #include <QUuid>
 
@@ -359,4 +360,13 @@ QVector<StationReview> AdminApiClient::listReviews(int stationId)
 bool AdminApiClient::deleteReview(int reviewId)
 {
     return accept(call(QStringLiteral("admin.reviews.delete"), {{"reviewId", reviewId}}));
+}
+
+bool AdminApiClient::stationForecast(int stationId, QJsonObject &out)
+{
+    const QJsonObject response = call(QStringLiteral("admin.forecast.station"), {{"stationId", stationId}});
+    if (!accept(response))
+        return false;
+    out = response.value("data").toObject();
+    return true;
 }

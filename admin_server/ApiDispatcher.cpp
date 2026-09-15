@@ -2,6 +2,7 @@
 
 #include "DatabaseManager.h"
 #include "JsonCodec.h"
+#include "MlForecastGateway.h"
 #include "Models.h"
 
 #include <algorithm>
@@ -392,6 +393,9 @@ QJsonObject ApiDispatcher::dispatch(const QJsonObject &request)
     if (action == QLatin1String("orders.list"))
         return success(request, QJsonObject{{"items", ordersJson(db.listOrders(userId, data.value("status").toString()))}});
 
+    if (action == QLatin1String("forecast.station"))
+        return stationForecastPayload(request);
+
     qWarning().noquote() << QStringLiteral("未知请求 action=") << action;
     return failure(request, QStringLiteral("UNKNOWN_ACTION"),
                    QStringLiteral("未知请求: %1").arg(action));
@@ -723,6 +727,25 @@ QJsonObject ApiDispatcher::dispatchAdmin(const QJsonObject &request, int adminId
         return success(request, QJsonObject(), QStringLiteral("评论已删除"));
     }
 
+    if (action == QLatin1String("admin.forecast.station")) {
+        if (const auto denied = denyIfNoPermission(request, adminId, QStringLiteral("stations.read"));
+            !denied.isEmpty())
+            return denied;
+        return stationForecastPayload(request);
+    }
+
     return failure(request, QStringLiteral("UNKNOWN_ACTION"),
                    QStringLiteral("未知管理员请求: %1").arg(action));
+}
+
+QJsonObject ApiDispatcher::stationForecastPayload(const QJsonObject &request)
+{
+    const int stationId = request.value("data").toObject().value("stationId").toInt();
+    if (stationId <= 0)
+        return failure(request, QStringLiteral("INVALID_STATION"), QStringLiteral("请先选择电站"));
+    QString error;
+    const QJsonObject payload = MlForecastGateway::queryStation(stationId, &error);
+    if (payload.isEmpty())
+        return failure(request, QStringLiteral("FORECAST_UNAVAILABLE"), error);
+    return success(request, payload);
 }

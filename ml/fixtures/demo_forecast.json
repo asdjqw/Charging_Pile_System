@@ -1,0 +1,68 @@
+{
+  "schema_version": "1.0",
+  "success": true,
+  "errors": [],
+  "run_id": "forecast-demo-simulated-20260915",
+  "request_id": "forecast-demo-simulated-20260915",
+  "generated_at": "2026-09-15T14:10:00",
+  "data_cutoff_time": "2026-09-15T14:00:00",
+  "timezone": "Asia/Shanghai",
+  "data_version": "demo-simulated-20260915",
+  "source_kind": "SIMULATED",
+  "input_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "source_manifest_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "config_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "integration_version": "warehouse-inference-v1",
+  "model_freeze_id": "shenzhen-six-model-freeze-20260914",
+  "quality_status": "PASS",
+  "prediction_mode": "direct_h1_h6_h24",
+  "occupancy_semantics": "charging_duration_ratio",
+  "pile_count_semantics": "equivalent_hourly_counts_not_live_availability",
+  "models": {
+    "load": {"1h": "v1.1", "6h": "v1", "24h": "v1"},
+    "occupancy": {"1h": "v1.1", "6h": "v1", "24h": "v1"}
+  },
+  "stations": [
+    {
+      "station_id": 1001,
+      "station_name": "站点1001",
+      "status": "ok",
+      "capacity": {"total_piles": 12, "station_capacity_kw": 180.0},
+      "forecast": {
+        "1h": {
+          "load_ratio": 0.42,
+          "load_kw": 75.6,
+          "occupancy_ratio": 0.48,
+          "target_start": "2026-09-15T14:00:00",
+          "target_end": "2026-09-15T15:00:00",
+          "equivalent_occupied_piles": 6,
+          "equivalent_idle_piles": 6
+        },
+        "6h": {
+          "load_ratio": 0.61,
+          "load_kw": 109.8,
+          "occupancy_ratio": 0.72,
+          "target_start": "2026-09-15T19:00:00",
+          "target_end": "2026-09-15T20:00:00",
+          "equivalent_occupied_piles": 9,
+          "equivalent_idle_piles": 3
+        },
+        "24h": {
+          "load_ratio": 0.38,
+          "load_kw": 68.4,
+          "occupancy_ratio": 0.41,
+          "target_start": "2026-09-16T13:00:00",
+          "target_end": "2026-09-16T14:00:00",
+          "equivalent_occupied_piles": 5,
+          "equivalent_idle_piles": 7
+        }
+      },
+      "business_status": {
+        "congestion_level": "low",
+        "warning_level": "normal"
+      },
+      "peak": {"time": null, "load_ratio": null},
+      "hourly_forecast": []
+    }
+  ]
+}
