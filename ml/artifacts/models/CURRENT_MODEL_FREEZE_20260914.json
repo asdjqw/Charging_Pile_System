@@ -1,0 +1,99 @@
+{
+  "freeze_id": "shenzhen-six-model-freeze-20260914",
+  "freeze_date": "2026-09-14",
+  "status": "FROZEN_NO_RETRAINING",
+  "scope": "Six frozen Shenzhen forecasting models with inline inference parameters",
+  "previous_manifest_sha256": "b5c211be8b4ffc0e9908590c92ce09e73ba9edab02aade45426953d966f7151d",
+  "hash_algorithm": "SHA-256",
+  "rules": {
+    "allow_inference_integration": true,
+    "allow_read_only_evaluation": true,
+    "allow_data_adapter_work": true,
+    "allow_model_retraining": false,
+    "allow_parameter_tuning": false,
+    "allow_model_file_overwrite": false,
+    "allow_threshold_change": false,
+    "unfreeze_requires_explicit_user_instruction": true
+  },
+  "background_training": {
+    "training_process_detected_at_freeze": false,
+    "unloaded_launch_agents": [
+      "com.chargingpile.h24-gate-incremental",
+      "com.chargingpile.h24-hybrid-v2"
+    ],
+    "obsolete_plist_files_trashed": true
+  },
+  "models": [
+    {
+      "task": "load_h1",
+      "model_version": "v1.1",
+      "architecture": "two_stage_xgboost_classifier_plus_residual_xgboost",
+      "model_path": "ml/artifacts/models/urbanev-local-v1_1-h1-20260903/models/load_h1/model.joblib",
+      "metadata_path": "ml/artifacts/models/urbanev-local-v1_1-h1-20260903/models/load_h1/metadata.json",
+      "sha256": "0c101a0d7206e4bf2cbc2cafde054445a552de23b167cd4632ce69e1d24169cd",
+      "feature_contract": "h1-20f-v1",
+      "classification_threshold": 0.4,
+      "deadband_tau": 0.0,
+      "alpha": 1.0,
+      "fallback": "persistence"
+    },
+    {
+      "task": "occupancy_h1",
+      "model_version": "v1.1_plus_v1.4_deadband",
+      "architecture": "two_stage_xgboost_classifier_plus_residual_xgboost_plus_deadband",
+      "model_path": "ml/artifacts/models/urbanev-local-v1_1-h1-20260903/models/occupancy_h1/model.joblib",
+      "metadata_path": "ml/artifacts/models/urbanev-local-v1_1-h1-20260903/models/occupancy_h1/metadata.json",
+      "sha256": "654c2b3d5321e2ed4a2085974f02a3e8442c0cae554ab967bcb9dec6eacb8600",
+      "feature_contract": "h1-20f-v1",
+      "classification_threshold": 0.4,
+      "deadband_tau": 0.02,
+      "alpha": 1.0,
+      "fallback": "persistence"
+    },
+    {
+      "task": "load_h6",
+      "model_version": "v1",
+      "architecture": "random_forest_regressor",
+      "model_path": "ml/artifacts/models/urbanev-local-v1-20260902/load_h6/model.joblib",
+      "metadata_path": "ml/artifacts/models/urbanev-local-v1-20260902/load_h6/metadata.json",
+      "sha256": "1dd3de5bb3a24e1c9cde1f92144803078c8c68c0a112646ebc4b408305bc4149",
+      "feature_contract": "v1-18f"
+    },
+    {
+      "task": "occupancy_h6",
+      "model_version": "v1",
+      "architecture": "random_forest_regressor",
+      "model_path": "ml/artifacts/models/urbanev-local-v1-20260902/occupancy_h6/model.joblib",
+      "metadata_path": "ml/artifacts/models/urbanev-local-v1-20260902/occupancy_h6/metadata.json",
+      "sha256": "6b33e1e66723b9bc24c5c4e2dc75e0cae0352fb7da2bd56ffbc230982a0829e1",
+      "feature_contract": "v1-18f"
+    },
+    {
+      "task": "load_h24",
+      "model_version": "v1",
+      "architecture": "random_forest_regressor",
+      "model_path": "ml/artifacts/models/urbanev-local-v1-20260902/load_h24/model.joblib",
+      "metadata_path": "ml/artifacts/models/urbanev-local-v1-20260902/load_h24/metadata.json",
+      "sha256": "568339de30ce58dceb7f799c55660abfbce8a4842e52c6703eb6df8162d0c3c9",
+      "feature_contract": "v1-18f",
+      "release_note": "Retained current RF; experimental H24 Gate and residual candidates were not promoted."
+    },
+    {
+      "task": "occupancy_h24",
+      "model_version": "v1",
+      "architecture": "random_forest_regressor",
+      "model_path": "ml/artifacts/models/urbanev-local-v1-20260902/occupancy_h24/model.joblib",
+      "metadata_path": "ml/artifacts/models/urbanev-local-v1-20260902/occupancy_h24/metadata.json",
+      "sha256": "f219db10590137f0f61fb15858a9062ef3e01af058577e372560bd2a4f3ee226",
+      "feature_contract": "v1-18f",
+      "release_note": "Retained current RF; experimental H24 Gate and residual candidates were not promoted."
+    }
+  ],
+  "notes": [
+    "This is an operational and integrity freeze, not a filesystem permission lock.",
+    "The frozen model binaries were verified against the listed SHA-256 values on 2026-09-14.",
+    "All six models use this manifest as the single source of inference parameters; no separate policy file is required.",
+    "The previous manifest hash identifies the manifest used by the retained Test-A reports. Policy consolidation changes no model binaries, inference parameters or historical evaluation records.",
+    "Model integration, database adapter alignment, tests and documentation may continue without changing model behavior."
+  ]
+}

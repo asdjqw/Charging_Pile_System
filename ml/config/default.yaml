@@ -1,0 +1,13 @@
+artifacts:
+  current_freeze_manifest: "ml/artifacts/models/CURRENT_MODEL_FREEZE_20260914.json"
+
+prediction:
+  history_window_hours: 72
+
+congestion:
+  medium_threshold: 0.50
+  high_threshold: 0.80
+
+warning:
+  warning_threshold: 0.80
+  critical_threshold: 0.90

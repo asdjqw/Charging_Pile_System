@@ -1,0 +1,54 @@
+{
+  "task": "occupancy_h24",
+  "status": "EVALUATION_COMPLETED",
+  "evaluation_type": "reused_original_test_a_regression",
+  "independent_unseen_holdout": false,
+  "retrained": false,
+  "tuned": false,
+  "evaluated_at": "2026-09-14T20:58:59.870692+08:00",
+  "model_version": "v1",
+  "model_sha256": "f219db10590137f0f61fb15858a9062ef3e01af058577e372560bd2a4f3ee226",
+  "freeze_id": "shenzhen-six-model-freeze-20260914",
+  "freeze_manifest_sha256": "b5c211be8b4ffc0e9908590c92ce09e73ba9edab02aade45426953d966f7151d",
+  "dataset_run_id": "urbanev-local-v1-20260902",
+  "cache_manifest_sha256": "98d6aa816c26ac7a0ba07395b6765444795551a7cde34c68dd2c947a65a3c78e",
+  "test_indices_sha256": "40d854b3b0e8bf28c12eaa7c557ca89ed099be766e87c0fbcb35761c37025c1d",
+  "rows": 890504,
+  "excluded_rows": 0,
+  "feature_count": 18,
+  "feature_row_start": "2023-02-01T20:00:00.000000000",
+  "feature_row_end": "2023-02-27T23:00:00.000000000",
+  "target_hour_offset": 24,
+  "timezone": "Asia/Shanghai",
+  "metrics": {
+    "RMSE": 0.11652660605087588,
+    "MAE": 0.07247624718039543,
+    "R2": 0.6679494720490553,
+    "within_5_percentage_points": 0.5888609147179574,
+    "within_10_percentage_points": 0.766507505861849
+  },
+  "persistence_metrics": {
+    "RMSE": 0.13678995653675227,
+    "MAE": 0.06790287025907953,
+    "R2": 0.5424248787970036,
+    "within_5_percentage_points": 0.6430526982472847,
+    "within_10_percentage_points": 0.7548713986686191
+  },
+  "relative_rmse_gain": 0.1481347826909507,
+  "relative_mae_gain": -0.06735174675041633,
+  "clip_count": 0,
+  "clip_rate": 0.0,
+  "raw_prediction": {
+    "min": 0.0011475016507263706,
+    "max": 0.9961994771863047,
+    "mean": 0.15765170002506154
+  },
+  "clipped_prediction": {
+    "min": 0.0011475016507263706,
+    "max": 0.9961994771863047,
+    "mean": 0.15765170002506154
+  },
+  "prediction_sha256_float64": "47476bdf68a00a3d3d37e63ae54ed1960b05618f230a608397c9971a34a6e048",
+  "runtime_seconds": 9.351072833989747,
+  "notes": "Original task-specific Test-A rows retained exactly; horizons have different valid end dates. Metrics use unrounded clipped model ratios. This reused set does not establish unseen-data generalization."
+}

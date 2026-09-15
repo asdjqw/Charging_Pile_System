@@ -1,0 +1,147 @@
+{
+  "arrays": {
+    "X_common": {
+      "bytes": 369587648,
+      "dtype": "float32",
+      "file": "X_common.npy",
+      "sha256": "24978d1bd720b6f50b9a24bd9499f4d74055fdc2c0668582d7e09e596a189c0f",
+      "shape": [
+        6159792,
+        15
+      ]
+    },
+    "persistence_load": {
+      "bytes": 24639296,
+      "dtype": "float32",
+      "file": "persistence_load.npy",
+      "sha256": "b2f49187deaaaf2b73bbdaea0586160fa36b25b07a7d5668d63a68484f6c44fb",
+      "shape": [
+        6159792
+      ]
+    },
+    "persistence_occupancy": {
+      "bytes": 24639296,
+      "dtype": "float32",
+      "file": "persistence_occupancy.npy",
+      "sha256": "27472dbf17937f31915f79554ca40a6a7269a8ca74217c103b7bf06097f4ba05",
+      "shape": [
+        6159792
+      ]
+    },
+    "station_id": {
+      "bytes": 24639296,
+      "dtype": "int32",
+      "file": "station_id.npy",
+      "sha256": "c15fe76958ee8dc36e0f7cb0165a899981657b4870e3e6efc7248b2cb681e3fd",
+      "shape": [
+        6159792
+      ]
+    },
+    "timestamp_ns": {
+      "bytes": 49278464,
+      "dtype": "int64",
+      "file": "timestamp_ns.npy",
+      "sha256": "29a6d2f26bcdc922a8f6951bcac7ebd09073ba01cf28c9c56ca69ad6a453f3fc",
+      "shape": [
+        6159792
+      ]
+    },
+    "y_load_h1": {
+      "bytes": 24639296,
+      "dtype": "float32",
+      "file": "y_load_h1.npy",
+      "sha256": "9c7fd5e481cf6fd4137cac7109cdb51d8b78c8f7e307953c36d6f75ef70253e7",
+      "shape": [
+        6159792
+      ]
+    },
+    "y_load_h24": {
+      "bytes": 24639296,
+      "dtype": "float32",
+      "file": "y_load_h24.npy",
+      "sha256": "102faf3d5177ee0f8b55199bbc7182788902049534483cd531093f2c92130845",
+      "shape": [
+        6159792
+      ]
+    },
+    "y_load_h6": {
+      "bytes": 24639296,
+      "dtype": "float32",
+      "file": "y_load_h6.npy",
+      "sha256": "fef007676a5d406cfb998577354a590fe17f417832bf962cec272b518ed8f4cd",
+      "shape": [
+        6159792
+      ]
+    },
+    "y_occupancy_h1": {
+      "bytes": 24639296,
+      "dtype": "float32",
+      "file": "y_occupancy_h1.npy",
+      "sha256": "05b13bd0573a27b073e25bd5aa47f9a80231636db5441f20967eff6d65bc86b0",
+      "shape": [
+        6159792
+      ]
+    },
+    "y_occupancy_h24": {
+      "bytes": 24639296,
+      "dtype": "float32",
+      "file": "y_occupancy_h24.npy",
+      "sha256": "6f6819028e46f26d078229e61fdfe5aee3cdf1a727809cd1654b296f1b740ead",
+      "shape": [
+        6159792
+      ]
+    },
+    "y_occupancy_h6": {
+      "bytes": 24639296,
+      "dtype": "float32",
+      "file": "y_occupancy_h6.npy",
+      "sha256": "a752c7ea325dc06ad80af946b02c92556d66c5a3473a0c153278cca9886ca645",
+      "shape": [
+        6159792
+      ]
+    }
+  },
+  "common_feature_columns": [
+    "hour",
+    "weekday",
+    "is_weekend",
+    "load_lag_1",
+    "load_lag_6",
+    "load_lag_24",
+    "load_rolling_mean_6",
+    "load_rolling_mean_24",
+    "occupancy_lag_1",
+    "occupancy_lag_6",
+    "occupancy_lag_24",
+    "occupancy_rolling_mean_6",
+    "occupancy_rolling_mean_24",
+    "total_piles",
+    "station_capacity_kw"
+  ],
+  "dtype": "float32",
+  "feature_columns": [
+    "hour",
+    "weekday",
+    "is_weekend",
+    "target_hour",
+    "target_weekday",
+    "target_is_weekend",
+    "load_lag_1",
+    "load_lag_6",
+    "load_lag_24",
+    "load_rolling_mean_6",
+    "load_rolling_mean_24",
+    "occupancy_lag_1",
+    "occupancy_lag_6",
+    "occupancy_lag_24",
+    "occupancy_rolling_mean_6",
+    "occupancy_rolling_mean_24",
+    "total_piles",
+    "station_capacity_kw"
+  ],
+  "row_count": 6159792,
+  "source_feature_frame": "/Users/bayuxuan/Documents/ChatGPT/充电桩/ml/artifacts/urbanev_preflight/shenzhen_feature_frame.parquet",
+  "source_sha256": "c404d5dd1c6bed7e89ccea57cec5234fe2920ad9467b5a9713f56e8902fe0341",
+  "total_bytes": 640619776,
+  "use_memmap": true
+}
