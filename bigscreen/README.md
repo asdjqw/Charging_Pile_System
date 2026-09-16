@@ -403,6 +403,19 @@ bash deploy/fetch_from_hdfs.sh && .venv/bin/python spark/jobs/load_mysql.py
 - 16 个面板使用的图表类型：翻牌数字、环形占比、水球图、柱状、折线、面积、双轴混合、雷达、
   热力图、玫瑰图、漏斗图、锥形柱图、横向条形、分组柱状、堆叠柱 + 折线、滚动榜。
 
+### 11.0 充电负荷智能预测页
+
+标题栏左侧「📈 负荷预测」（或 `http://<地址>/#/forecast`）进入**充电负荷智能预测**页，
+数据来自 `ml/` 子模块六个冻结模型（H1/H6/H24 × 负荷率/占用率）发布的批次，
+由 `backend/app.py` 挂载的只读蓝图同源提供（`GET /api/forecast/latest`、`GET /api/forecast/station/<id>`）：
+
+- 顶部：批次来源（MEASURED/SIMULATED）、数据截止与时效、质量、模型冻结号与模型版本；
+- 7 张 KPI + 「站点预测负荷 TOP10」「目标小时整体水平」两张图；
+- 站点明细表：可按站点搜索、按列排序、按拥堵筛选、切换三窗口/单窗口视图、导出 CSV，
+  点击行展开该站 H1/H6/H24 的预测负荷（kW）、负荷率、占用率与等效占用/空闲桩；
+- 批次目录按 `ML_FORECAST_RESULTS_DIR` → `ml/data/warehouse/ads` → `ml/fixtures` 自动探测，
+  `ML_FORECAST_SOURCE_KIND` 默认 `MEASURED`，`GET /api/health` 的 `forecast` 字段可确认当前生效配置。
+
 ### 11.1 双主题（暗色 / 亮色一键切换）
 
 大屏提供两套完整配色，右上角按钮一键切换，切换后**所有 ECharts 图表 + DataV 组件 + 卡片/文字/背景**同步换肤：
@@ -458,6 +471,8 @@ cp -r /home/bit/charging-bigscreen/frontend/dist/* .      # 放入我们的 inde
 | `GET /api/revenue/struct?dim=站点类型` | 收入结构与付费率（维度可切换） |
 | `GET /api/quality`、`GET /api/realtime?limit=20` | 清洗质量报告、实时订单流水 |
 | `GET /api/pipeline` | 本次作业的数据链路信息（计算引擎 Spark on YARN / 存储 HDFS） |
+| `GET /api/forecast/latest` | 机器学习最新预测批次（`ml/` 子模块，只读） |
+| `GET /api/forecast/station/<id>` | 单个站点的预测结果（批次里没有该 ID 时按 MEASURED 规则稳定映射） |
 | `POST /api/cache/refresh` | 清空后端缓存（数据更新后可立即生效） |
 
 数据源模式由 `config/database.env` 的 `DATA_SOURCE` 控制：`mysql`（默认）或 `csv`（MySQL 不可用时直接读 `output/ads/*.csv`）。

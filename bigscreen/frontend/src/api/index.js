@@ -52,3 +52,14 @@ export async function fetchHealth() {
   const data = await getJson('/health')
   return data.data
 }
+
+/**
+ * 机器学习预测接口（ml/ 子模块的只读蓝图，挂在同一个 Flask 上）：
+ *   不传站点时返回最新批次里的全部站点，传站点时只返回该站点。
+ */
+export async function fetchForecast(stationId) {
+  const path = stationId ? `/forecast/station/${encodeURIComponent(stationId)}` : '/forecast/latest'
+  const data = await getJson(path)
+  if (data.code !== 0) throw new Error(data.msg || '预测接口返回异常')
+  return data.data
+}

@@ -31,6 +31,7 @@ Flask 后端：为数据大屏提供 REST 接口
 """
 
 import os
+import sys
 
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
@@ -51,6 +52,77 @@ _DIST_CANDIDATES = [
     os.path.join(os.path.dirname(_PROJECT_DIR), "web"),
 ]
 DIST_DIR = next((p for p in _DIST_CANDIDATES if os.path.isfile(os.path.join(p, "index.html"))), _DIST_CANDIDATES[0])
+
+
+# --------------------------------------------------------------------------
+# 充电负荷智能预测：把 ml/ 子模块的只读查询蓝图挂到同一个 Flask 上
+# --------------------------------------------------------------------------
+# Qt 端走 admin_server -> 127.0.0.1:5010；大屏和 nginx 只有一个服务，
+# 所以这里直接复用 ml.warehouse.api 的蓝图，前端同源调 /api/forecast/latest。
+_REPO_ROOT = os.path.dirname(_PROJECT_DIR)
+_ML_RESULTS_CANDIDATES = (
+    os.path.join(_REPO_ROOT, "ml", "data", "warehouse", "ads"),  # 真实推理产出（run_measured_ml.sh）
+    os.path.join(_REPO_ROOT, "ml", "fixtures"),                  # 仓库内置批次（可直接演示）
+)
+FORECAST_STATUS = {"enabled": False, "results_dir": "", "source_kind": config.ML_FORECAST_SOURCE_KIND, "reason": ""}
+
+
+def _dir_has_batch(directory, source_kind):
+    """目录里是否存在"该来源、且成功"的批次 JSON。"""
+    import json
+    if not os.path.isdir(directory):
+        return False
+    for name in os.listdir(directory):
+        if not name.endswith(".json"):
+            continue
+        try:
+            with open(os.path.join(directory, name), encoding="utf-8") as handle:
+                payload = json.load(handle)
+        except Exception:
+            continue
+        if isinstance(payload, dict) and payload.get("success") and payload.get("source_kind") == source_kind:
+            return True
+    return False
+
+
+def resolve_forecast_dir(source_kind):
+    """定位预测批次目录：显式配置优先，否则「真实产出 > 仓库内置」自动探测。"""
+    if config.ML_FORECAST_RESULTS_DIR:
+        return config.ML_FORECAST_RESULTS_DIR
+    for path in _ML_RESULTS_CANDIDATES:
+        if _dir_has_batch(path, source_kind):
+            return path
+    for path in _ML_RESULTS_CANDIDATES:
+        if os.path.isdir(path):
+            return path
+    return ""
+
+
+def register_forecast_blueprint(flask_app):
+    """挂载 /api/forecast/latest 与 /api/forecast/station/<id>；失败也不影响大屏其它接口。"""
+    if not config.ML_FORECAST_ENABLED:
+        FORECAST_STATUS["reason"] = "ML_FORECAST_ENABLED=0"
+        return
+    try:
+        if _REPO_ROOT not in sys.path:
+            sys.path.insert(0, _REPO_ROOT)
+        from ml.warehouse.api import create_forecast_blueprint
+        from ml.warehouse.results import FileForecastStore
+    except Exception as exc:  # ml 依赖缺失时不拖垮整个后端
+        FORECAST_STATUS["reason"] = f"ml 模块不可用：{exc}"
+        return
+    results_dir = resolve_forecast_dir(config.ML_FORECAST_SOURCE_KIND)
+    if not results_dir or not os.path.isdir(results_dir):
+        FORECAST_STATUS["reason"] = "未找到预测批次目录"
+        return
+    store = FileForecastStore(results_dir)
+    flask_app.register_blueprint(
+        create_forecast_blueprint(store, source_kind=config.ML_FORECAST_SOURCE_KIND)
+    )
+    FORECAST_STATUS.update(enabled=True, results_dir=results_dir, reason="")
+
+
+register_forecast_blueprint(app)
 
 
 def ok(data, **extra):
@@ -291,6 +363,7 @@ def api_health():
             "configured_source": config.DATA_SOURCE,
             "csv_results": csv_results,
             "hint": hint,
+            "forecast": FORECAST_STATUS,
             "mysql": {
                 "host": config.DB_HOST,
                 "port": config.DB_PORT,

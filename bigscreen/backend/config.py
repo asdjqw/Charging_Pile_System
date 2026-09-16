@@ -52,6 +52,14 @@ class Config:
     CACHE_TTL = int(env("CACHE_TTL", 30))          # 秒，大屏自动刷新间隔大于该值即可命中缓存
     POOL_SIZE = int(env("DB_POOL_SIZE", 8))
 
+    # 充电负荷智能预测（ml/ 子模块）：大屏只读读取"已发布的预测批次"，
+    # 不在这里训练、也不在请求时推理。
+    #   ML_FORECAST_RESULTS_DIR 留空时自动探测：先找真实推理产出
+    #   ml/data/warehouse/ads/，没有就退回仓库内置批次 ml/fixtures/。
+    ML_FORECAST_ENABLED = env("ML_FORECAST_ENABLED", "1").strip().lower() not in {"0", "false", "no", "off"}
+    ML_FORECAST_SOURCE_KIND = env("ML_FORECAST_SOURCE_KIND", "MEASURED").strip().upper()
+    ML_FORECAST_RESULTS_DIR = env("ML_FORECAST_RESULTS_DIR", "").strip()
+
     # 数据库超时与熔断（避免 MySQL 重启/网络半开时请求假死，导致大屏接口 20s 超时）
     DB_CONNECT_TIMEOUT = int(env("DB_CONNECT_TIMEOUT", 3))    # 建立连接超时
     DB_READ_TIMEOUT = int(env("DB_READ_TIMEOUT", 8))          # 读取响应超时
