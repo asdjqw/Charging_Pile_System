@@ -6,7 +6,7 @@
 
 | 进程 | 职责 | 不做什么 |
 |---|---|---|
-| `admin_server` | 独占 SQLite；TCP 业务；HTTP 静态 `web/` + 三个只读接口 | 不跑 Spark，不直接给分析大屏提供 `/api/screen/bundle` |
+| `admin_server` | 独占 SQLite；TCP 业务；HTTP 静态 `web/` + 三个只读接口 | 不跑 Spark，不提供 `/api/charts/*` |
 | `user_client` | 车主 GUI，只发 TCP 动作 | 不打开 `charge_pile.db` |
 | `admin_client` | 运营 GUI，只发 TCP 动作 | 同上 |
 
@@ -51,10 +51,10 @@ Hadoop NameNode 已改为 **8020**，不必再把 Qt 改成 9100。
 
 ## HTTP 与分析大屏的关系
 
-打包后的 `web/` 是 Vue 分析大屏的构建产物，但运行时仍请求 **`/api/...` 相对路径**。`admin_server` 只实现三个运营快照接口，**没有** `/api/screen/bundle`。因此：
+打包后的 `web/` 是 Vue 分析大屏的构建产物，但运行时仍请求 **`/api/...` 相对路径**。`admin_server` 只实现三个运营快照接口，**没有** `/api/charts/*`。因此：
 
-- 看 **15 维分析大屏**：浏览器打开 Flask **`http://127.0.0.1:5000/`**
-- 打开 `http://127.0.0.1:8080/` 容易出现「数据接口异常」，这不是管理端缺页，是走错了入口
+- 看 **分析大屏与负荷预测**：浏览器打开 Flask **`http://127.0.0.1:5000/`**，预测页 `#/forecast`
+- 打开 `http://127.0.0.1:8080/` 只能看到一期快照，不是 16 维分析入口
 
 ## 构建
 

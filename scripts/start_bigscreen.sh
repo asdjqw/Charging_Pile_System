@@ -10,8 +10,10 @@ VENV="${CHARGING_SCREEN_VENV:-}"
 if [[ -z "$SCREEN" ]]; then
     if [[ -f "$HOME/charging-bigscreen/backend/app.py" ]]; then
         SCREEN="$HOME/charging-bigscreen"
-    elif [[ -f "$ROOT/charging-bigscreen-export/charging-bigscreen-export/backend/app.py" ]]; then
-        SCREEN="$ROOT/charging-bigscreen-export/charging-bigscreen-export"
+    elif [[ -f "$HOME/cps/bigscreen/backend/app.py" ]]; then
+        SCREEN="$HOME/cps/bigscreen"
+    elif [[ -f "$ROOT/bigscreen/backend/app.py" ]]; then
+        SCREEN="$ROOT/bigscreen"
     fi
 fi
 if [[ -z "$VENV" ]]; then
@@ -21,13 +23,7 @@ if [[ -z "$VENV" ]]; then
         VENV="$HOME/charging-bigscreen-venv"
     fi
 fi
-if [[ -z "${DATA_SOURCE:-}" ]]; then
-    if [[ -f "$SCREEN/config/database.env" ]] && grep -q '^DATA_SOURCE=mysql' "$SCREEN/config/database.env"; then
-        export DATA_SOURCE=mysql
-    else
-        export DATA_SOURCE=csv
-    fi
-fi
+export DATA_SOURCE="${DATA_SOURCE:-mysql}"
 [[ -x "$VENV/bin/python" ]] || { echo "请先执行 bash scripts/setup_phase2_ubuntu.sh"; exit 1; }
 [[ -f "$SCREEN/backend/app.py" ]] || { echo "找不到 backend/app.py"; exit 1; }
 
@@ -36,7 +32,6 @@ if [[ -f "$SCREEN/deploy/phase2_services.sh" ]]; then
     exit 0
 fi
 
-export ADS_DIR="$SCREEN/output/ads"
 mkdir -p "$HOME/charging-bigscreen-logs"
 LOG="$HOME/charging-bigscreen-logs/flask.log"
 PIDF="$HOME/charging-bigscreen-logs/flask.pid"

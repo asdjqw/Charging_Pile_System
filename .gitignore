@@ -22,6 +22,7 @@ object_script.*
 *.Debug
 *.Release
 /ml-models-*.tar.gz
+/charging-bigscreen-export/
 /charging-bigscreen-export.tar.gz
 SHA256SUMS
 files/

@@ -9,10 +9,8 @@ Qt 一期业务系统 + Spark/Flask 分析大屏 + 站点负荷预测。面向�
 | 部分 | 目录 | 技术 | 职责 |
 |---|---|---|---|
 | 一期 | `user_client/` `admin_client/` `admin_server/` `common/` `database/` | Qt 6、C++17、SQLite | 找站、预约、充电、结算、运维。客户端只走 TCP |
-| 分析大屏 | `bigscreen/`（主），`web/`（构建产物） | Spark、MySQL、Flask、Vue/DataV | 清洗与 15 维分析。浏览器看 **:5000** |
-| 机器学习 | `ml/` | 冻结 XGBoost/RF + Flask 查询 | 站点 H1/H6/H24 负荷与占用。Qt 经后端访问 **:5010** |
-
-`charging-bigscreen-export/` 是大屏导出副本，不要双线修改。
+| 分析大屏 | `bigscreen/`（主），`web/`（前端构建产物） | Spark SQL、HDFS ORC、MySQL、Flask、Vue/DataV | 清洗、19 张 ADS、16 维图表 + 负荷预测页。浏览器看 **:5000** |
+| 机器学习 | `ml/` | 冻结 XGBoost/RF + Flask 查询 | 站点 H1/H6/H24 负荷与占用。Qt 经后端访问 **:5010**；大屏同源 `/api/forecast/*` |
 
 ```text
 用户端 / 管理端  --TCP 9000-->  admin_server  --SQLite-->  charge_pile.db
@@ -21,7 +19,7 @@ Qt 一期业务系统 + Spark/Flask 分析大屏 + 站点负荷预测。面向�
                                       v
                               ml 查询服务 :5010  （读 JSON 批次，默认可演示 fixtures）
 
-浏览器  --:5000-->  Flask  --MySQL charging_screen-->  Spark ADS
+浏览器  --:5000-->  Flask  --MySQL charging_screen-->  Spark SQL ADS（ORC）
 Hadoop HDFS :8020  只存离线文件，不是大屏在线库
 ```
 
@@ -31,7 +29,7 @@ Hadoop HDFS :8020  只存离线文件，不是大屏在线库
 |---|---|
 | 9000 | Qt TCP |
 | 8080 | Qt HTTP（静态 `web/` + `/api/health|dashboard|stations`） |
-| 5000 | 分析大屏 Flask |
+| 5000 | 分析大屏 Flask（图表 `/api/charts/*`、预测 `/api/forecast/*`） |
 | 5010 | ML 查询 |
 | 3306 | MySQL |
 | **8020** | HDFS NameNode RPC（避开 9000） |
@@ -39,7 +37,7 @@ Hadoop HDFS :8020  只存离线文件，不是大屏在线库
 
 不要再用「Qt 改 9100、HDFS 占 9000」当默认方案。
 
-分析大屏必须打开 `http://127.0.0.1:5000/`。打开 `:8080` 会因缺少 `/api/screen/bundle` 报数据异常。
+分析大屏入口是 `http://127.0.0.1:5000/`，负荷预测页是 `http://127.0.0.1:5000/#/forecast`。`:8080` 只是一期运营快照，不是 16 维分析接口。
 
 ## 目录
 
@@ -52,8 +50,8 @@ Charge_pile/
 ├─ common/                 协议、SQLite、样式、ForecastPanel
 ├─ database/               schema.sql / seed / DESIGN.md
 ├─ data/                   北京市充电桩 POI CSV
-├─ web/                    大屏前端构建产物（给 8080 静态用）
-├─ bigscreen/              二期主工程
+├─ web/                    大屏前端构建产物（给 Flask 与 8080 静态用）
+├─ bigscreen/              二期主工程（Spark SQL ORC ETL + Flask + Vue）
 ├─ ml/                     预测子模块
 ├─ scripts/                安装与一键启动
 └─ docs/                   交接文档
@@ -79,6 +77,13 @@ bash ~/start_charge_pile.sh status
 ```
 
 只编译一期三个 Qt 程序：`bash scripts/rebuild_run.sh`。系统依赖：`bash scripts/install_deps_ubuntu.sh`。
+
+重跑正式数仓（ODS 已在 HDFS 时）：
+
+```bash
+cd ~/charging-bigscreen   # 或共享盘上的 bigscreen/
+MYSQL_RESET_SCHEMA=1 bash run_etl_all.sh
+```
 
 Windows 本机：Qt Creator 打开 `ChargePile.pro`，先起 `admin_server`，再起两个客户端。大屏和 ML 建议在 Ubuntu 虚机里跑。
 
@@ -118,6 +123,8 @@ Windows 本机：Qt Creator 打开 `ChargePile.pro`，先起 `admin_server`，�
 ./build/protocol_test/protocol_test
 ./build/database_behavior_test/database_behavior_test
 ./build/server_api_smoke/server_api_smoke   # 需要后端已启动
+curl -s http://127.0.0.1:5000/api/health
+curl -s http://127.0.0.1:5000/api/overview
 ```
 
 ## 已知限制（演示可过、不能当生产）
@@ -126,6 +133,7 @@ Windows 本机：Qt Creator 打开 `ChargePile.pro`，先起 `admin_server`，�
 - TCP/HTTP 明文；密码为盐 + 单次 SHA-256，不是 Argon2。
 - `/api/dashboard` 无鉴权。
 - 客户端在 GUI 线程同步等网络；会话主要在内存。
-- ML 真实推理需要 Releases 模型 + 小时快照；大屏 Vue **未接**预测接口。
+- ML 真实推理需要 Releases 模型 + 小时快照；大屏预测页读已发布的 JSON 批次。
+- 本机 MySQL 若关闭 `local_infile`，ADS 导入会回退为逐行 INSERT。
 
-更细的表结构、15 维分析、模型 CLI 见 `docs/`、`database/DESIGN.md`、`bigscreen/README.md`、`ml/README.md`。
+更细的表结构、图表接口、模型 CLI 见 `docs/`、`database/DESIGN.md`、`bigscreen/README.md`、`ml/README.md`。

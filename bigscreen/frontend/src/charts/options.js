@@ -563,7 +563,9 @@ export function batteryHealthOption(health = []) {
 export function timePeriodFunnelOption(period = []) {
   const order = { 峰: 0, 平: 1, 谷: 2 }
   const rows = [...period].sort((a, b) => (order[a.time_period] ?? 9) - (order[b.time_period] ?? 9))
-  const colors = { 峰: theme.danger, 平: theme.accent2, 谷: theme.success }
+  const totalKwh = rows.reduce((sum, row) => sum + num(row.kwh), 0)
+  const totalSessions = rows.reduce((sum, row) => sum + num(row.sessions), 0)
+  const share = (value, total) => (total ? Number(((num(value) / total) * 100).toFixed(1)) : 0)
   return {
     tooltip: {
       trigger: 'item',
@@ -572,7 +574,7 @@ export function timePeriodFunnelOption(period = []) {
       textStyle: { color: theme.tooltipText, fontSize: 12 },
       formatter: (p) => {
         const row = rows[p.dataIndex] || {}
-        return `${p.name}时段<br/>充电量 ${num(row.kwh)} kWh<br/>订单 ${num(row.sessions)} 单（${num(row.sessions_pct)}%）<br/>收入 ${num(row.revenue)} 元`
+        return `${p.name}<br/>充电量 ${num(row.kwh)} kWh（${share(row.kwh, totalKwh)}%）<br/>订单 ${num(row.sessions)} 单（${share(row.sessions, totalSessions)}%）<br/>收入 ${num(row.revenue)} 元`
       }
     },
     series: [
@@ -592,7 +594,7 @@ export function timePeriodFunnelOption(period = []) {
         data: rows.map((r) => ({
           name: `${r.time_period}时段`,
           value: num(r.kwh),
-          pct: Number(num(r.kwh_pct).toFixed(1)),
+          pct: share(r.kwh, totalKwh),
           itemStyle: { color: hexToRgba(periodColor(r.time_period), 0.85) }
         }))
       }

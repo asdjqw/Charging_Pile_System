@@ -12,7 +12,7 @@
 #   SKIP_HADOOP=1     不装 Hadoop
 #   SKIP_PYSPARK=1    不装 PySpark（只能看大屏，不能重算）
 #   SKIP_FLASK=1      装完不自动启动大屏
-#   RUN_SPARK=1       用本地 Spark 重算并覆盖 MySQL（默认不跑，用 sql 备份）
+#   RUN_SPARK=1       Hadoop 就绪后跑正式 Spark SQL ORC ETL 并覆盖 MySQL（默认不跑）
 #
 # 装好以后每天一键启动（含大屏 / ML / 一期后端）：
 #   bash ~/start_charge_pile.sh
@@ -27,12 +27,9 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 SRC=""
-for candidate in "$REPO_ROOT/bigscreen" "$REPO_ROOT/charging-bigscreen-export/charging-bigscreen-export"; do
-  if [[ -f "$candidate/backend/app.py" ]]; then
-    SRC="$candidate"
-    break
-  fi
-done
+if [[ -f "$REPO_ROOT/bigscreen/backend/app.py" ]]; then
+  SRC="$REPO_ROOT/bigscreen"
+fi
 [[ -n "$SRC" ]] || { echo "找不到 bigscreen/backend/app.py，当前仓库：$REPO_ROOT"; exit 1; }
 
 RUNTIME="${CHARGING_SCREEN_HOME:-$HOME/charging-bigscreen}"
@@ -127,11 +124,12 @@ sudo systemctl enable mysql >/dev/null 2>&1 || true
 sudo systemctl start mysql
 sleep 2
 sudo mysql -e "SELECT 1" >/dev/null || die "MySQL 未能以 sudo mysql 登录（Ubuntu auth_socket）"
-if [[ -f "$RUNTIME/sql/charging_screen.sql" ]]; then
-  log "导入 $RUNTIME/sql/charging_screen.sql（可能 1～2 分钟）"
-  sudo mysql < "$RUNTIME/sql/charging_screen.sql"
+if [[ -f "$RUNTIME/mysql/schema/ads_schema.sql" ]]; then
+  log "导入 $RUNTIME/mysql/schema/ads_schema.sql"
+  sudo mysql -e "CREATE DATABASE IF NOT EXISTS \`$DB_NAME\` DEFAULT CHARSET utf8mb4;"
+  sudo mysql "$DB_NAME" < "$RUNTIME/mysql/schema/ads_schema.sql"
 else
-  warn "未找到 SQL 备份，只建空库"
+  warn "未找到 ADS Schema，只建空库"
   sudo mysql -e "CREATE DATABASE IF NOT EXISTS \`$DB_NAME\` DEFAULT CHARSET utf8mb4;"
 fi
 sudo mysql <<SQL
@@ -164,11 +162,7 @@ if [[ "$SKIP_PYSPARK" != "1" ]]; then
 fi
 
 if [[ "$RUN_SPARK" == "1" ]]; then
-  log "本地 Spark 重算（会覆盖刚才导入的 MySQL 数据）"
-  export PYSPARK_PYTHON="$RUNTIME/.venv/bin/python"
-  export PYSPARK_DRIVER_PYTHON="$PYSPARK_PYTHON"
-  ( cd "$RUNTIME" && .venv/bin/python spark/jobs/run_all.py --raw data/raw )
-  ( cd "$RUNTIME" && .venv/bin/python spark/jobs/load_mysql.py )
+  log "RUN_SPARK=1：正式 ETL 需要 HDFS，将在 Hadoop 安装段之后执行 bash run_etl_all.sh"
 fi
 
 if [[ "$SKIP_HADOOP" != "1" ]]; then
@@ -305,11 +299,25 @@ EOF
 
   log "上传原始 CSV 到 HDFS /data/charging/raw"
   hdfs dfs -mkdir -p /data/charging/raw /data/charging/warehouse /data/charging/ads
-  hdfs dfs -put -f "$RUNTIME"/data/raw/*.csv /data/charging/raw/
+  RAW_DIR="$RUNTIME/data/raw_expanded"
+  [[ -d "$RAW_DIR" ]] || RAW_DIR="$RUNTIME/data/raw"
+  hdfs dfs -put -f "$RAW_DIR"/*.csv /data/charging/raw/
   hdfs dfs -ls /data/charging/raw
   jps || true
 else
   log "[5/8] 跳过 Hadoop（SKIP_HADOOP=1）"
+fi
+
+if [[ "$RUN_SPARK" == "1" ]]; then
+  if [[ "$SKIP_HADOOP" == "1" ]]; then
+    warn "RUN_SPARK=1 但 SKIP_HADOOP=1，跳过 ETL。稍后执行：bash $RUNTIME/run_etl_all.sh"
+  else
+    log "正式 Spark SQL ORC ETL（覆盖 MySQL ADS）"
+    export PYSPARK_PYTHON="$RUNTIME/.venv/bin/python"
+    export PYSPARK_DRIVER_PYTHON="$PYSPARK_PYTHON"
+    ( cd "$RUNTIME" && MYSQL_RESET_SCHEMA=1 LOAD_DT="$(date +%F)" bash run_etl_all.sh ) \
+      || warn "ETL 失败，Flask 仍会启动，但图表可能为空"
+  fi
 fi
 
 log "[6/8] 写入环境脚本 ~/.charge_phase2_env.sh"

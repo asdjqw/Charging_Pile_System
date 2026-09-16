@@ -85,17 +85,34 @@ def main(argv=None):
                         "请先执行一次 CONFIRM_RESET_ADS_SCHEMA=YES python mysql/scripts/reset_ads_schema.py"
                     )
 
+        def _parse_cell(cell):
+            if cell in (r"\N", None):
+                return None
+            return cell
+
         for table in TABLES:
             path = os.path.abspath(os.path.join(args.stage_dir, f"{table}.txt"))
             with conn.cursor() as cur:
                 # 按要求先清空再导入；文件检查已在任何 TRUNCATE 前完成。
                 cur.execute(f"TRUNCATE TABLE `{table}`")
-                cur.execute(
-                    f"LOAD DATA LOCAL INFILE %s INTO TABLE `{table}` "
-                    "CHARACTER SET utf8mb4 FIELDS TERMINATED BY '|' OPTIONALLY ENCLOSED BY '\"' "
-                    "ESCAPED BY '\\\\' LINES TERMINATED BY '\\n'",
-                    (path,),
-                )
+                try:
+                    cur.execute(
+                        f"LOAD DATA LOCAL INFILE %s INTO TABLE `{table}` "
+                        "CHARACTER SET utf8mb4 FIELDS TERMINATED BY '|' OPTIONALLY ENCLOSED BY '\"' "
+                        "ESCAPED BY '\\\\' LINES TERMINATED BY '\\n'",
+                        (path,),
+                    )
+                except Exception as load_exc:
+                    print(f"[WARN] LOAD DATA LOCAL 不可用，改用 INSERT：{load_exc}", flush=True)
+                    with open(path, encoding="utf-8", newline="") as handle:
+                        parsed = [
+                            [_parse_cell(cell) for cell in row]
+                            for row in csv.reader(handle, delimiter="|", quotechar='"', escapechar="\\")
+                            if row
+                        ]
+                    if parsed:
+                        placeholders = ",".join(["%s"] * len(parsed[0]))
+                        cur.executemany(f"INSERT INTO `{table}` VALUES ({placeholders})", parsed)
                 cur.execute(f"SELECT COUNT(*) FROM `{table}`")
                 rows = cur.fetchone()[0]
                 cur.execute(
