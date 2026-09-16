@@ -5,6 +5,7 @@
     <div class="header__left">
       <span class="chip chip--blue">数据源 {{ dataSource.toUpperCase() }}</span>
       <span class="chip chip--green">清洗记录 {{ qualityText }}</span>
+      <a class="nav-link" href="#/forecast" title="打开充电负荷智能预测页">📈 负荷预测</a>
     </div>
     <div class="header__center">
       <div class="header__title">北京市充电桩运营数据可视化大屏</div>
@@ -75,6 +76,7 @@ const qualityText = computed(() => {
 
 <style scoped>
 .header {
+  position: relative;
   height: 76px;
   display: flex;
   align-items: center;
@@ -84,25 +86,34 @@ const qualityText = computed(() => {
   box-sizing: border-box;
 }
 
+/*
+ * 左右装饰线只占标题栏顶部的一条窄带：
+ * dv-decoration-8 的横线画在容器高度的一半处，之前 40px 高会把横线落在两侧
+ * 小字（数据源 / 清洗记录 / 更新 / 主题按钮）正中，视觉上"被蓝线挡住"。
+ * 这里把高度压到 18px 并钉在顶部，横线整体落在小字上方。
+ */
 .header__deco-left,
 .header__deco-right {
   position: absolute;
-  top: 6px;
+  top: 0;
   width: 168px;
-  height: 40px;
+  height: 18px;
   opacity: 0.7;
   pointer-events: none;
+  z-index: 0;
 }
 
 .header__deco-left {
-  left: 8px;
+  left: 0;
 }
 
 .header__deco-right {
-  right: 8px;
+  right: 0;
 }
 
 .header__center {
+  position: relative;
+  z-index: 1;
   text-align: center;
   flex: none;
   max-width: 46%;
@@ -130,6 +141,8 @@ const qualityText = computed(() => {
 
 .header__left,
 .header__right {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -184,6 +197,27 @@ const qualityText = computed(() => {
   cursor: pointer;
   transition: all 0.2s ease;
   white-space: nowrap;
+}
+
+/* 大屏与预测页之间的跳转按钮（详情见 views/ForecastView.vue） */
+.nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--chip-gold-border);
+  background: var(--chip-bg);
+  color: var(--chip-gold-text);
+  font-size: 12px;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.nav-link:hover {
+  border-color: var(--toggle-hover-border);
+  transform: translateY(-1px);
 }
 
 .theme-toggle:hover {

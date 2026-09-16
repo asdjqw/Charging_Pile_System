@@ -51,6 +51,11 @@ html[data-theme='dark'],
   --kpi-label: rgba(168, 214, 250, 0.9);
   --kpi-unit: rgba(140, 190, 230, 0.8);
   --kpi-note: rgba(150, 205, 245, 0.85);
+  --table-head-bg: rgba(0, 120, 200, 0.35);
+  --table-row-alt: rgba(120, 200, 255, 0.04);
+  --table-row-hover: rgba(0, 228, 255, 0.1);
+  --table-row-active: rgba(0, 228, 255, 0.18);
+  --table-line: rgba(120, 200, 255, 0.12);
 }
 
 /* ------------------------------------------------------------------
@@ -86,6 +91,11 @@ html[data-theme='light'],
   --kpi-label: rgba(40, 80, 120, 0.92);
   --kpi-unit: rgba(70, 110, 150, 0.85);
   --kpi-note: rgba(50, 90, 130, 0.85);
+  --table-head-bg: rgba(31, 111, 208, 0.16);
+  --table-row-alt: rgba(31, 111, 208, 0.05);
+  --table-row-hover: rgba(31, 111, 208, 0.12);
+  --table-row-active: rgba(31, 111, 208, 0.2);
+  --table-line: rgba(60, 110, 165, 0.18);
 }
 
 /* 大屏整体背景：径向光晕 + 渐变（随主题切换） */

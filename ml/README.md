@@ -9,7 +9,7 @@
 | 六个冻结模型推理（H1 XGBoost 两阶段，H6/H24 随机森林） | 代码在；**模型文件不在 git** |
 | 文件或 MySQL 发布结果 + Flask 只读查询 `:5010` | 可用 |
 | Qt 用户端 / 管理端展示 | 已接（经 `admin_server` 转发） |
-| Vue 分析大屏 | **未注册**预测路由 |
+| Vue 分析大屏 | 已接：`#/forecast` 预测页，同源读 `/api/forecast/*` |
 | Spark ADS 自动产出小时 parquet | **没有**，快照要另供 |
 
 ## 演示查询（无 3.4GB 模型）
@@ -98,4 +98,9 @@ MySQL 结果表见 `ml/warehouse/sql/mysql_forecast.sql`。凭据用环境变量
 
 ## 定时与中台
 
-`ml/warehouse/deploy/` 有 systemd 模板，部署前改路径和用户。查询服务需另外部署。`bigscreen/backend/app.py` 目前未挂预测蓝图。
+`ml/warehouse/deploy/` 有 systemd 模板，部署前改路径和用户。查询服务需另外部署。
+
+`bigscreen/backend/app.py` 已挂载**同一份只读蓝图**（`/api/forecast/latest`、`/api/forecast/station/<id>`），
+所以大屏预测页 `http://<大屏地址>/#/forecast` 不需要额外的 :5010 服务，直接同源取数。
+批次目录按 `ML_FORECAST_RESULTS_DIR` → `ml/data/warehouse/ads` → `ml/fixtures` 顺序自动探测，
+来源由 `ML_FORECAST_SOURCE_KIND`（默认 `MEASURED`）决定；`GET /api/health` 的 `forecast` 字段能看到当前生效的目录与来源。
