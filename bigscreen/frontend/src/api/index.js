@@ -39,14 +39,32 @@ async function getJson(path) {
   throw lastError || new Error('接口请求失败')
 }
 
-/**
- * 大屏首屏聚合接口：一次请求获取全部面板数据，减少并发请求数
- */
-export async function fetchScreenBundle() {
-  const data = await getJson('/screen/bundle')
+async function fetchPanel(path) {
+  const data = await getJson(path)
   if (data.code !== 0) throw new Error(data.msg || '接口返回异常')
-  return { payload: data.data, updatedAt: data.updated_at }
+  return data.data
 }
+
+// 一张图表对应一个 Flask 接口；接口内部只读取同名的一张 MySQL ADS 表。
+export const fetchOverview = () => fetchPanel('/overview')
+export const fetchDailyTrend = () => fetchPanel('/charts/daily-trend')
+export const fetchMonthlyTrend = () => fetchPanel('/charts/monthly-trend')
+export const fetchHourLoad = () => fetchPanel('/charts/hour-load')
+export const fetchWeekdayHourHeat = () => fetchPanel('/charts/weekday-hour-heat')
+export const fetchStationTop = () => fetchPanel('/charts/station-top')
+export const fetchFacilityCompare = () => fetchPanel('/charts/facility-compare')
+export const fetchWeekendCompare = () => fetchPanel('/charts/weekend-compare')
+export const fetchTimePeriodCompare = () => fetchPanel('/charts/time-period-compare')
+export const fetchPlatformCompare = () => fetchPanel('/charts/platform-compare')
+export const fetchDistrictCompare = () => fetchPanel('/charts/district-compare')
+export const fetchDurationDist = () => fetchPanel('/charts/duration-dist')
+export const fetchEnergyDist = () => fetchPanel('/charts/energy-dist')
+export const fetchUserSegment = () => fetchPanel('/charts/user-segment')
+export const fetchBatteryHealth = () => fetchPanel('/charts/battery-health')
+export const fetchRevenueStruct = () => fetchPanel('/charts/revenue-struct')
+export const fetchRealtimeSessions = () => fetchPanel('/charts/realtime-sessions')
+export const fetchQuality = () => fetchPanel('/quality')
+export const fetchPipeline = () => fetchPanel('/pipeline')
 
 export async function fetchHealth() {
   const data = await getJson('/health')

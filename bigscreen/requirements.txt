@@ -27,6 +27,7 @@ pandas==2.2.3
 Flask==3.0.3
 flask-cors==4.0.1
 PyMySQL==1.1.1
+cryptography>=42.0.0
 
 # Production WSGI server (Linux/macOS) / local Windows server
 gunicorn==22.0.0; sys_platform != "win32"

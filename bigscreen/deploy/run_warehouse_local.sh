@@ -51,7 +51,7 @@ if [[ -x "$ROOT_DIR/.venv/bin/python" ]]; then
 fi
 
 command -v hdfs >/dev/null || { echo "[ERROR] 找不到 hdfs，请先 source deploy/hadoop_env.sh 并启动 HDFS"; exit 1; }
-hdfs dfs -mkdir -p /tmp/hive /warehouse/charging_pile \
+hdfs dfs -mkdir -p /tmp/hive /warehouse/charging_pile_orc \
   /warehouse/tablespace/managed/hive /warehouse/tablespace/external/hive
 hdfs dfs -chmod 1777 /tmp /tmp/hive || true
 
@@ -78,7 +78,7 @@ fi
 
 echo "[INFO] HIVE_CMD=$HIVE_CMD"
 LOAD_DT="$LOAD_DT" MODE="${MODE:-hdfs}" LOCAL_RAW="$LOCAL_RAW" \
-  WAREHOUSE_ROOT="${WAREHOUSE_ROOT:-/warehouse/charging_pile}" \
+  WAREHOUSE_ROOT="${WAREHOUSE_ROOT:-/warehouse/charging_pile_orc}" \
   SPARK_MASTER="$SPARK_MASTER" SPARK_SUBMIT="$SPARK_SUBMIT" \
-  HIVE_CMD="$HIVE_CMD" ANALYTICS_SQL_CMD="${ANALYTICS_SQL_CMD:-$HIVE_CMD}" \
+  HIVE_CMD="$HIVE_CMD" SPARK_SQL_CMD="${SPARK_SQL_CMD:-$ROOT_DIR/.venv/bin/spark-sql --master $SPARK_MASTER}" \
   bash "$ROOT_DIR/hive/scripts/build_warehouse.sh"

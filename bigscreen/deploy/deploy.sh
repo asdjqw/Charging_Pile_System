@@ -5,8 +5,8 @@
 #   在虚拟机（如 bit@192.168.44.129）上执行：
 #       cd charging-bigscreen && bash deploy/deploy.sh
 #
-#   脚本流程：环境检查 -> 依赖安装 -> MySQL 初始化 -> Spark 离线计算
-#             -> 结果装载 MySQL -> 前端构建 -> 启动 Flask(gunicorn) 服务
+#   脚本流程：环境检查 -> 依赖安装 -> MySQL 初始化 -> ODS/Spark SQL 数仓
+#             -> ADS TXT 导入 MySQL -> 前端构建 -> 启动 Flask(gunicorn) 服务
 #   可重复执行（幂等）。
 # ============================================================================
 set -euo pipefail
@@ -37,9 +37,7 @@ PIP="$VENV_DIR/bin/pip"
 
 PYTHON_BIN="${PYTHON_BIN:-python3.12}"
 SKIP_INSTALL="${SKIP_INSTALL:-0}"
-SKIP_SPARK="${SKIP_SPARK:-0}"
 SKIP_BACKEND="${SKIP_BACKEND:-0}"   # 1：只准备环境与数据，不启动/重启后端（用于准备阶段或调试）
-LOAD_SQL="${LOAD_SQL:-auto}"     # auto：有 sql 备份且跳过 Spark 时直接导入，速度最快
 SERVER_PORT="${SERVER_PORT:-5000}"
 
 log()  { printf '\033[36m[%s]\033[0m %s\n' "$(date '+%H:%M:%S')" "$*"; }
@@ -277,11 +275,7 @@ setup_venv() {
   pip_install --upgrade pip >/dev/null 2>&1 || warn "pip 升级失败（继续使用现有 pip）"
   log "安装 PySpark 与 Flask 依赖（约 350MB，请耐心等待）"
   pip_install -r backend/requirements.txt || die "Flask 依赖安装失败：请检查网络或手动执行 $PIP install -r backend/requirements.txt"
-  if [[ "$SKIP_SPARK" == "1" ]]; then
-    log "SKIP_SPARK=1：不安装 PySpark，直接使用 sql/charging_screen.sql 中的结果数据"
-  else
-    pip_install "pyspark==3.5.3" || die "PySpark 安装失败（数据量较大，可加 SKIP_SPARK=1 跳过）"
-  fi
+  pip_install "pyspark==3.5.3" || die "PySpark 安装失败"
   # 记录 venv 位置，供 run_pipeline.sh / install_service.sh 等脚本复用
   printf '# 由 deploy.sh 生成：虚拟环境位置（共享目录场景会放到家目录）\nexport VENV_DIR=%q\n' "$VENV_DIR" > deploy/venv_path.sh
 }
@@ -290,61 +284,11 @@ setup_venv() {
 # 4. Spark 离线计算 + 装载 MySQL
 # ---------------------------------------------------------------------------
 run_pipeline() {
-  if [[ "$SKIP_SPARK" == "1" ]]; then
-    log "SKIP_SPARK=1：跳过 Spark 计算"
-    if [[ -f sql/charging_screen.sql ]]; then
-      log "从 sql/charging_screen.sql 导入结果数据（约 1MB，秒级完成）"
-      load_sql_dump
-    else
-      warn "未找到 sql/charging_screen.sql，跳过数据装载（大屏会没有数据）"
-    fi
-    return
-  fi
-  log "执行 Spark 数据清洗与多维分析"
+  log "执行正式 Spark SQL 数仓链路（ODS TextFile -> ORC ADS -> TXT -> MySQL）"
   export JAVA_HOME="${JAVA_HOME:-$(dirname "$(dirname "$(readlink -f "$(command -v java)")")")}"
   export PYSPARK_PYTHON="$PY"
-  local raw_path="${RAW_PATH:-}"
-  if [[ -z "$raw_path" ]]; then
-    if [[ -d data/raw_expanded ]]; then raw_path="data/raw_expanded"; else raw_path="data/raw"; fi
-  fi
-  log "输入数据目录：$raw_path"
-  "$PY" spark/jobs/run_all.py --raw "$raw_path"
-  log "装载分析结果到 MySQL"
-  "$PY" spark/jobs/load_mysql.py
-}
-
-# 直接用仓库里的 MySQL 备份还原结果数据（新机器最快的起步方式）
-load_sql_dump() {
-  local sql_file="$ROOT_DIR/sql/charging_screen.sql"
-  if [[ ! -f "$sql_file" ]]; then
-    warn "未找到 $sql_file"
-    return 1
-  fi
-  mysql_import "$sql_file"
-}
-
-mysql_import() {
-  local sql_file="$1"
-  # 备份里含 CREATE DATABASE，优先用 root 导入（权限最完整），失败再退回应用账号
-  if $SUDO mysql -uroot < "$sql_file" 2>/dev/null; then
-    log "已通过 root 导入 $(basename "$sql_file")"
-    return 0
-  fi
-  if mysql -uroot < "$sql_file" 2>/dev/null; then
-    log "已通过 root 导入 $(basename "$sql_file")"
-    return 0
-  fi
-  if [[ -n "$DB_PASSWORD" ]] && \
-     mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASSWORD" < "$sql_file" 2>/dev/null; then
-    log "已导入 $(basename "$sql_file")"
-    return 0
-  fi
-  if mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" < "$sql_file" 2>/dev/null; then
-    log "已导入 $(basename "$sql_file")"
-    return 0
-  fi
-  warn "导入 SQL 失败：请用 sudo 重新执行本脚本（sudo bash deploy/deploy.sh），或手工执行  sudo mysql < $sql_file"
-  return 1
+  LOAD_DT="${LOAD_DT:-$(date +%F)}" RAW_PATH="${RAW_PATH:-data/raw_expanded}" \
+    bash deploy/run_pipeline.sh
 }
 
 # ---------------------------------------------------------------------------
@@ -393,7 +337,7 @@ main() {
   start_mysql
   init_mysql
   setup_venv
-  if [[ "$SKIP_SPARK" != "1" ]]; then run_pipeline; fi
+  run_pipeline
   build_frontend
   if [[ "$SKIP_BACKEND" == "1" ]]; then
     log "SKIP_BACKEND=1：跳过服务启动（需要时手动执行： bash deploy/install_service.sh 或 sudo systemctl restart charging-screen）"

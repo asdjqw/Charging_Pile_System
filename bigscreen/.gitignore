@@ -12,6 +12,8 @@ spark-warehouse/
 metastore_db/
 derby.log
 output/
+# ADS ORC 导出后、导入 MySQL 前的本地管道符 TXT（output/ 已覆盖，此条用于明确用途）
+output/mysql_stage/
 logs/
 # data/raw_expanded/ 是项目默认原始数据集，需要随 Git 仓库分发
 # 外部数据（合并进《充电桩综合管理系统》后复用仓库根目录的 data/北京市充电桩数据.csv）
