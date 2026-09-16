@@ -1,6 +1,6 @@
-SET hive.exec.dynamic.partition=true;
-SET hive.exec.dynamic.partition.mode=nonstrict;
-SET parquet.compression=SNAPPY;
+-- 本文件必须由 spark-sql 执行，不使用 Hive on Spark。
+SET spark.sql.orc.compression.codec=snappy;
+SET spark.sql.sources.partitionOverwriteMode=dynamic;
 
 INSERT OVERWRITE TABLE charging_dws.dws_daily_operation PARTITION(load_dt='${hiveconf:load_dt}')
 SELECT stat_date, COUNT(*), ROUND(SUM(kwh_total),2), ROUND(SUM(charging_fees),2),

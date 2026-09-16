@@ -1,15 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-数据访问层：
-    - MySQL 模式：使用轻量连接池执行查询，把 Spark 分析结果表读为 dict 列表
-    - CSV  模式：MySQL 不可用时，直接读取 Spark 输出的 CSV，保证大屏始终可用
-    - 统一带 TTL 的内存缓存，降低大屏轮询压力
+数据访问层：MySQL 是正式大屏唯一数据源；统一带 TTL 内存缓存。
 """
 
-import csv
 import datetime
 import decimal
-import glob
 import os
 import queue
 import threading
@@ -26,7 +21,7 @@ _pool_created = 0
 _cache = {}
 _cache_lock = threading.Lock()
 
-_breaker_until = 0.0          # 熔断截止时间戳：期间不再尝试 MySQL，直接走 CSV 兜底
+_breaker_until = 0.0          # 熔断截止时间戳：期间快速返回数据库不可用错误，避免接口阻塞
 _last_error = ""              # 最近一次数据库错误，供 /api/health 展示
 
 
@@ -146,70 +141,27 @@ def db_available():
         return False
 
 
-def _csv_path(table):
-    for pattern in (f"mysql_{table}.csv", f"{table}.csv"):
-        hits = glob.glob(os.path.join(config.ADS_DIR, pattern))
-        if hits:
-            return hits[0]
-    return None
-
-
-def _csv_rows(table):
-    path = _csv_path(table)
-    if not path:
-        return []
-    rows = []
-    with open(path, encoding="utf-8-sig", newline="") as fh:
-        for row in csv.DictReader(fh):
-            conv = {}
-            for key, value in row.items():
-                if value in ("", None):
-                    conv[key] = None
-                    continue
-                try:
-                    number = float(value)
-                    conv[key] = int(number) if number == int(number) and "." not in value and "e" not in value.lower() else number
-                except (ValueError, AttributeError):
-                    conv[key] = value
-            rows.append(conv)
-    return rows
-
-
 def fetch(table, where="", params=None, order="", limit=None):
     """
     读取一张结果表：
-        MySQL 模式 -> SELECT * FROM `table` [WHERE ...] [ORDER BY ...] [LIMIT n]
-        CSV  模式 -> 读取 Spark 输出 CSV 后在内存中过滤/排序
+        SELECT * FROM `table` [WHERE ...] [ORDER BY ...] [LIMIT n]
     """
-    if config.DATA_SOURCE == "mysql":
-        if db_breaker_open():
-            # 熔断期内直接读 CSV，避免每次请求都去等数据库超时（大屏首屏有 ~20 个查询）
-            return _fetch_from_csv(table, where, order, limit)
-        sql = f"SELECT * FROM `{table}`"
-        if where:
-            sql += f" WHERE {where}"
-        if order:
-            sql += f" ORDER BY {order}"
-        if limit:
-            sql += f" LIMIT {int(limit)}"
-        try:
-            return query(sql, params)
-        except Exception as exc:
-            _trip_breaker(exc)
-            print(f"[WARN] MySQL 查询失败（已熔断 {config.DB_BREAKER_SECONDS}s），回退 CSV：{exc}")
-    return _fetch_from_csv(table, where, order, limit)
-
-
-def _fetch_from_csv(table, where="", order="", limit=None):
-    """CSV 兜底数据源：读取 Spark 输出的结果表。"""
-    rows = _csv_rows(table)
+    if config.DATA_SOURCE != "mysql":
+        raise RuntimeError("正式大屏仅支持 DATA_SOURCE=mysql")
+    if db_breaker_open():
+        raise RuntimeError(f"MySQL 连接熔断中：{db_last_error()}")
+    sql = f"SELECT * FROM `{table}`"
     if where:
-        print(f"[WARN] CSV 模式忽略过滤条件：{where}")
+        sql += f" WHERE {where}"
     if order:
-        key, _, direction = order.partition(" ")
-        key = key.strip().strip("`")
-        rows.sort(key=lambda r: (r.get(key) is None, r.get(key)), reverse=direction.strip().lower().startswith("desc"))
-    return rows[:limit] if limit else rows
+        sql += f" ORDER BY {order}"
+    if limit:
+        sql += f" LIMIT {int(limit)}"
+    try:
+        return query(sql, params)
+    except Exception as exc:
+        _trip_breaker(exc)
+        raise RuntimeError(f"MySQL 查询失败：{exc}") from exc
 
 
 def cached(key, builder, ttl=None):

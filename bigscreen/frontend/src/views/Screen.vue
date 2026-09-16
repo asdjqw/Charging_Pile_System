@@ -101,7 +101,13 @@ import HeaderBar from '../components/HeaderBar.vue'
 import KpiBar from '../components/KpiBar.vue'
 import PanelBox from '../components/PanelBox.vue'
 import RealtimeBoard from '../components/RealtimeBoard.vue'
-import { fetchHealth, fetchScreenBundle } from '../api'
+import {
+  fetchBatteryHealth, fetchDailyTrend, fetchDistrictCompare, fetchDurationDist,
+  fetchEnergyDist, fetchFacilityCompare, fetchHealth, fetchHourLoad, fetchMonthlyTrend,
+  fetchOverview, fetchPipeline, fetchPlatformCompare, fetchQuality, fetchRealtimeSessions,
+  fetchRevenueStruct, fetchStationTop, fetchTimePeriodCompare, fetchUserSegment,
+  fetchWeekdayHourHeat, fetchWeekendCompare
+} from '../api'
 import { initTheme, theme } from '../utils/echartsTheme'
 import {
   batteryHealthOption,
@@ -211,10 +217,25 @@ const stageStyle = computed(() => {
 
 async function load() {
   try {
-    const { payload, updatedAt: time } = await fetchScreenBundle()
-    bundle.value = payload || {}
-    updatedAt.value = time || ''
-    const sessions = Number(payload?.overview?.total_sessions || 0)
+    const [
+      overview, dailyTrend, monthlyTrend, hourLoad, weekdayHeat, stationTop, district,
+      facility, weekend, timePeriod, platform, userSegment, durationDist, energyDist,
+      batteryHealth, revenueStruct, realtime, quality, pipeline
+    ] = await Promise.all([
+      fetchOverview(), fetchDailyTrend(), fetchMonthlyTrend(), fetchHourLoad(),
+      fetchWeekdayHourHeat(), fetchStationTop(), fetchDistrictCompare(), fetchFacilityCompare(),
+      fetchWeekendCompare(), fetchTimePeriodCompare(), fetchPlatformCompare(), fetchUserSegment(),
+      fetchDurationDist(), fetchEnergyDist(), fetchBatteryHealth(), fetchRevenueStruct(),
+      fetchRealtimeSessions(), fetchQuality(), fetchPipeline()
+    ])
+    const payload = {
+      overview, dailyTrend, monthlyTrend, hourLoad, weekdayHeat, stationTop, district,
+      facility, weekend, timePeriod, platform, userSegment, durationDist, energyDist,
+      batteryHealth, revenueStruct, realtime, quality, pipeline
+    }
+    bundle.value = payload
+    updatedAt.value = new Date().toLocaleString('zh-CN', { hour12: false })
+    const sessions = Number(overview?.total_sessions || 0)
     errorMessage.value = sessions > 0
       ? ''
       : '未取到数据：请确认后端已连上 MySQL（config/database.env），或已执行 bash deploy/deploy.sh / run_pipeline 生成结果'

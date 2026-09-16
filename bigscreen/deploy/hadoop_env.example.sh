@@ -1,5 +1,5 @@
 # Hadoop 环境变量模板：复制为 deploy/hadoop_env.sh 后按实际安装路径修改
-# （deploy/spark_submit.sh 与 deploy/fetch_from_hdfs.sh 会自动加载该文件）
+# （deploy/spark_submit.sh 与 deploy/run_warehouse_local.sh 会自动加载该文件）
 
 # 运行 Spark 3.5 需要 Java 8u371+/11/17；Hadoop 3.x 自身可用 Java 8
 export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64

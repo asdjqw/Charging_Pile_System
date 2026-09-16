@@ -1,12 +1,12 @@
--- DWD 明细层由 spark/jobs/hive_dwd.py 写入，清洗口径与原项目完全共用。
+-- DWD 明细层由 Spark SQL 写入；ODS 保持 TextFile，DWD 起统一使用 ORC + Snappy。
 CREATE EXTERNAL TABLE IF NOT EXISTS charging_dwd.dwd_station (
   station_id STRING, location_id STRING, station_name STRING, address STRING,
   district STRING, road STRING, device_count INT, facility_type INT,
   facility_type_cn STRING, open_time STRING, update_time DATE
 )
 PARTITIONED BY (load_dt STRING)
-STORED AS PARQUET LOCATION '${hiveconf:warehouse_root}/dwd/station'
-TBLPROPERTIES ('parquet.compression'='SNAPPY');
+STORED AS ORC LOCATION '${hiveconf:warehouse_root}/dwd/station'
+TBLPROPERTIES ('orc.compress'='SNAPPY');
 
 CREATE EXTERNAL TABLE IF NOT EXISTS charging_dwd.dwd_charging_session (
   session_id STRING, user_id STRING, station_id STRING, location_id STRING,
@@ -20,8 +20,8 @@ CREATE EXTERNAL TABLE IF NOT EXISTS charging_dwd.dwd_charging_session (
   address STRING, district STRING, road STRING, device_count INT
 )
 PARTITIONED BY (load_dt STRING, biz_date STRING)
-STORED AS PARQUET LOCATION '${hiveconf:warehouse_root}/dwd/charging_session'
-TBLPROPERTIES ('parquet.compression'='SNAPPY');
+STORED AS ORC LOCATION '${hiveconf:warehouse_root}/dwd/charging_session'
+TBLPROPERTIES ('orc.compress'='SNAPPY');
 
 CREATE EXTERNAL TABLE IF NOT EXISTS charging_dwd.dwd_battery_detail (
   session_id STRING, soc DOUBLE, soc_bin STRING, pack_voltage DOUBLE,
@@ -32,12 +32,12 @@ CREATE EXTERNAL TABLE IF NOT EXISTS charging_dwd.dwd_battery_detail (
   facility_type_cn STRING, day_type STRING, time_period STRING, stat_date DATE
 )
 PARTITIONED BY (load_dt STRING, biz_date STRING)
-STORED AS PARQUET LOCATION '${hiveconf:warehouse_root}/dwd/battery_detail'
-TBLPROPERTIES ('parquet.compression'='SNAPPY');
+STORED AS ORC LOCATION '${hiveconf:warehouse_root}/dwd/battery_detail'
+TBLPROPERTIES ('orc.compress'='SNAPPY');
 
 CREATE EXTERNAL TABLE IF NOT EXISTS charging_dwd.dwd_data_quality (
   stage STRING, data_type STRING, cnt BIGINT
 )
 PARTITIONED BY (load_dt STRING)
-STORED AS PARQUET LOCATION '${hiveconf:warehouse_root}/dwd/data_quality'
-TBLPROPERTIES ('parquet.compression'='SNAPPY');
+STORED AS ORC LOCATION '${hiveconf:warehouse_root}/dwd/data_quality'
+TBLPROPERTIES ('orc.compress'='SNAPPY');
